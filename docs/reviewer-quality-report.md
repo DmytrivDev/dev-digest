@@ -53,34 +53,37 @@ Two edits to the General Reviewer, saved as agent version 2:
 
 Both runs used the identical v2 prompt, minutes apart.
 
-| | v1 | v2 — run 1 | v2 — run 2 |
-|---|---|---|---|
-| Findings | 1 | 2 | 4 |
-| Verdict / score | comment / 88 | request_changes / 53 | comment / 70 |
-| Categories | `security` (wrong) | `bug` | `bug` ×4 |
-| Output tokens | 5,097 | 12,166 | 6,067 |
-| Cost | $0.0021 | $0.0033 | $0.0023 |
-| Duration | 91 s | 247 s | 133 s |
-| Grounding | 1/1 | 2/2 | 4/4 |
+| | v1 | v2 — run 1 | v2 — run 2 | v2 — run 3 |
+|---|---|---|---|---|
+| Findings | 1 | 2 | 4 | 2 |
+| Verdict / score | comment / 88 | request_changes / 53 | comment / 70 | comment / 76 |
+| Categories | `security` (wrong) | `bug` | `bug` ×4 | `bug` ×2 |
+| Output tokens | 5,097 | 12,166 | 6,067 | 7,109 |
+| Cost | $0.0021 | $0.0033 | $0.0023 | $0.0062 |
+| Duration | 91 s | 247 s | 133 s | 104 s |
+| Grounding | 1/1 | 2/2 | 4/4 | 2/2 |
 
 ### What got better
 
-- **The category error is gone.** Every finding in both v2 runs is `bug`. The fix was
-  four sentences of prompt.
+- **The category error is gone.** Every finding in all three v2 runs is `bug` — 8 out
+  of 8. The fix was four sentences of prompt.
 - **PHP-specific defects appeared.** The strongest new finding — *"Potential PHP warning
   from null array access in FAQ retrieval"* (`inc/schema.php:430`, 95% confidence) —
   reasons about `get_field()` returning `null` and about `empty()` not suppressing the
   warning when the base value is null. **The repository owner confirmed this one is
   real.** It is a class of bug the Node-flavoured prompt was never looking for.
-- **The stable finding stayed stable.** The `Article.about` defect was reported in all
-  three runs. A finding that survives re-runs is much more likely to be real than one
-  that appears once.
+- **The stable finding stayed stable.** The `Article.about` defect was reported in
+  every run — 4 out of 4, across both prompt versions. A finding that survives re-runs
+  is much more likely to be real than one that appears once. The confirmed PHP-warning
+  defect showed up in 2 of the 3 v2 runs.
 
 ### What did not get better — and the main result
 
-**Two runs of the same prompt on the same diff disagreed.** Not slightly: 2 findings vs
-4, `request_changes` vs `comment`, score 53 vs 70. Even the one finding both runs share
-was anchored at different lines (555 vs 530) with different confidence (90% vs 70%).
+**Three runs of the same prompt on the same diff disagreed.** Not slightly: 2, 4 and 2
+findings; `request_changes` once and `comment` twice; scores 53, 70 and 76. Even the one
+finding every run shares was anchored at different lines (555 / 530 / 550) with
+different confidence (90% / 70% / 85%), and its cost ranged from $0.0023 to $0.0062 —
+a 2.7× spread for the same work.
 
 So the honest conclusion of this experiment is not "v2 is better than v1". It is:
 
@@ -89,7 +92,11 @@ So the honest conclusion of this experiment is not "v2 is better than v1". It is
 > a prompt change improved review quality needs several runs per version.
 
 The category fix is the only change here that can be asserted from this data, because it
-held in 6 findings out of 6.
+held in 8 findings out of 8.
+
+> Note on reproducibility: the runs from experiment 1's first rounds were later deleted
+> from the app while preparing the demo, so only the most recent v2 run is still visible
+> in the UI. The numbers above were recorded from the API as each run finished.
 
 ### Where the noise is
 
