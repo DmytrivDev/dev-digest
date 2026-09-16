@@ -30,19 +30,16 @@ Both vendored copies (`server/src/vendor/shared/`, `client/src/vendor/shared/`)
 are edited in lock-step.
 
 ### R4 — PR-list aggregate
-`GET /repos/:id/pulls` returns `cost_usd` per PR = **cost of the latest review
-batch**, computed on read (like the existing latest-score aggregate; nothing is
-denormalized onto `pull_requests`).
+`GET /repos/:id/pulls` returns `cost_usd` per PR = the **sum of every successful
+run** of that PR, computed on read (like the existing latest-score aggregate;
+nothing is denormalized onto `pull_requests`).
 
-Batch rule — over that PR's `status='done'` runs, newest first:
-1. the newest run with a non-null `cost_usd` anchors the batch;
-2. every priced run with `ran_at >= anchor.ran_at - 120s` is summed in;
+Rule — over that PR's runs:
+1. only `status='done'` runs count (failed/cancelled never do);
+2. their non-null `cost_usd` values are summed — re-reviewing a PR ADDS to the
+   total rather than replacing it, so the column reads "what this PR has cost us
+   so far"; the per-run breakdown lives on the PR page;
 3. no priced run at all → `null`.
-
-The window stands in for a review-session / batch id, which the schema does not
-have: "Review all" fans out N agents within seconds, so one number per PR should
-mean "what the last review of this PR cost", not "what one of its agents cost".
-If a batch id is ever added, replace the window with exact grouping.
 
 ## Acceptance criteria
 
@@ -50,10 +47,10 @@ If a batch id is ever added, replace the window with exact grouping.
    value is returned by the run history and inside the persisted run trace.
 2. A failed or cancelled run stores `cost_usd = null` and never `0`.
 3. `GET /repos/:id/pulls` serializes `cost_usd` for every PR: the sum of the
-   latest batch, or `null` when the PR has no priced run.
-4. Two agents run on the same PR within the window → the PR's `cost_usd` is
-   their sum; a run older than the window is excluded.
+   sum of its successful runs, or `null` when the PR has no priced run.
+4. Two agents run on the same PR → the PR's `cost_usd` is their sum; an earlier
+   review of the same PR is included in the total; a failed run never is.
 5. A real `0` cost survives as `0` (not collapsed into `null`).
-6. `pnpm typecheck` and the unit suite pass; the batch aggregation has unit
+6. `pnpm typecheck` and the unit suite pass; the aggregation has unit
    coverage that does not need a database.
 7. No new LLM/network call anywhere in the path.

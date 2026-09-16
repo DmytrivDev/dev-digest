@@ -6,17 +6,17 @@ so the next agent/session doesn't relearn it. Append-only — see the
 
 ## What Works
 
-- **2026-06-14** — `formatCost` (`src/lib/cost.ts`) distinguishes MISSING data (`null`/`undefined` → "—") from a genuine zero (`0` → "$0.00"), widens precision for sub-cent values (~2 sig figs), and trims trailing zeros to a 2dp floor ("$0.06" not "$0.060", "$0.0013" not "$0.00"). Reuse it for any per-run money display.
+- **2026-06-14** — `formatCost` (`client/src/lib/cost.ts:13`) distinguishes MISSING data (`null`/`undefined` → "—") from a genuine zero (`0` → "$0.00"), widens precision for sub-cent values (~2 sig figs), and trims trailing zeros to a 2dp floor ("$0.06" not "$0.060", "$0.0013" not "$0.00"). Reuse it for any per-run money display.
 
 ## What Doesn't Work
 
-- **2026-09-16** — On Windows a long-running `pnpm dev` (Next 15) can serve a STALE compiled chunk indefinitely: after editing `RunCostBadge.tsx` the browser kept rendering the pre-edit output while `.next/static/chunks/app/repos/[repoId]/pulls/[number]/page.js` still contained the old `toLocaleString()` call. A hard navigation AND `touch`ing the source both failed to trigger a recompile — only killing the dev server and restarting `pnpm dev` picked the change up. When a UI change 'has no effect' but `pnpm typecheck`/`pnpm test` agree with your source, grep `.next/` for the compiled string before debugging the component.
+- **2026-09-16** — On Windows a long-running `pnpm dev` (Next 15) can serve a STALE compiled chunk indefinitely: after editing `RunCostBadge.tsx` the browser kept rendering the pre-edit output while `.next/static/chunks/app/repos/[repoId]/pulls/[number]/page.js` still contained the old `toLocaleString()` call. A hard navigation AND `touch`ing the source both failed to trigger a recompile — only killing the dev server and restarting `pnpm dev` picked the change up. When a UI change 'has no effect' but `pnpm typecheck`/`pnpm test` agree with your source, grep `.next/` for the compiled string before debugging the component. Evidence: `client/package.json:6`, `client/src/components/RunCostBadge/RunCostBadge.tsx:41`.
 
 ## Codebase Patterns
 
-- **2026-06-14** — Cross-route shared components live in `src/components/<Name>/` with an `index.ts` barrel, imported via `@/components/<Name>` (e.g. `RunCostBadge`, `diff-viewer`). Vendored UI primitives (`Badge`, `CircularScore`) live in `src/vendor/ui` under `@devdigest/ui` — different home. Evidence: `client/src/components/RunCostBadge/`.
-- **2026-06-14** — The PR-list table is driven by two parallel constants that MUST stay length-aligned: `COLUMN_KEYS` (header keys + order) and `GRID` (CSS grid-template tracks). Adding a column = add to both AND render a matching cell in `PRRow.tsx`, else header/cells misalign silently. Evidence: `client/src/app/repos/[repoId]/pulls/constants.ts`.
-- **2026-06-14** — i18n has only the `en` locale (`client/messages/en/`); new UI strings need a key under the right namespace file (e.g. `prReview.json`, `runs.json`) read via `useTranslations("<ns>")`. A missing key renders the raw key, not an error.
+- **2026-06-14** — Cross-route shared components live in `src/components/<Name>/` with an `index.ts` barrel, imported via `@/components/<Name>` (e.g. `RunCostBadge`, `diff-viewer`). Vendored UI primitives (`Badge`, `CircularScore`) live in `src/vendor/ui` under `@devdigest/ui` — different home. Evidence: `client/src/components/RunCostBadge/index.ts:3`.
+- **2026-06-14** — The PR-list table is driven by two parallel constants that MUST stay length-aligned: `COLUMN_KEYS` (header keys + order) and `GRID` (CSS grid-template tracks). Adding a column = add to both AND render a matching cell in `PRRow.tsx`, else header/cells misalign silently. Evidence: `client/src/app/repos/[repoId]/pulls/constants.ts:27,42`.
+- **2026-06-14** — i18n has only the `en` locale (`client/messages/en/`); new UI strings need a key under the right namespace file (e.g. `prReview.json`, `runs.json`) read via `useTranslations("<ns>")`. A missing key renders the raw key, not an error. Evidence: `client/messages/en/prReview.json:89`.
 
 ## Tool & Library Notes
 

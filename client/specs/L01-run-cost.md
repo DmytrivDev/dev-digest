@@ -20,7 +20,8 @@ zero after the point).
 
 ### R2 — Surface 1: Pull Requests list
 A `COST` column between `STATUS` and `UPDATED`, compact value (`$0.014`), muted
-when missing. The table's `COLUMN_KEYS` and `GRID` stay length-aligned.
+when missing. The value is the PR's running total — every successful run summed,
+not just the last review. The table's `COLUMN_KEYS` and `GRID` stay length-aligned.
 
 ### R3 — Surface 2: Agent runs timeline (PR detail)
 Under the run's timestamp, `<tokens> tok · <cost>` (e.g. `9,119 tok · $0.0013`),
@@ -40,9 +41,9 @@ component with a barrel) drive all three surfaces. New UI strings go under the
 ## Acceptance criteria
 
 1. A PR with no priced run shows `—` in the COST column, never `$0.00`.
-2. After a review, the COST column shows the latest batch's cost, the timeline
-   row shows `tok · $cost`, and the drawer shows the COST card — all three from
-   one run, without a reload beyond the normal refetch.
+2. After a review, the COST column shows the PR's total, the timeline row shows
+   `tok · $cost` per run, and the drawer shows the COST card — all from one run,
+   without a reload beyond the normal refetch.
 3. The PR-list header and rows stay aligned (7 columns ↔ 7 grid tracks).
 4. A running run shows no cost text; a failed run shows its error, no `$0.00`.
 5. `pnpm typecheck` and `pnpm test` pass; `formatCost` has unit coverage for

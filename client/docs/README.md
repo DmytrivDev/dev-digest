@@ -6,3 +6,6 @@ Deep-dives for the `client` package (pipelines, diagrams, design notes).
 ## Naming
 One file per topic: `<topic>.md` (e.g. `review-context.md`). Add a line to this
 index when you add a file — keep the index itself short, the depth goes in the file.
+
+## Index
+- [`pr-list-table.md`](pr-list-table.md) — the PR-list grid contract: `COLUMN_KEYS` ↔ `GRID` ↔ `PRRow` cells, how to add a column, where the values come from.

@@ -42,6 +42,9 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 - Full stack: `./scripts/dev.sh` (Postgres + API :3001 + web :3000, migrated + seeded)
 - Browser e2e: `./scripts/e2e.sh` (isolated stack — never run e2e against the dev DB)
 - Per-package commands: see that package's CLAUDE.md
+- Checks (run before every commit): `pnpm typecheck` + `pnpm test` in the package
+  you touched; DB-backed suites separately (`pnpm exec vitest run .it.test`, needs
+  Docker). There is NO linter configured in this repo — don't look for one.
 
 ## Map
 | Folder | Package | Role |
@@ -53,6 +56,20 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 | `server/src/vendor/shared` | `@devdigest/shared` | Zod contracts |
 
 `repo-intel` (indexer) lives inside the server: `server/src/modules/repo-intel/`.
+
+## Naming
+- Components: `src/components/<PascalCase>/<PascalCase>.tsx` + an `index.ts` barrel;
+  route-local ones live in that route's `_components/<PascalCase>/`.
+- Tests: colocated `*.test.tsx` next to the component (client) or `server/test/*.test.ts`;
+  a DB-backed server test MUST use the `*.it.test.ts` suffix or the CI split breaks.
+- Contracts: snake_case on the wire (`cost_usd`, `tokens_in`), camelCase in Drizzle/DB
+  code (`costUsd`); the Zod schema and its inferred type share one name (`RunSummary`).
+- Migrations: generated names only — `00NN_<slug>.sql` from `pnpm db:generate`.
+- `specs/` → `L0N-<feature>.md` · `docs/` → `<topic>.md` (one topic per file).
+- i18n: one namespace file per feature area, dot-path keys (`list.columns.cost`).
+- Server modules: `server/src/modules/<name>/` with `routes.ts` · `service.ts` ·
+  `repository.ts` · `constants.ts` · `helpers.ts` as needed.
+- Branches: one `feat/<slug>` per homework — see `docs/git-workflow.md`.
 
 ## Conventions (not obvious from code)
 - NOT a monorepo workspace — each package has its own package.json/lockfile;
@@ -70,6 +87,9 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 ## Do-not-touch
 - `*/src/vendor/shared/` — hand-edit only in lock-step across both copies.
 - `server/src/db/migrations/` — never hand-write SQL; `pnpm db:generate`.
+- Lock files — never hand-edit, and always change them with THAT package's manager:
+  `client/pnpm-lock.yaml`, `server/pnpm-lock.yaml` (pnpm) ·
+  `reviewer-core/package-lock.json`, `e2e/package-lock.json` (npm).
 
 ## Use when
 - Commit / push / open a PR → `docs/git-workflow.md` (read first, every time)

@@ -14,7 +14,7 @@ so the next agent/session doesn't relearn it. Append-only — see the
 
 ## Tool & Library Notes
 
-- **2026-09-15** — Although reviewer-core is consumed as SOURCE via tsconfig path aliases (never as a built/published module), it still needs its OWN `node_modules`: Node resolves the bare `openai` / `zod` imports upward from `reviewer-core/src/`, so the consumer's deps (`server/node_modules`) are never visible. It is also the ONLY package installed with npm — it ships `package-lock.json`, not `pnpm-lock.yaml`, so use `npm ci` here while server/client use `pnpm install`. Evidence: `reviewer-core/src/llm/structured.ts`, `reviewer-core/package.json`, `reviewer-core/package-lock.json`.
+- **2026-09-15** — Although reviewer-core is consumed as SOURCE via tsconfig path aliases (never as a built/published module), it still needs its OWN `node_modules`: Node resolves the bare `openai` / `zod` imports upward from `reviewer-core/src/`, so the consumer's deps (`server/node_modules`) are never visible. It is also the ONLY package installed with npm — it ships `package-lock.json`, not `pnpm-lock.yaml`, so use `npm ci` here while server/client use `pnpm install`. Evidence: `reviewer-core/src/llm/structured.ts:2`, `reviewer-core/package.json:8`, `reviewer-core/package-lock.json:1`.
 
 ## Recurring Errors & Fixes
 

@@ -131,7 +131,7 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
     await app.close();
   });
 
-  it('GET /repos/:id/pulls serializes cost_usd = the latest review batch only', async () => {
+  it('GET /repos/:id/pulls serializes cost_usd = the sum of all successful runs', async () => {
     const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
     const app = await buildApp({
       config,
@@ -150,26 +150,27 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
       .from(t.pullRequests)
       .where(eq(t.pullRequests.id, target.id));
     const now = Date.now();
-    const run = (msAgo: number, costUsd: number | null) => ({
+    const run = (msAgo: number, costUsd: number | null, status = 'done') => ({
       workspaceId: pull!.workspaceId,
       prId: pull!.id,
       ranAt: new Date(now - msAgo),
-      status: 'done',
+      status,
       costUsd,
       tokensIn: 100,
       tokensOut: 10,
     });
     await pg.handle.db.insert(t.agentRuns).values([
-      run(0, 0.0013),          // latest batch: three agents fanned out together
+      run(0, 0.0013),                  // this review: three agents fanned out
       run(20_000, 0.0014),
       run(40_000, 0.0012),
-      run(600_000, 5),         // an older review — outside the batch window
-      run(1_000, null),        // un-priced run in the batch — contributes nothing
+      run(600_000, 0.002),             // an earlier review — counted too
+      run(1_000, null),                // un-priced run — contributes nothing
+      run(2_000, 99, 'failed'),        // failed run — never counted
     ]);
 
     const after = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
     const priced = after.json().find((p: { id: string }) => p.id === target.id)!;
-    expect(priced.cost_usd).toBeCloseTo(0.0039, 6);
+    expect(priced.cost_usd).toBeCloseTo(0.0059, 6);
     await app.close();
   });
 

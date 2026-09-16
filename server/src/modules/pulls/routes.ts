@@ -130,16 +130,15 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
-    // Latest-review-batch COST per PR for the list's COST column. Same on-read
-    // IN-query + JS grouping as the score block above; the batch rule itself
-    // lives in `./cost.js` so it can be unit-tested without a database.
+    // COST per PR for the list's COST column: the sum of every SUCCESSFUL run.
+    // Same on-read IN-query + JS grouping as the score block above; the summing
+    // rule itself lives in `./cost.js` so it unit-tests without a database.
     const costByPr =
       prIds.length > 0
         ? costByPrFromRuns(
             await container.db
               .select({
                 prId: t.agentRuns.prId,
-                ranAt: t.agentRuns.ranAt,
                 costUsd: t.agentRuns.costUsd,
               })
               .from(t.agentRuns)
@@ -149,8 +148,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
                   inArray(t.agentRuns.prId, prIds),
                   eq(t.agentRuns.status, 'done'),
                 ),
-              )
-              .orderBy(desc(t.agentRuns.ranAt)),
+              ),
           )
         : new Map<string, number>();
 

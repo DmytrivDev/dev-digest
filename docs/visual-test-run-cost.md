@@ -63,26 +63,26 @@ its value equals the cost shown for that same run on the timeline.
 Go back to `/repos/<repoId>/pulls` (or press Refresh in the list — that only re-reads,
 it does not re-clone).
 
-✅ **Pass:** the PR's COST equals the **sum of the runs from this review batch**
-(all agents launched together), not one agent's cost and not the all-time total.
+✅ **Pass:** the PR's COST equals the **sum of every successful run** of that PR
+(all agents of this review, plus any earlier review), not one agent's cost.
 Cross-check: `curl -s localhost:3001/repos/<repoId>/pulls | jq '.[] | {number, cost_usd}'`
 must return the same number the UI renders.
 
-## 6. Batch semantics (second review)
+## 6. Running total (second review)
 
 Run the review again on the same PR, wait for it to finish, reload the list.
 
-✅ **Pass:** COST shows the **new** batch's total, not the sum of both reviews
-(runs older than 120 s from the newest priced run are excluded). The timeline still
-lists the older runs with their own costs.
+✅ **Pass:** COST **grows** — it now equals the first review plus the second, so
+re-reviewing adds to the PR's total. The timeline keeps every run with its own
+individual cost.
 
 ## 7. Negative path
 
 Temporarily break a key (Settings → paste an invalid OpenRouter key) and run a review.
 
 ✅ **Pass:** the run lands as `error` with the provider message, `cost_usd` stays `null`,
-the timeline shows no cost for it, and the PR-list COST still reflects the last
-**successful** batch (or `—` if there never was one). Restore the real key afterwards.
+the timeline shows no cost for it, and the PR-list COST is unchanged — failed runs
+never contribute (or `—` if the PR never had a successful run). Restore the real key afterwards.
 
 ## Overall success criteria
 
@@ -93,7 +93,7 @@ The feature passes when all of the following hold:
 2. Missing data renders `—` and a genuine zero would render `$0.00` — the two are never
    confused.
 3. Running / failed / cancelled runs never show a fabricated `$0.00`.
-4. The PR-list number equals the latest batch's sum and matches the API payload.
+4. The PR-list number equals the sum of the PR's successful runs and matches the API payload.
 5. Nothing in the flow triggers an extra model call — the run's token counts and cost
    come from the same completion the review already made.
 6. The PR-list table stays aligned with the new column at desktop width.
