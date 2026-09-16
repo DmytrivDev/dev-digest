@@ -131,6 +131,48 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
     await app.close();
   });
 
+  it('GET /repos/:id/pulls serializes cost_usd = the latest review batch only', async () => {
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+    const app = await buildApp({
+      config,
+      db: pg.handle.db,
+      overrides: { git: new MockGitClient(), github: new MockGitHubClient() },
+    });
+    const repoId = (await app.inject({ method: 'GET', url: '/repos' })).json()[0]!.id;
+    const before = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    const target = before.json()[0]!;
+    // No priced run yet → the key is present and null ("—" in the UI, not "$0.00").
+    expect(target).toHaveProperty('cost_usd');
+    expect(target.cost_usd).toBeNull();
+
+    const [pull] = await pg.handle.db
+      .select()
+      .from(t.pullRequests)
+      .where(eq(t.pullRequests.id, target.id));
+    const now = Date.now();
+    const run = (msAgo: number, costUsd: number | null) => ({
+      workspaceId: pull!.workspaceId,
+      prId: pull!.id,
+      ranAt: new Date(now - msAgo),
+      status: 'done',
+      costUsd,
+      tokensIn: 100,
+      tokensOut: 10,
+    });
+    await pg.handle.db.insert(t.agentRuns).values([
+      run(0, 0.0013),          // latest batch: three agents fanned out together
+      run(20_000, 0.0014),
+      run(40_000, 0.0012),
+      run(600_000, 5),         // an older review — outside the batch window
+      run(1_000, null),        // un-priced run in the batch — contributes nothing
+    ]);
+
+    const after = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    const priced = after.json().find((p: { id: string }) => p.id === target.id)!;
+    expect(priced.cost_usd).toBeCloseTo(0.0039, 6);
+    await app.close();
+  });
+
   it('POST /repos/:id/poll syncs PR list and does NOT trigger a review', async () => {
     const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
     const app = await buildApp({
