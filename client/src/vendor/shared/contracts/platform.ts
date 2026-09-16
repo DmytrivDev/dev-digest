@@ -173,6 +173,16 @@ export const PrMeta = z.object({
   // Cost (USD) of the latest review batch (list endpoint only). null/absent
   // when the PR has no priced run yet; UI shows "—", not "$0".
   cost_usd: z.number().nullish(),
+  // Severity breakdown of the LATEST review's findings (list endpoint only) —
+  // the same review the `score` above comes from. null/absent until the PR has
+  // been reviewed; {0,0,0} means reviewed and clean. Re-reviewing replaces it.
+  findings: z
+    .object({
+      critical: z.number().int(),
+      warning: z.number().int(),
+      suggestion: z.number().int(),
+    })
+    .nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

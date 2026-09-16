@@ -174,6 +174,73 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
     await app.close();
   });
 
+  it("GET /repos/:id/pulls serializes the LATEST review's findings breakdown", async () => {
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+    const app = await buildApp({
+      config,
+      db: pg.handle.db,
+      overrides: { git: new MockGitClient(), github: new MockGitHubClient() },
+    });
+    const repoId = (await app.inject({ method: 'GET', url: '/repos' })).json()[0]!.id;
+    const before = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    // The seeded review on PR #482 found 1 CRITICAL + 1 WARNING and no SUGGESTION.
+    const seeded = before.json().find((p: { number: number }) => p.number === 482)!;
+    expect(seeded.findings).toEqual({ critical: 1, warning: 1, suggestion: 0 });
+
+    const [pull] = await pg.handle.db
+      .select()
+      .from(t.pullRequests)
+      .where(eq(t.pullRequests.id, seeded.id));
+
+    // A PR nobody has reviewed serializes null — "—" in the UI, NOT a row of zeros.
+    await pg.handle.db.insert(t.pullRequests).values({
+      workspaceId: pull!.workspaceId,
+      repoId: pull!.repoId,
+      number: 999,
+      title: 'Never reviewed',
+      author: 'deepak.r',
+      branch: 'chore/noop',
+      base: 'main',
+      headSha: 'deadbee',
+    });
+    const withUnreviewed = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    const unreviewed = withUnreviewed.json().find((p: { number: number }) => p.number === 999)!;
+    expect(unreviewed).toHaveProperty('findings');
+    expect(unreviewed.findings).toBeNull();
+
+    // A NEWER review REPLACES the breakdown — unlike cost_usd, it is not a running total.
+    const [newer] = await pg.handle.db
+      .insert(t.reviews)
+      .values({
+        workspaceId: pull!.workspaceId,
+        prId: pull!.id,
+        kind: 'review',
+        verdict: 'comment',
+        score: 80,
+        model: 'test',
+        createdAt: new Date(Date.now() + 60_000),
+      })
+      .returning();
+    await pg.handle.db.insert(t.findings).values(
+      ['SUGGESTION', 'SUGGESTION'].map((severity, i) => ({
+        reviewId: newer!.id,
+        file: 'src/util/time.ts',
+        startLine: 8 + i,
+        endLine: 8 + i,
+        severity,
+        category: 'style',
+        title: `Extract magic number ${i}`,
+        rationale: 'Unexplained constant repeated twice.',
+        confidence: 0.62,
+      })),
+    );
+
+    const after = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    const rereviewed = after.json().find((p: { number: number }) => p.number === 482)!;
+    expect(rereviewed.findings).toEqual({ critical: 0, warning: 0, suggestion: 2 });
+    await app.close();
+  });
+
   it('POST /repos/:id/poll syncs PR list and does NOT trigger a review', async () => {
     const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
     const app = await buildApp({

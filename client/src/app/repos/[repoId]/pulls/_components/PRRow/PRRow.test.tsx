@@ -15,6 +15,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+vi.mock("@/lib/hooks/reviews", () => ({
+  usePrReviews: () => ({ data: [], isLoading: false }),
+}));
+
 import { PRRow } from "./PRRow";
 
 afterEach(cleanup);
@@ -36,6 +40,7 @@ function pr(o: Partial<PrMeta> = {}): PrMeta {
     updated_at: "2026-06-11T12:00:00.000Z",
     score: 61,
     cost_usd: 0.014,
+    findings: { critical: 1, warning: 2, suggestion: 0 },
     ...o,
   };
 }
@@ -63,6 +68,31 @@ describe("PRRow — COST cell", () => {
   it("keeps a genuine zero visible as $0.00", () => {
     renderRow(pr({ cost_usd: 0 }));
     expect(screen.getByText("$0.00")).toBeInTheDocument();
+  });
+});
+
+describe("PRRow — FINDINGS cell", () => {
+  it("shows a count per severity the latest review actually found", () => {
+    renderRow(pr());
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    // SUGGESTION is 0 — the design renders only the levels that occur
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("renders '—' for a PR that has never been reviewed", () => {
+    renderRow(pr({ findings: null }));
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("renders '—' for a reviewed PR whose latest run was clean", () => {
+    renderRow(pr({ findings: { critical: 0, warning: 0, suggestion: 0 } }));
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("shows no preview until the cell is hovered", () => {
+    renderRow(pr());
+    expect(screen.queryByText(/findings in this run/i)).not.toBeInTheDocument();
   });
 });
 

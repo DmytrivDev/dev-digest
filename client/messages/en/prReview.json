@@ -91,11 +91,16 @@
       "newest": "Sort: Newest",
       "oldest": "Sort: Oldest"
     },
+    "findingsPopup": {
+      "title": "{count} findings in this run",
+      "empty": "No findings in the latest run."
+    },
     "columns": {
       "pullRequest": "Pull request",
       "author": "Author",
       "size": "Size",
       "score": "Score",
+      "findings": "Findings",
       "status": "Status",
       "cost": "Cost",
       "updated": "Updated"
