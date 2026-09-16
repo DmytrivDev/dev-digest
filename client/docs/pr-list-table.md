@@ -24,6 +24,17 @@ compile time, and a mismatch throws nothing — the columns simply slide sideway
 `COLUMN_KEYS.length` cells and that `GRID` has one track per key. Adding a key
 without a track fails that test — which is the whole point of having it.
 
+The row currently has **8** columns:
+`Pull request · Author · Size · Score · Findings · Status · Cost · Updated`.
+
+A cell that opens a floating panel (the FINDINGS hover preview) has two extra
+constraints:
+
+- the panel must be nested **inside** its cell, never rendered as a sibling —
+  a ninth top-level `<div>` fails the guard above;
+- `s.tableCard` is `overflow: visible` for this reason. With `hidden` the panel
+  is silently clipped at the card's edge instead of overflowing it.
+
 ## Where the cell values come from
 
 The list endpoint computes its aggregates **on read** — nothing is denormalized
@@ -32,6 +43,12 @@ onto `pull_requests`:
 - `score` — the latest review's score (`null` until reviewed → "—" ring);
 - `cost_usd` — the sum of the PR's successful runs
   (`server/src/modules/pulls/cost.ts`); `null` when nothing is priced yet;
+- `findings` — the severity breakdown `{critical, warning, suggestion}` of the
+  **latest** review, i.e. the same review `score` comes from
+  (`server/src/modules/pulls/findings.ts`); `null` when the PR has never been
+  reviewed. Unlike `cost_usd` this is not a running total — re-reviewing
+  replaces it. The hover preview loads that review's findings lazily from
+  `GET /pulls/:id/reviews`, only while the cell is hovered;
 - `status` — derived review freshness (`deriveReviewStatus`), not GitHub's merge
   state, for open PRs.
 
