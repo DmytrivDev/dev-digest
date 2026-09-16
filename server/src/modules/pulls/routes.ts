@@ -8,6 +8,7 @@ import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import { deriveReviewStatus } from './status.js';
+import { costByPrFromRuns } from './cost.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -129,6 +130,30 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
+    // Latest-review-batch COST per PR for the list's COST column. Same on-read
+    // IN-query + JS grouping as the score block above; the batch rule itself
+    // lives in `./cost.js` so it can be unit-tested without a database.
+    const costByPr =
+      prIds.length > 0
+        ? costByPrFromRuns(
+            await container.db
+              .select({
+                prId: t.agentRuns.prId,
+                ranAt: t.agentRuns.ranAt,
+                costUsd: t.agentRuns.costUsd,
+              })
+              .from(t.agentRuns)
+              .where(
+                and(
+                  eq(t.agentRuns.workspaceId, workspaceId),
+                  inArray(t.agentRuns.prId, prIds),
+                  eq(t.agentRuns.status, 'done'),
+                ),
+              )
+              .orderBy(desc(t.agentRuns.ranAt)),
+          )
+        : new Map<string, number>();
+
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
@@ -153,6 +178,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
+        cost_usd: costByPr.get(r.id) ?? null,
       };
     });
   });
