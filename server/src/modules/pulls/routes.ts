@@ -7,7 +7,9 @@ import * as t from '../../db/schema.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { deriveReviewStatus } from './status.js';
+import { deriveReviewStatus, type SeverityCounts } from './status.js';
+import { costByPrFromRuns } from './cost.js';
+import { findingsByPrFromRows } from './findings.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -113,21 +115,64 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
 
     // Latest-review SCORE per PR for the list's score ring. Computed on read
     // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // grouping is cheap. The review's id is kept too — the FINDINGS breakdown
+    // below is scoped to that same review so the two columns can't disagree.
     const prIds = rows.map((r) => r.id);
-    const latestReviewByPr = new Map<string, { score: number | null }>();
+    const latestReviewByPr = new Map<string, { id: string; score: number | null }>();
     if (prIds.length > 0) {
       const reviewRows = await container.db
-        .select({ prId: t.reviews.prId, score: t.reviews.score })
+        .select({ prId: t.reviews.prId, id: t.reviews.id, score: t.reviews.score })
         .from(t.reviews)
         .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
         .orderBy(desc(t.reviews.createdAt));
       // Rows are newest-first → first seen per PR is the latest review.
       for (const rv of reviewRows) {
-        if (!latestReviewByPr.has(rv.prId)) latestReviewByPr.set(rv.prId, { score: rv.score });
+        if (!latestReviewByPr.has(rv.prId))
+          latestReviewByPr.set(rv.prId, { id: rv.id, score: rv.score });
       }
     }
+
+    // FINDINGS severity breakdown per PR for the list's FINDINGS column, scoped
+    // to the latest review captured above. `findings` has no workspace_id — it
+    // inherits tenancy from those review ids, which came from a scoped read.
+    const latestReviewIdByPr = new Map(
+      [...latestReviewByPr].map(([prId, review]) => [prId, review.id]),
+    );
+    const findingsByPr =
+      latestReviewIdByPr.size > 0
+        ? findingsByPrFromRows(
+            latestReviewIdByPr,
+            await container.db
+              .select({
+                reviewId: t.findings.reviewId,
+                severity: t.findings.severity,
+              })
+              .from(t.findings)
+              .where(inArray(t.findings.reviewId, [...latestReviewIdByPr.values()])),
+          )
+        : new Map<string, SeverityCounts>();
+
+    // COST per PR for the list's COST column: the sum of every SUCCESSFUL run.
+    // Same on-read IN-query + JS grouping as the score block above; the summing
+    // rule itself lives in `./cost.js` so it unit-tests without a database.
+    const costByPr =
+      prIds.length > 0
+        ? costByPrFromRuns(
+            await container.db
+              .select({
+                prId: t.agentRuns.prId,
+                costUsd: t.agentRuns.costUsd,
+              })
+              .from(t.agentRuns)
+              .where(
+                and(
+                  eq(t.agentRuns.workspaceId, workspaceId),
+                  inArray(t.agentRuns.prId, prIds),
+                  eq(t.agentRuns.status, 'done'),
+                ),
+              ),
+          )
+        : new Map<string, number>();
 
     const now = Date.now();
     return rows.map((r) => {
@@ -153,6 +198,8 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
+        cost_usd: costByPr.get(r.id) ?? null,
+        findings: findingsByPr.get(r.id) ?? null,
       };
     });
   });

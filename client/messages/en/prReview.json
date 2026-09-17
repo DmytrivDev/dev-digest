@@ -1,10 +1,10 @@
 {
   "finding": {
     "accepted": "accepted",
-    "dismissed": "dismissed",
+    "dismissed": "rejected",
     "suggestedFix": "Suggested fix",
     "accept": "Accept",
-    "dismiss": "Dismiss",
+    "dismiss": "Reject",
     "learn": "Learn",
     "replyToAuthor": "Reply to author",
     "replyPlaceholder": "Reply to the author about this finding…",
@@ -29,7 +29,12 @@
   "panel": {
     "hideLowConfidence": "Hide low confidence",
     "noMatchTitle": "No findings match",
-    "noMatchBody": "Adjust the filters above, or run a review to generate findings."
+    "noMatchBody": "Adjust the filters above, or run a review to generate findings.",
+    "severity": {
+      "CRITICAL": "CRITICAL",
+      "WARNING": "WARNING",
+      "SUGGESTION": "SUGGESTION"
+    }
   },
   "runReview": {
     "runAll": "Run all enabled agents",
@@ -86,12 +91,18 @@
       "newest": "Sort: Newest",
       "oldest": "Sort: Oldest"
     },
+    "findingsPopup": {
+      "title": "{count} findings in this run",
+      "empty": "No findings in the latest run."
+    },
     "columns": {
       "pullRequest": "Pull request",
       "author": "Author",
       "size": "Size",
       "score": "Score",
+      "findings": "Findings",
       "status": "Status",
+      "cost": "Cost",
       "updated": "Updated"
     },
     "filesCount": "{count} files",

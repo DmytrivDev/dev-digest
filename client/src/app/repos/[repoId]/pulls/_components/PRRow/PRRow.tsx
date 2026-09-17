@@ -6,17 +6,31 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, CircularScore } from "@devdigest/ui";
 import type { PrMeta } from "@/lib/types";
+import { RunCostBadge } from "@/components/RunCostBadge";
+import { FindingsCell } from "../FindingsCell";
 import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
 import { s } from "../../styles";
 
-export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
+export function PRRow({
+  pr,
+  repoId,
+  idx = 0,
+  total = 1,
+}: {
+  pr: PrMeta;
+  repoId: string;
+  /** Row position — rows in the lower half open their findings popup upwards. */
+  idx?: number;
+  total?: number;
+}) {
   const t = useTranslations("prReview");
   const router = useRouter();
   const [h, setH] = React.useState(false);
   const st = STATUS_META[pr.status] ?? STATUS_META.needs_review!;
   const { size, lines } = sizeOf(pr);
   const reviewed = pr.score != null; // null score ⇒ PR has never been reviewed
+  const placement = idx >= Math.ceil(total / 2) ? "up" : "down";
   return (
     <div
       onMouseEnter={() => setH(true)}
@@ -54,9 +68,15 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
         )}
       </div>
       <div>
+        <FindingsCell pr={pr} placement={placement} />
+      </div>
+      <div>
         <Badge dot color={st.c} bg="transparent">
           {t(`list.status.${st.labelKey}`)}
         </Badge>
+      </div>
+      <div style={s.costCell}>
+        <RunCostBadge variant="compact" cost={pr.cost_usd} />
       </div>
       <div style={s.updatedCell}>{relativeTime(pr.updated_at)}</div>
     </div>
