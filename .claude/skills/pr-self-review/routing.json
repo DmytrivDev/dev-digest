@@ -1,0 +1,211 @@
+{
+  "schema": "pr-self-review/routing@1",
+  "max_parallel_subagents": 6,
+  "max_files_per_subagent": 40,
+  "_comment": "SOURCE OF TRUTH for diff -> skill routing. routing.md mirrors this for humans; if they disagree, THIS file wins because it is what collect-diff.mjs reads. Every skill in .claude/skills/README.md's Catalog must appear here exactly once, either routed:true with globs/content, or routed:false with a reason. Omitting a skill is indistinguishable from forgetting it.",
+  "skills": [
+    {
+      "name": "onion-architecture",
+      "path": ".claude/skills/onion-architecture/SKILL.md",
+      "routed": true,
+      "priority": 10,
+      "globs": ["server/src/**/*.ts", "reviewer-core/src/**/*.ts"],
+      "exclude": [
+        "server/src/**/*.test.ts",
+        "server/src/db/migrations/**",
+        "server/src/prompts/**",
+        "server/src/vendor/**"
+      ],
+      "content": null,
+      "also_read": [".claude/skills/onion-architecture/enforcement.md"],
+      "suppress": "SKILL.md section 5 'Known debt (do not copy these)' lists four pre-existing violation classes: routes.ts querying Drizzle in pulls/polling/settings/workspace; service.ts taking the whole Container in repos/reviews/agents/repo-intel; repo-intel/service.ts importing concrete adapters. Never report one of those as a NEW finding. The rule is 'new code does not do this; existing code migrates when you are already touching it' - so only flag it if THIS diff adds to the pattern."
+    },
+    {
+      "name": "frontend-ui-architecture",
+      "path": ".claude/skills/frontend-ui-architecture/SKILL.md",
+      "routed": true,
+      "priority": 10,
+      "globs": [
+        "client/src/app/**",
+        "client/src/components/**",
+        "client/src/vendor/ui/**",
+        "client/src/lib/hooks/**",
+        "client/src/lib/api.ts",
+        "client/messages/**"
+      ],
+      "exclude": ["client/**/*.test.tsx", "client/**/*.test.ts"],
+      "content": null,
+      "also_read": [".claude/skills/frontend-ui-architecture/component-anatomy.md"],
+      "suppress": "Structure rules here are not linted (this repo has no linter), so surrounding files may already violate them. Only the added or changed lines are in scope."
+    },
+    {
+      "name": "security",
+      "path": ".claude/skills/security/SKILL.md",
+      "routed": true,
+      "priority": 9,
+      "globs": [
+        "server/src/modules/**/routes.ts",
+        "server/src/modules/**/service.ts",
+        "server/src/adapters/**",
+        "server/src/platform/config.ts",
+        "server/src/prompts/**",
+        "reviewer-core/src/prompt.ts",
+        "reviewer-core/src/llm/**",
+        "client/src/lib/api.ts",
+        ".github/workflows/**",
+        "**/.env*",
+        "**/package.json",
+        ".claude/hooks/**",
+        ".claude/skills/**/scripts/*.mjs"
+      ],
+      "exclude": [],
+      "content": "process\\.env|api[_-]?key|secret|\\btoken\\b|dangerouslySetInnerHTML|child_process|execSync|execFileSync|eval\\(|new Function",
+      "also_read": [".claude/skills/security/checklists.md"],
+      "suppress": null
+    },
+    {
+      "name": "fastify-best-practices",
+      "path": ".claude/skills/fastify-best-practices/SKILL.md",
+      "routed": true,
+      "priority": 8,
+      "globs": [
+        "server/src/modules/**/routes.ts",
+        "server/src/app.ts",
+        "server/src/server.ts",
+        "server/src/platform/sse.ts",
+        "server/src/platform/jobs.ts",
+        "server/src/platform/errors.ts",
+        "server/src/modules/_shared/**"
+      ],
+      "exclude": [],
+      "content": null,
+      "also_read": [],
+      "suppress": null
+    },
+    {
+      "name": "drizzle-orm-patterns",
+      "path": ".claude/skills/drizzle-orm-patterns/SKILL.md",
+      "routed": true,
+      "priority": 8,
+      "globs": [
+        "server/src/db/client.ts",
+        "server/src/db/rows.ts",
+        "server/src/db/schema.ts",
+        "server/src/db/schema/**",
+        "server/src/modules/**/repository.ts",
+        "server/src/modules/**/repository/**"
+      ],
+      "exclude": ["server/src/db/migrations/**"],
+      "content": "from ['\"]drizzle-orm",
+      "also_read": [],
+      "suppress": null
+    },
+    {
+      "name": "next-best-practices",
+      "path": ".claude/skills/next-best-practices/SKILL.md",
+      "routed": true,
+      "priority": 8,
+      "globs": [
+        "client/src/app/**/page.tsx",
+        "client/src/app/**/layout.tsx",
+        "client/src/app/**/loading.tsx",
+        "client/src/app/**/error.tsx",
+        "client/src/app/**/not-found.tsx",
+        "client/src/app/**/template.tsx",
+        "client/src/app/**/default.tsx",
+        "client/src/app/**/route.ts",
+        "client/next.config.mjs",
+        "client/next.config.js"
+      ],
+      "exclude": [],
+      "content": "'use client'|'use server'|\"use client\"|\"use server\"",
+      "also_read": [],
+      "suppress": "This skill's frontmatter carries user-invocable: false. That only stops a HUMAN typing /next-best-practices; reading the file is unaffected, which is why every subagent reads its skill by path instead of invoking the Skill tool."
+    },
+    {
+      "name": "postgresql-table-design",
+      "path": ".claude/skills/postgresql-table-design/SKILL.md",
+      "routed": true,
+      "priority": 7,
+      "globs": ["server/src/db/schema.ts", "server/src/db/schema/**", "server/src/db/migrations/**/*.sql"],
+      "exclude": [],
+      "content": null,
+      "also_read": [],
+      "suppress": "Migration SQL is generated by drizzle-kit, never hand-written. Do not suggest editing a .sql file under db/migrations - suggest a schema change plus `pnpm db:generate` instead."
+    },
+    {
+      "name": "react-best-practices",
+      "path": ".claude/skills/react-best-practices/SKILL.md",
+      "routed": true,
+      "priority": 7,
+      "globs": ["client/src/**/*.tsx", "client/src/lib/hooks/**"],
+      "exclude": ["client/**/*.test.tsx", "client/src/vendor/**"],
+      "content": null,
+      "also_read": [".claude/skills/react-best-practices/examples.md"],
+      "suppress": null
+    },
+    {
+      "name": "react-testing-library",
+      "path": ".claude/skills/react-testing-library/SKILL.md",
+      "routed": true,
+      "priority": 6,
+      "globs": ["client/**/*.test.tsx", "client/**/*.test.ts", "client/src/test/**", "client/vitest.config.ts"],
+      "exclude": [],
+      "content": null,
+      "also_read": [],
+      "suppress": null
+    },
+    {
+      "name": "zod",
+      "path": ".claude/skills/zod/SKILL.md",
+      "routed": true,
+      "priority": 5,
+      "globs": ["server/src/vendor/shared/**", "client/src/vendor/shared/**"],
+      "exclude": [],
+      "content": "from ['\"]zod['\"]|\\bz\\.[a-z]",
+      "also_read": [],
+      "suppress": "These two trees are hand-maintained COPIES of each other and server/test/vendor-shared-sync.test.ts asserts they stay byte-identical. Never suggest a change to one copy alone, and never suggest a comment-only tweak to one side - comments must match too."
+    },
+    {
+      "name": "typescript-expert",
+      "path": ".claude/skills/typescript-expert/SKILL.md",
+      "routed": true,
+      "priority": 4,
+      "globs": ["**/tsconfig*.json", "**/*.d.ts"],
+      "exclude": [],
+      "content": "\\binfer |\\bsatisfies\\b|declare module|\\bkeyof |Omit<|Pick<|Record<|ReturnType<",
+      "also_read": [],
+      "suppress": "Deliberately NOT given a broad **/*.ts glob: it would match nearly every diff and consume the subagent cap ahead of higher-yield skills. Path-routed only for tsconfig/.d.ts; otherwise it needs a type-level construct in the added lines."
+    },
+    {
+      "name": "mermaid-diagram",
+      "path": ".claude/skills/mermaid-diagram/SKILL.md",
+      "routed": false,
+      "reason": "Authoring skill. It explains how to write a diagram and states no assertion a reviewer could check against a diff. A changed ```mermaid block is a docs change, not a correctness risk."
+    },
+    {
+      "name": "engineering-insights",
+      "path": ".claude/skills/engineering-insights/SKILL.md",
+      "routed": false,
+      "reason": "Session-protocol skill whose instructions are to WRITE INSIGHTS.md via append-insight.mjs. Loading it inside a read-only review subagent is a category error - it would ask an agent that must not write to write. It also asserts nothing about the code under review, and it already runs at session end through its own Stop hook."
+    },
+    {
+      "name": "pr-self-review",
+      "path": ".claude/skills/pr-self-review/SKILL.md",
+      "routed": false,
+      "reason": "This skill itself. It would review its own diff. Its scripts are still covered by the `security` route, which globs .claude/skills/**/scripts/*.mjs - see the known coverage gap in README.md."
+    }
+  ],
+  "unrouted_paths": {
+    "_comment": "Matched by nothing above and deliberately so. Listed to keep the report's Coverage table honest about what no domain reviewer looked at.",
+    "globs": [
+      "docs/**",
+      "**/*.md",
+      "scripts/*.sh",
+      "e2e/**",
+      "*.html",
+      "**/INSIGHTS.md",
+      "**/CLAUDE.md"
+    ]
+  }
+}
