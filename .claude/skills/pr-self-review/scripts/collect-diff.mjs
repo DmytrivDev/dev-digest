@@ -563,7 +563,20 @@ const mechanical = {
 
 // ---------------------------------------------------------------- output
 
-const packagesTouched = [...new Set(all.map((f) => f.package).filter(Boolean))];
+/**
+ * A package counts as touched only when a file that can affect COMPILATION changed.
+ * Deriving this from "any path under the package" runs that package's typecheck for a
+ * docs-only edit — and `e2e/INSIGHTS.md` alone was enough to demand `tsc` in a package
+ * whose deps are not installed, turning a markdown change into an INCOMPLETE verdict.
+ */
+const COMPILABLE = /\.(ts|tsx|js|jsx|mjs|cjs|json)$/i;
+const packagesTouched = [
+  ...new Set(
+    all
+      .filter((f) => f.package && f.status !== 'deleted' && COMPILABLE.test(f.path))
+      .map((f) => f.package),
+  ),
+];
 
 const plan = {
   schema: SCHEMA,

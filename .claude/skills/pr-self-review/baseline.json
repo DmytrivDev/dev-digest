@@ -2,16 +2,13 @@
   "schema": "pr-self-review/baseline@1",
   "_comment": "Pre-existing failures that must NOT be attributed to a diff. Checked in so the whole team shares one answer to 'is this mine?'. Keep it SMALL: every entry here is a test nobody is fixing. Remove an entry the moment the underlying bug is fixed.",
   "_scope": "Tests only. Architecture violations are deliberately absent: gate.mjs attributes arch:check output by changed file, and onion-architecture/SKILL.md section 5 points at enforcement.md#current-state as the live inventory, warning that a second copy 'would only drift'. Typecheck is likewise attributed by file, not baselined.",
-  "known_failing_tests": [
+  "known_failing_tests": [],
+  "_history": [
     {
-      "package": "server",
-      "file": "server/test/indexer-pipeline.test.ts",
-      "count": 6,
-      "platform": "win32",
-      "symptom": "ENOENT … \\src\\a.ts",
-      "cause": "The test's own writeFileAt helper splits paths on '/' only, so nested fixture directories are never created.",
-      "verified": "2026-09-16, by stashing all local work and re-running on plain origin/main. The other 95 tests pass.",
-      "report_as": "known-failing (Windows, unrelated)"
+      "entry": "server/test/indexer-pipeline.test.ts — 6 tests, ENOENT … \\src\\a.ts on Windows",
+      "cause": "The test's own writeFileAt helper split paths on '/' only, so nested fixture dirs were never created.",
+      "removed": "2026-09-18",
+      "why": "Fixed on this branch by 4fb6400 'fix(tooling): make the suite green and e2e.sh runnable on a clean checkout'. Verified: 20 files / 118 tests pass. Kept here as a record so nobody re-adds it from an older INSIGHTS.md entry."
     }
   ]
 }
