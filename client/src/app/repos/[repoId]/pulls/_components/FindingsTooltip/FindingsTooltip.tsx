@@ -13,14 +13,9 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, SeverityBadge, CategoryTag, ConfidenceNum, Skeleton } from "@devdigest/ui";
-import type { FindingRecord } from "@devdigest/shared";
 import { usePrReviews } from "@/lib/hooks/reviews";
+import { lineLabel } from "@/lib/findings";
 import { s } from "../../styles";
-
-/** "12" for a one-line finding, "12-18" for a range. */
-function lineLabel(f: FindingRecord): string {
-  return f.start_line === f.end_line ? `${f.start_line}` : `${f.start_line}-${f.end_line}`;
-}
 
 /** Previews are one line of plain text — drop the markdown the card renders. */
 function stripMd(text: string): string {
