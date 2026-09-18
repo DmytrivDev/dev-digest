@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision, index } from 'drizzle-orm/pg-core';
 import { workspaces } from './core';
 import { agents } from './agents';
 import { pullRequests } from './pulls';
@@ -31,7 +31,13 @@ export const agentRuns = pgTable('agent_runs', {
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
   blockers: integer('blockers'),
-});
+},
+  (t) => ({
+    // activeRunsForPull / listRunsForPull / costByPr all filter
+    // (workspace_id, pr_id) and order by ran_at desc.
+    byPr: index('agent_runs_ws_pr_ran_idx').on(t.workspaceId, t.prId, t.ranAt.desc()),
+  }),
+);
 
 /** Whole trace of one run as a SINGLE jsonb document. */
 export const runTraces = pgTable('run_traces', {

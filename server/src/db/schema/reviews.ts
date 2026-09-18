@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision, index } from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces } from './core';
 import { pullRequests } from './pulls';
@@ -23,7 +23,14 @@ export const reviews = pgTable('reviews', {
   score: integer('score'),
   model: text('model'),
   createdAt: now(),
-});
+},
+  (t) => ({
+    // Postgres does not index FK columns automatically. Every read of a PR's
+    // reviews filters on pr_id and orders by created_at desc — without this the
+    // PR list and PR detail both sequential-scan the whole table.
+    byPr: index('reviews_pr_created_idx').on(t.prId, t.createdAt.desc()),
+  }),
+);
 
 export const findings = pgTable('findings', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -43,7 +50,13 @@ export const findings = pgTable('findings', {
   trifectaComponents: jsonb('trifecta_components').$type<string[]>(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
   dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
-});
+},
+  (t) => ({
+    // review_id is the ONLY way findings are ever queried (tenancy is inherited
+    // transitively through reviews.workspace_id), so it carries every read.
+    byReview: index('findings_review_idx').on(t.reviewId),
+  }),
+);
 
 export const prIntent = pgTable('pr_intent', {
   prId: uuid('pr_id')
