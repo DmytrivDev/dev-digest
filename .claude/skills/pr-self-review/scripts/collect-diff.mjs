@@ -484,6 +484,18 @@ const unrouted = [...files.values()]
 const all = [...files.values()];
 const pathsOf = (re) => all.filter((f) => re.test(f.path)).map((f) => f.path);
 
+/**
+ * Does this test actually reach a database? `import type { Db }` does not — it is how a
+ * UNIT test types a mock, and `server/test/jobs.test.ts` does exactly that. Counting a
+ * type-only import as a DB dependency flags most new server tests, which is how a gate
+ * earns the reputation that gets it ignored. Strip type-only imports first, then look
+ * for a real runtime dependency.
+ */
+function isDbBacked(text) {
+  const runtime = text.replace(/^\s*import\s+type\s[^\n]*$/gm, '');
+  return /testcontainers|PostgreSqlContainer|pg-mem|DATABASE_URL|from\s+['"][^'"]*db\/client/.test(runtime);
+}
+
 const migrations = all
   .filter((f) => f.path.startsWith('server/src/db/migrations/') && f.path.endsWith('.sql'))
   .map((f) => ({
@@ -530,13 +542,21 @@ const mechanical = {
         in_routing: (routing.skills ?? []).some((s) => s?.name === slug),
       };
     }),
+  /**
+   * Only DB-BACKED new server tests. CLAUDE.md requires the `.it.test.ts` suffix
+   * because CI splits on it — but most server tests are pure unit tests that
+   * correctly lack it, so flagging every new `server/test/*.test.ts` fires on the
+   * majority and teaches the team to ignore the gate. Gate on evidence of a
+   * database instead of on the filename alone.
+   */
   new_server_tests: all
     .filter(
       (f) =>
         f.path.startsWith('server/test/') &&
         /\.test\.ts$/.test(f.path) &&
         !/\.it\.test\.ts$/.test(f.path) &&
-        (f.status === 'added' || f.status === 'untracked'),
+        (f.status === 'added' || f.status === 'untracked') &&
+        isDbBacked(addedText.get(f.path) ?? ''),
     )
     .map((f) => f.path),
 };
@@ -570,10 +590,56 @@ process.stdout.write(json);
 
 if (!TO_STDOUT_ONLY) {
   const out = flag('--out', join(REPO_ROOT, '.devdigest', 'cache', 'pr-self-review', 'plan.json'));
+  const artifactDir = dirname(out);
   try {
-    mkdirSync(dirname(out), { recursive: true });
+    mkdirSync(artifactDir, { recursive: true });
     writeFileSync(out, json, 'utf8');
   } catch {
     // Writing the artifact is a convenience; stdout already carries the plan.
+  }
+
+  /**
+   * One patch per route, so a reviewer subagent needs only `Read` — no Bash, and
+   * therefore no way to modify the tree it is reviewing. Handing it a shell to run
+   * its own `git diff` would trade that guarantee for nothing.
+   */
+  for (const r of plan.routes) {
+    if (r.deferred) continue;
+    const tracked = r.files.filter((p) => files.get(p)?.status !== 'untracked');
+    const untracked = r.files.filter((p) => files.get(p)?.status === 'untracked');
+    const chunks = [
+      `# pr-self-review patch for skill: ${r.skill}`,
+      `# base: ${mergeBase}  (${BASE_REF})`,
+      `# ${r.files.length} file(s). Line numbers below are NEW-side and are what you must cite.`,
+      '',
+    ];
+    if (tracked.length > 0) {
+      const patch = gitQuiet(['diff', '-M', mergeBase, '--', ...tracked]);
+      if (patch) chunks.push(patch);
+    }
+    for (const p of untracked) {
+      // An untracked file has no diff at all. Number every line so a finding on it
+      // can still cite a range, instead of being dropped as ungrounded.
+      let body = '';
+      try {
+        body = readFileSync(resolve(REPO_ROOT, p), 'utf8');
+      } catch {
+        continue;
+      }
+      chunks.push(`\n=== NEW UNTRACKED FILE: ${p} ===`);
+      chunks.push(
+        body
+          .split(/\r?\n/)
+          .map((line, i) => `${String(i + 1).padStart(5)}| ${line}`)
+          .join('\n'),
+      );
+    }
+    const name = `${r.skill}${r.slice ? `-${r.slice}` : ''}.patch`;
+    try {
+      mkdirSync(join(artifactDir, 'diffs'), { recursive: true });
+      writeFileSync(join(artifactDir, 'diffs', name), `${chunks.join('\n')}\n`, 'utf8');
+    } catch {
+      // Non-fatal: the orchestrator reports a missing patch as INCOMPLETE for that skill.
+    }
   }
 }

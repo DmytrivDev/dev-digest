@@ -15,6 +15,12 @@ course branching rules (feature branch per homework; PR targets **your fork's** 
 never upstream; merge each homework PR before branching the next one). Getting the PR
 base wrong is not recoverable by editing the PR later.
 
+ALSO MANDATORY before `git push` or opening a PR: run `/pr-self-review`. It routes the
+diff to the skills that govern each changed file, reviews them in parallel, runs the
+deterministic checks, and returns PASS / BLOCKED / INCOMPLETE. **≥1 CRITICAL ⇒ do not push
+and do not open the PR** until it is fixed or the user explicitly waives it. There is no
+hook enforcing this — it holds by this line.
+
 ## Session protocol (engineering-insights loop)
 Not optional — all three steps run every session, and two hooks in `.claude/settings.json`
 enforce them rather than relying on memory.
