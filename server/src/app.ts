@@ -158,8 +158,19 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
     app.log.error(err);
     const e = err as { statusCode?: number; message?: string };
-    reply.status(e.statusCode ?? 500).send({
-      error: { code: 'internal_error', message: e.message ?? 'Internal error' },
+    const status = e.statusCode ?? 500;
+    // Only echo the raw message in development. A 5xx here carries whatever the
+    // failure produced — Postgres text with table and constraint names, SQL
+    // fragments, filesystem paths, upstream provider bodies — and sending that
+    // to the browser hands an attacker a free schema dump. A 4xx carries a
+    // caller-facing message and is safe to pass through. The full error is on
+    // the line above either way.
+    const expose = status < 500 || config.nodeEnv === 'development';
+    reply.status(status).send({
+      error: {
+        code: 'internal_error',
+        message: (expose ? e.message : undefined) ?? 'Internal error',
+      },
     });
   });
 
