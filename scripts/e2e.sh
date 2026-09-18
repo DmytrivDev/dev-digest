@@ -115,6 +115,11 @@ install_if_needed client
 # reviewer-core's RAW source is imported by the API at runtime (tsconfig alias);
 # without its deps the API crashes at boot with ERR_MODULE_NOT_FOUND. It uses npm.
 [ -d reviewer-core/node_modules ] || { log "installing deps in reviewer-core"; (cd reviewer-core && npm ci); }
+# e2e itself runs through `tsx`, which is one of ITS devDependencies. Without
+# this the script did all the expensive work first — Postgres, migrate, seed,
+# API, web — and only then died with `tsx: not found`. CI gets this right; the
+# local script did not. Also npm, not pnpm: e2e ships a package-lock.json.
+[ -d e2e/node_modules ] || { log "installing deps in e2e"; (cd e2e && npm ci); }
 
 # --- migrate + seed the ISOLATED db ------------------------------------------
 # Hard guard: never let migrate/seed run against anything but the isolated port.
