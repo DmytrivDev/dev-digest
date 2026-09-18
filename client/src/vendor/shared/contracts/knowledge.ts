@@ -118,6 +118,29 @@ export type SkillType = z.infer<typeof SkillType>;
 export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
 export type SkillSource = z.infer<typeof SkillSource>;
 
+/**
+ * Length limits the skills API enforces on the fields that are rendered into a
+ * review prompt.
+ *
+ * They live in the contract, not only on the server, because both sides need
+ * the same number: the server rejects an over-long field with a 422, and the
+ * editor has to be able to say so BEFORE the round trip. A client-side copy
+ * would drift silently the first time the server's cap moved.
+ *
+ * Deliberately NOT applied to the `Skill` schema above. `Skill` parses what the
+ * API RETURNS, and a row that predates a cap (or was written by the seed, which
+ * inserts straight through Drizzle) legitimately exceeds it — tightening the
+ * read schema would make such a row unreadable instead of merely uneditable.
+ * The caps belong on the write path only.
+ *
+ * `body` is not here: its cap is a 512 KB anti-abuse ceiling nobody reaches by
+ * typing, so the editor has nothing useful to do with it.
+ */
+export const SKILL_LIMITS = {
+  name: 120,
+  description: 200,
+} as const;
+
 export const Skill = z.object({
   id: z.string(),
   name: z.string(),
@@ -130,6 +153,70 @@ export const Skill = z.object({
   evidence_files: z.array(z.string()).nullish(),
 });
 export type Skill = z.infer<typeof Skill>;
+
+/**
+ * One immutable snapshot of a skill's BODY, written whenever the body changes.
+ *
+ * Only the body is versioned — it is the only field that reaches a model, so a
+ * rename cannot change what a past run was told. History is append-only:
+ * restoring an old version writes a NEW version carrying that text rather than
+ * rewinding the counter, so a run that cites v3 can always be explained.
+ */
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
+/** An agent this skill is linked to right now. */
+export const SkillAgentUsage = z.object({
+  agent_id: z.string(),
+  agent_name: z.string(),
+  /** False = linked, but the agent itself is switched off. */
+  agent_enabled: z.boolean(),
+});
+export type SkillAgentUsage = z.infer<typeof SkillAgentUsage>;
+
+/**
+ * Usage statistics for one skill.
+ *
+ * Read every number here as CO-OCCURRENCE, not causation. A run carries several
+ * skills at once, so `findings` counts findings produced by runs whose prompt
+ * included this skill — not findings this skill caused. There is no per-skill
+ * attribution in the data and inventing one would be a precise-looking lie.
+ *
+ * `used_by` comes from the CURRENT links (`agent_skills`); everything else
+ * comes from `run_skills`, which records history. The two can legitimately
+ * disagree — a skill detached yesterday still has runs.
+ */
+export const SkillStats = z.object({
+  /** Window the run-derived numbers cover, in days. */
+  window_days: z.number().int(),
+  /** Agents carrying this skill right now. */
+  used_by: z.array(SkillAgentUsage),
+  /** Runs in the window whose prompt included this skill. */
+  runs: z.number().int(),
+  /** Findings produced by those runs, by severity. */
+  findings: z.number().int(),
+  findings_by_severity: z.record(z.string(), z.number().int()),
+  findings_by_category: z.record(z.string(), z.number().int()),
+  /**
+   * Accepted ÷ (accepted + dismissed) over those findings. Null when nobody has
+   * triaged any of them — an untriaged skill is not a 0% skill.
+   */
+  accept_rate: z.number().nullable(),
+  accepted: z.number().int(),
+  dismissed: z.number().int(),
+  /** Tokens this skill contributed across those runs; null when never priced. */
+  tokens: z.number().int().nullable(),
+  /** The version most recently carried into a run; null when never run. */
+  last_version_used: z.number().int().nullable(),
+  /** ISO timestamp of the newest run carrying it; null when never run. */
+  last_used_at: z.string().nullable(),
+});
+export type SkillStats = z.infer<typeof SkillStats>;
 
 export const CommunitySkill = z.object({
   name: z.string(),

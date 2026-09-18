@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SkillSource, SkillType } from './knowledge.js';
 
 /**
  * Run trace. The ENTIRE trace of one run is persisted as a SINGLE
@@ -49,6 +50,14 @@ export const PromptAssembly = z.object({
   /** PR author's description/body (truncated); null when absent. */
   pr_description: z.string().nullish(),
   user: z.string(),
+  /**
+   * Tokens contributed by each prompt slot, keyed by the field names above
+   * ('system', 'skills', 'user', …). Counted server-side AFTER assembly — the
+   * pure engine has no tokenizer — so it is absent on traces written before
+   * this existed and on the degraded failure/cancel trace. Read it as "unknown",
+   * never as zero.
+   */
+  token_counts: z.record(z.string(), z.number().int()).nullish(),
 });
 export type PromptAssembly = z.infer<typeof PromptAssembly>;
 
@@ -57,6 +66,32 @@ export const MemoryPulled = z.object({
   text: z.string(),
 });
 export type MemoryPulled = z.infer<typeof MemoryPulled>;
+
+/**
+ * One skill the run carried, captured at prompt-assembly time.
+ *
+ * A SNAPSHOT, not a live join: an agent's linked skills can be re-ordered,
+ * detached or edited after the run, so resolving `agent_skills` at read time
+ * would silently re-label history. `version` is the skill's version at the
+ * moment it was assembled, which is what makes an old trace reproducible.
+ */
+export const SkillUsed = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: SkillType,
+  source: SkillSource,
+  /** The skill's `version` when this run assembled it, not its current one. */
+  version: z.number().int(),
+  /** 0-based position in the agent's link list — the prompt-block order. */
+  order: z.number().int(),
+  /** False = linked to the agent but skipped, so it contributed NO block. */
+  enabled: z.boolean(),
+  /** True = the body was delimiter-wrapped before the model saw it. */
+  untrusted: z.boolean(),
+  /** Tokens this skill's block contributed; null for a skipped skill. */
+  tokens: z.number().int().nullish(),
+});
+export type SkillUsed = z.infer<typeof SkillUsed>;
 
 export const RunStats = z.object({
   duration_ms: z.number().int(),
@@ -85,6 +120,17 @@ export const RunTrace = z.object({
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
   specs_read: z.array(z.string()),
+  /**
+   * The agent's linked skills as this run resolved them, in link order.
+   *
+   * NULLISH rather than `.default([])` on purpose: `getRunTrace` CASTS the
+   * jsonb document (`row.trace as RunTrace`) instead of parsing it, so a
+   * default would be a lie — a trace written before this field existed really
+   * does arrive without the key, and a consumer that maps over it blindly
+   * crashes. Read it as `?? []`. An EMPTY array is a different fact: the run
+   * resolved the links and the agent had none.
+   */
+  skills_used: z.array(SkillUsed).nullish(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;
