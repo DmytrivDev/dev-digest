@@ -20,10 +20,27 @@ export function RunStatus({
   const { events, running } = useRunEvents(runIds);
   const wasRunning = React.useRef(false);
 
+  // `onDone` arrives as a fresh inline arrow on every parent render, so keeping
+  // it in the dependency array re-ran this effect on every render — and because
+  // the callback invalidates queries, each run triggered another render, which
+  // recreated the callback, which re-ran the effect. A self-feeding refetch
+  // storm for as long as `running` stayed false with runIds still live.
+  // A ref gives the effect the latest callback without making it a dependency.
+  const onDoneRef = React.useRef(onDone);
+  onDoneRef.current = onDone;
+
   React.useEffect(() => {
-    if (running) wasRunning.current = true;
-    if (!running && wasRunning.current) onDone?.();
-  }, [running, onDone]);
+    if (running) {
+      wasRunning.current = true;
+      return;
+    }
+    // Fire once per running→idle edge, then disarm: without resetting the latch
+    // any later re-render would fire again.
+    if (wasRunning.current) {
+      wasRunning.current = false;
+      onDoneRef.current?.();
+    }
+  }, [running]);
 
   if (runIds.length === 0) return null;
 

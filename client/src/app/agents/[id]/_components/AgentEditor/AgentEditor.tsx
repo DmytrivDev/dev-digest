@@ -20,7 +20,9 @@ export function AgentEditor({ agent, tab, onTab }: { agent: Agent; tab: string; 
         <Tabs tabs={tabs} value={tab} onChange={onTab} pad="0 24px" />
       </div>
       <div style={s.body}>
-        <ConfigTab agent={agent} />
+        {/* key = remount on agent switch, so the form re-seeds from the new
+            agent without an effect mirroring every field into state. */}
+        <ConfigTab key={agent.id} agent={agent} />
       </div>
     </div>
   );

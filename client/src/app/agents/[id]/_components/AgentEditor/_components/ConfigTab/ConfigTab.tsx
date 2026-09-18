@@ -25,18 +25,11 @@ export function ConfigTab({ agent }: { agent: Agent }) {
   const [repoIntel, setRepoIntel] = React.useState(agent.repo_intel);
   const [enabled, setEnabled] = React.useState(agent.enabled);
 
-  // Reset local form when switching agents.
-  React.useEffect(() => {
-    setName(agent.name);
-    setDescription(agent.description);
-    setProvider(agent.provider);
-    setModel(agent.model);
-    setSystemPrompt(agent.system_prompt);
-    setStrategy(agent.strategy);
-    setCiFailOn(agent.ci_fail_on);
-    setRepoIntel(agent.repo_intel);
-    setEnabled(agent.enabled);
-  }, [agent.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching agents resets this form by REMOUNTING it — AgentEditor passes
+  // `key={agent.id}`. The effect that used to re-seed all nine fields here is
+  // gone on purpose: it rendered twice on every switch, needed an
+  // exhaustive-deps suppression, and (because it keyed on `agent.id`) never
+  // re-seeded when the same agent's data changed underneath.
 
   const { data: models } = useProviderModels(provider);
   // Show the price (USD per 1M in/out tokens) in the label when the provider
