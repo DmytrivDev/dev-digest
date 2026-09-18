@@ -1,7 +1,18 @@
-import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  jsonb,
+  timestamp,
+  doublePrecision,
+  index,
+  primaryKey,
+} from 'drizzle-orm/pg-core';
 import { workspaces } from './core';
 import { agents } from './agents';
 import { pullRequests } from './pulls';
+import { skills } from './skills';
 
 // ============================================================ Observability
 
@@ -46,6 +57,50 @@ export const runTraces = pgTable('run_traces', {
     .references(() => agentRuns.id, { onDelete: 'cascade' }),
   trace: jsonb('trace').notNull(),
 });
+
+/**
+ * Which skills a run's prompt actually carried.
+ *
+ * The queryable index over a fact the trace already holds as prose: without it
+ * the only record of "this run used that skill" is the `skills` STRING inside
+ * the `run_traces` jsonb document, and per-skill statistics would mean scanning
+ * every trace. `agent_skills` cannot answer it either — that table says what is
+ * linked RIGHT NOW, so reading it for history silently re-labels past runs
+ * every time someone edits the picker.
+ *
+ * Only skills that REACHED the model are recorded, so every query over this
+ * table is honest without remembering a filter; a linked-but-disabled skill is
+ * still visible in the run's trace document. `skill_version` is the version at
+ * assembly time, which is what makes an old run explainable after an edit.
+ *
+ * Attribution caveat, for anything built on this: a run carries several skills
+ * at once, so a finding can only be attributed to ALL of them together. This
+ * table supports "runs/findings that carried skill X", never "findings caused
+ * by skill X".
+ */
+export const runSkills = pgTable(
+  'run_skills',
+  {
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => agentRuns.id, { onDelete: 'cascade' }),
+    skillId: uuid('skill_id')
+      .notNull()
+      .references(() => skills.id, { onDelete: 'cascade' }),
+    /** The skill's `version` when this run assembled it, not its current one. */
+    skillVersion: integer('skill_version').notNull(),
+    /** 0-based position in the agent's link list — the prompt-block order. */
+    order: integer('order').notNull(),
+    /** Tokens this skill's rendered block contributed to the prompt. */
+    tokens: integer('tokens'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.runId, t.skillId] }),
+    // The stats page reads by skill, never by run — the run side is served by
+    // the primary key.
+    bySkill: index('run_skills_skill_idx').on(t.skillId),
+  }),
+);
 
 export const multiAgentRuns = pgTable('multi_agent_runs', {
   id: uuid('id').primaryKey().defaultRandom(),

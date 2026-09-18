@@ -7,7 +7,9 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import { API_CONTRACT_GUARD, SEED_SKILLS, TEST_QUALITY_RUBRIC } from './seed-skills.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -19,11 +21,12 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  *
  * Seeds: default workspace + system user + membership, default settings,
  * demo repo (acme/payments-api), PR #482 with files/commits, a sample review
- * with a few findings, and the three built-in agents (General + Security +
- * Performance), all on the default openrouter/deepseek-v4-flash provider+model.
+ * with a few findings, the four built-in agents (General + Security +
+ * Performance + Test Quality), all on the default openrouter/deepseek-v4-flash
+ * provider+model, and the L02 starter skills with their agent links.
  *
- * Course lessons populate the other tables (skills, conventions, memory, eval,
- * …) once their features are built — they start empty here.
+ * Later lessons populate the remaining tables (conventions, memory, eval, …)
+ * once their features are built — they start empty here.
  */
 
 export const DEFAULT_WORKSPACE_NAME = 'default';
@@ -212,6 +215,17 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'Test Quality Reviewer',
+      description: 'Judges the tests a PR ships: uncovered branches, missing corner cases, over-mocking, flakes.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
   for (const a of seedAgents) {
     const [existing] = await db
@@ -219,6 +233,61 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, a.name)));
     if (!existing) await db.insert(t.agents).values(a);
+  }
+
+  // ---- built-in skills (L02) + their agent links ----
+  // Bodies live in ./seed-skills.ts. Matched by name like the agents above, so
+  // re-seeding never duplicates a skill and never overwrites one you edited in
+  // the studio.
+  const skillIdByName = new Map<string, string>();
+  for (const sk of SEED_SKILLS) {
+    let [row] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, sk.name)));
+    if (!row) {
+      [row] = await db
+        .insert(t.skills)
+        .values({
+          workspaceId,
+          name: sk.name,
+          description: sk.description,
+          type: sk.type,
+          source: 'manual',
+          body: sk.body,
+          enabled: true,
+          version: 1,
+        })
+        .returning();
+      // v1 body snapshot, mirroring what the skills repository writes on create.
+      await db
+        .insert(t.skillVersions)
+        .values({ skillId: row!.id, version: 1, body: sk.body })
+        .onConflictDoNothing();
+    }
+    skillIdByName.set(sk.name, row!.id);
+  }
+
+  // Link Test Quality Reviewer to its rubric. `order` is the order the blocks
+  // appear in the assembled prompt, so it is set explicitly rather than left to
+  // the column default.
+  const links: Array<{ agent: string; skills: string[] }> = [
+    { agent: 'Test Quality Reviewer', skills: [TEST_QUALITY_RUBRIC.name, API_CONTRACT_GUARD.name] },
+  ];
+  for (const link of links) {
+    const [agentRow] = await db
+      .select()
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, link.agent)));
+    if (!agentRow) continue;
+    for (const [i, name] of link.skills.entries()) {
+      const skillId = skillIdByName.get(name);
+      if (!skillId) continue;
+      await db
+        .insert(t.agentSkills)
+        .values({ agentId: agentRow.id, skillId, order: i })
+        .onConflictDoNothing();
+    }
   }
 
   return { workspaceId, userId };

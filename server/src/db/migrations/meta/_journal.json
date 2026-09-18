@@ -85,6 +85,13 @@
       "when": 1789731641396,
       "tag": "0011_dear_nico_minoru",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789745830187,
+      "tag": "0012_sharp_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }
