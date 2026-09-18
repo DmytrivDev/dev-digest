@@ -33,6 +33,9 @@
 
   --ok: #10b981;
   --ok-bg: rgba(16, 185, 129, 0.12);
+  /* Finding-category accent with no severity token of its own (perf). Charts
+     colour categories, and severity must not be borrowed to mean category. */
+  --cat-perf: #8b5cf6;
   --pending: #f59e0b;
   --failed: #ef4444;
   --stale: #6b7280;
@@ -72,6 +75,7 @@
 
   --ok: #059669;
   --ok-bg: rgba(5, 150, 105, 0.08);
+  --cat-perf: #7c3aed;
   --pending: #d97706;
   --failed: #dc2626;
   --stale: #9ca3af;

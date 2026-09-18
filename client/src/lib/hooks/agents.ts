@@ -3,7 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { Agent, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
+import type { Agent, AgentSkillLink, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
 
 export function useAgents() {
   return useQuery({
@@ -87,5 +87,36 @@ export function useProviderModels(provider: Provider | null | undefined) {
     queryFn: () => api.get<ModelInfo[]>(`/providers/${provider}/models`),
     enabled: !!provider,
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * The skills linked to an agent, in prompt order.
+ *
+ * Lives here rather than in hooks/skills.ts because the endpoint is
+ * agent-scoped: `agent_skills` is owned by the agents module, and the Skills
+ * page never reads it.
+ */
+export function useAgentSkills(agentId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["agent-skills", agentId],
+    queryFn: () => api.get<AgentSkillLink[]>(`/agents/${agentId}/skills`),
+    enabled: !!agentId,
+  });
+}
+
+/**
+ * Replace an agent's linked skills with this exact ordered list.
+ *
+ * The server replaces the whole set in one transaction, so attach, detach and
+ * reorder are all this one call — there is no partial state where an agent has
+ * lost its skills because a second request failed.
+ */
+export function useSetAgentSkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, skillIds }: { agentId: string; skillIds: string[] }) =>
+      api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skill_ids: skillIds }),
+    onSuccess: (data, { agentId }) => qc.setQueryData(["agent-skills", agentId], data),
   });
 }
