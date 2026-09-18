@@ -11,12 +11,7 @@ import {
 import { ThemeProvider } from "./theme";
 import { RepoProvider } from "./repo-context";
 import { ToastProvider, notify } from "./toast";
-import { ApiError } from "./api";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong";
-}
+import { ApiError, describeApiError } from "./api";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [qc] = React.useState(
@@ -35,11 +30,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
         queryCache: new QueryCache({
           onError: (err) => {
             const status = err instanceof ApiError ? err.status : 500;
-            if (status === 0 || status >= 500) notify.error(errorMessage(err));
+            if (status === 0 || status >= 500) notify.error(describeApiError(err));
           },
         }),
         mutationCache: new MutationCache({
-          onError: (err) => notify.error(errorMessage(err)),
+          onError: (err) => notify.error(describeApiError(err)),
         }),
       })
   );

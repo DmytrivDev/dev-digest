@@ -20,7 +20,19 @@ const miniBtnStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-export function PromptBlock({ label, text, color }: { label: string; text: string; color: string }) {
+export function PromptBlock({
+  label,
+  text,
+  color,
+  tokens,
+}: {
+  label: string;
+  text: string;
+  color: string;
+  /** Tokens this slot contributed, counted server-side. Omitted when the trace
+      predates per-slot attribution — absent is not the same as zero. */
+  tokens?: number | undefined;
+}) {
   const t = useTranslations("runs");
   const [open, setOpen] = React.useState(false);
   const [full, setFull] = React.useState(false);
@@ -36,6 +48,11 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
         <span style={s.promptDot(color)} />
         <span style={s.promptLabel}>{label}</span>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          {tokens != null && (
+            <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              {t("trace.prompt.tokens", { count: tokens.toLocaleString("en-US") })}
+            </span>
+          )}
           <button
             type="button"
             title={t("trace.prompt.copy")}

@@ -62,6 +62,51 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return (await res.json()) as T;
 }
 
+/**
+ * One entry of a Fastify + zod `validation_error` payload. Only the two fields
+ * worth showing a human are named; the rest of the envelope is noise.
+ */
+interface ValidationIssue {
+  /** JSON pointer to the offending field, e.g. "/description". */
+  instancePath?: string;
+  message?: string;
+}
+
+/** At most this many field errors reach a toast before it becomes a wall. */
+const MAX_REPORTED_ISSUES = 3;
+
+function validationFields(details: unknown): string[] {
+  if (!Array.isArray(details)) return [];
+  const seen = new Set<string>();
+  for (const raw of details) {
+    const issue = raw as ValidationIssue;
+    if (!issue?.message) continue;
+    const field = (issue.instancePath ?? "").replace(/^\//, "").replace(/\//g, ".");
+    seen.add(field ? `${field} — ${issue.message}` : issue.message);
+  }
+  return [...seen].slice(0, MAX_REPORTED_ISSUES);
+}
+
+/**
+ * Human-readable text for any thrown value, for the global error toast.
+ *
+ * A 422 from the API carries only "Request validation failed" in `message`;
+ * WHICH field and WHY live in `details`. Dropping them produced a real dead
+ * end: saving a skill failed with "Request validation failed" while the field
+ * at fault (an over-long description inherited from the seed) was one the user
+ * had not touched, because the editor posts every field in one patch. A
+ * validation error that does not name its field is indistinguishable from a
+ * bug in the app.
+ */
+export function describeApiError(e: unknown): string {
+  if (e instanceof ApiError) {
+    const fields = validationFields(e.details);
+    return fields.length > 0 ? `${e.message}: ${fields.join("; ")}` : e.message;
+  }
+  if (e instanceof Error) return e.message;
+  return "Something went wrong";
+}
+
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>
