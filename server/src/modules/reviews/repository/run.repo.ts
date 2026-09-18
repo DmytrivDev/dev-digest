@@ -188,6 +188,26 @@ export async function completeAgentRun(
     .where(eq(t.agentRuns.id, runId));
 }
 
+/**
+ * Index which skills this run's prompt carried, one row per skill.
+ *
+ * The queryable twin of the trace's `skills_used`; see `db/schema/runs.ts` for
+ * why the table exists. `onConflictDoNothing` because a re-run of the same
+ * runId (a retry writing its trace twice) must not explode — the set is
+ * determined by the prompt, so a second write carries the same rows.
+ */
+export async function recordRunSkills(
+  db: Db,
+  runId: string,
+  rows: { skillId: string; skillVersion: number; order: number; tokens: number | null }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await db
+    .insert(t.runSkills)
+    .values(rows.map((r) => ({ runId, ...r })))
+    .onConflictDoNothing();
+}
+
 /** Persist the WHOLE run log as ONE document. PK = runId → agent_runs. */
 export async function saveRunTrace(db: Db, runId: string, trace: RunTrace): Promise<void> {
   await db

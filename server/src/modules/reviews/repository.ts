@@ -180,6 +180,14 @@ export class ReviewRepository {
     return runRepo.saveRunTrace(this.db, runId, trace);
   }
 
+  /** Index which skills a run's prompt carried (per-skill stats read this). */
+  recordRunSkills(
+    runId: string,
+    rows: { skillId: string; skillVersion: number; order: number; tokens: number | null }[],
+  ): Promise<void> {
+    return runRepo.recordRunSkills(this.db, runId, rows);
+  }
+
   getRunTrace(workspaceId: string, runId: string): Promise<RunTrace | undefined> {
     return runRepo.getRunTrace(this.db, workspaceId, runId);
   }

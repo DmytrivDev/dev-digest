@@ -6,7 +6,7 @@ import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
-import { taskLine } from './helpers.js';
+import { assembleSkills, countPromptTokens, taskLine, type SkillAssembly } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
@@ -184,6 +184,11 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // L02 — the agent's linked skills, resolved to their bodies. Independent
+      // of repo-intel: a skill is text the user wrote, not repo-derived context.
+      // `used` is the trace record and covers linked-but-disabled skills too.
+      const { blocks: skillBlocks, used: skillsUsed } = await this.buildSkills(agent.id, runLog);
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -204,6 +209,9 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // L02 — linked, enabled skills. No skills ⇒ the slot is absent and the
+        // prompt is byte-identical to the pre-L02 shape.
+        ...(skillBlocks.length > 0 ? { skills: skillBlocks } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -271,7 +279,14 @@ export class ReviewRunExecutor {
           findings: findingRows.length,
           grounding,
         },
-        prompt_assembly: outcome.assembly,
+        prompt_assembly: {
+          ...outcome.assembly,
+          // Per-slot token attribution — counted here because the pure engine
+          // has no tokenizer. Lets the trace show what each block cost.
+          token_counts: countPromptTokens(outcome.assembly, (text) =>
+            this.container.tokenizer.count(text),
+          ),
+        },
         tool_calls: outcome.chunks.map((c) => ({
           tool: 'review_file',
           args: c.label,
@@ -281,12 +296,35 @@ export class ReviewRunExecutor {
         raw_output: outcome.raw,
         memory_pulled: [],
         specs_read: [],
+        // The agent's linked skills as THIS run resolved them (disabled ones
+        // included, marked). A snapshot: re-reading agent_skills later would
+        // describe the picker's current state, not this run's prompt.
+        skills_used: skillsUsed,
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
       };
       runLog.info('Run complete; trace persisted');
       await this.repo.saveRunTrace(runId, trace);
+
+      // Index the skills this prompt carried so per-skill stats can be queried
+      // without scanning trace documents. Best-effort on purpose: the trace
+      // above is already the authoritative record, so a failed index must not
+      // turn a finished review into a failed run. Only skills that actually
+      // reached the model are indexed — see `db/schema/runs.ts`.
+      await this.repo
+        .recordRunSkills(
+          runId,
+          skillsUsed
+            .filter((sk) => sk.enabled)
+            .map((sk) => ({
+              skillId: sk.id,
+              skillVersion: sk.version,
+              order: sk.order,
+              tokens: sk.tokens ?? null,
+            })),
+        )
+        .catch((err) => runLog.info(`skills: usage not indexed — ${(err as Error).message}`));
       this.container.runBus.complete(runId);
 
       return { review, findings: findingRows, grounding, raw: outcome.review };
@@ -315,6 +353,40 @@ export class ReviewRunExecutor {
       this.container.runBus.complete(runId);
       throw err;
     }
+  }
+
+  /**
+   * L02 — resolve the agent's linked skills into prompt blocks, in link order,
+   * plus the `skills_used` record the run trace reports.
+   *
+   * Best-effort like the other builders: on any failure this returns empty and
+   * the `## Skills / rules` section is simply absent, so a broken read degrades
+   * the review instead of killing the run. Disabled skills are dropped from
+   * `blocks` — that is what the toggle on the Skills page means — but KEPT in
+   * `used`, so the report can show that a skill was attached and deliberately
+   * left out rather than silently vanishing. An IMPORTED body is
+   * delimiter-wrapped by `assembleSkills` so the injection guard covers it.
+   */
+  private async buildSkills(agentId: string, runLog: RunLogger): Promise<SkillAssembly> {
+    let links;
+    try {
+      links = await this.agents.linkedSkills(agentId);
+    } catch (err) {
+      runLog.info(`skills: could not be loaded — ${(err as Error).message}`);
+      return { blocks: [], used: [] };
+    }
+    if (links.length === 0) return { blocks: [], used: [] };
+
+    const assembly = assembleSkills(
+      links.map((l) => l.skill),
+      (text) => this.container.tokenizer.count(text),
+    );
+    const skipped = links.length - assembly.blocks.length;
+    runLog.info(
+      `skills: ${assembly.blocks.length} of ${links.length} linked skill(s) attached` +
+        (skipped > 0 ? ` (${skipped} disabled)` : ''),
+    );
+    return assembly;
   }
 
   /**

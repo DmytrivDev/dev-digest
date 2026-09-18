@@ -10,6 +10,7 @@ import type {
 } from '@devdigest/shared';
 import { AgentsRepository } from './repository.js';
 import { toAgentDto, toAgentVersionDto } from './helpers.js';
+import { ValidationError } from '../../platform/errors.js';
 
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
@@ -152,8 +153,29 @@ export class AgentsService {
   ): Promise<AgentSkillLink[] | undefined> {
     const agent = await this.repo.getById(workspaceId, agentId);
     if (!agent) return undefined;
-    await this.repo.setSkills(agentId, skillIds);
+    await this.assertSkillsInWorkspace(workspaceId, skillIds);
+    await this.repo.setSkills(agent, skillIds);
     return this.skillLinks(agentId);
+  }
+
+  /**
+   * Every id must name a skill in THIS workspace.
+   *
+   * Scoping the agent is not enough: the ids arrive from the client, and the
+   * only constraint the link table enforces is that the skill exists at all.
+   * Linking a foreign skill would feed its body into this workspace's review
+   * prompt — and the prompt is served back through the run trace, so the leak
+   * is readable, not just theoretical.
+   *
+   * The error names no id and does not distinguish "no such skill" from
+   * "not yours": either answer would confirm which skill ids exist elsewhere.
+   */
+  private async assertSkillsInWorkspace(workspaceId: string, skillIds: string[]): Promise<void> {
+    if (skillIds.length === 0) return;
+    const known = await this.repo.skillIdsInWorkspace(workspaceId, skillIds);
+    if (skillIds.some((id) => !known.has(id))) {
+      throw new ValidationError('One or more skills do not exist in this workspace');
+    }
   }
 
   /** Link a single skill (append or set order) — additive to existing links. */
@@ -165,9 +187,10 @@ export class AgentsService {
   ): Promise<AgentSkillLink[] | undefined> {
     const agent = await this.repo.getById(workspaceId, agentId);
     if (!agent) return undefined;
+    await this.assertSkillsInWorkspace(workspaceId, [skillId]);
     const existing = await this.repo.linkedSkills(agentId);
     const resolvedOrder = order ?? existing.length;
-    await this.repo.linkSkill(agentId, skillId, resolvedOrder);
+    await this.repo.linkSkill(agent, skillId, resolvedOrder);
     return this.skillLinks(agentId);
   }
 

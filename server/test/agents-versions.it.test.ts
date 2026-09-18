@@ -109,6 +109,90 @@ d('GET /agents/:id/versions', () => {
     await app.close();
   });
 
+  // Linking or REORDERING skills changes the agent's assembled prompt exactly as
+  // editing its system prompt does. Before this was recorded, two runs could
+  // share a version number and a config snapshot yet have been given different
+  // skill blocks — which defeats the reproducibility agent_versions exists for.
+  it('records attaching, reordering and detaching skills as config changes', async () => {
+    const app = await makeApp();
+    const agentId = (
+      await app.inject({ method: 'POST', url: '/agents', payload: createBody })
+    ).json().id as string;
+
+    const skill = async (name: string) =>
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/skills',
+          payload: { name, description: 'd', type: 'rubric', body: '- rule' },
+        })
+      ).json().id as string;
+    const a = await skill(`a-${Math.random().toString(36).slice(2, 8)}`);
+    const b = await skill(`b-${Math.random().toString(36).slice(2, 8)}`);
+
+    const setSkills = (skill_ids: string[]) =>
+      app.inject({ method: 'POST', url: `/agents/${agentId}/skills`, payload: { skill_ids } });
+    const versions = async () =>
+      (await app.inject({ method: 'GET', url: `/agents/${agentId}/versions` })).json();
+
+    await setSkills([a, b]);
+    let list = await versions();
+    expect(list).toHaveLength(2);
+    expect(list[0].config.skills).toEqual([a, b]);
+
+    // Reorder only — same members, different prompt.
+    await setSkills([b, a]);
+    list = await versions();
+    expect(list).toHaveLength(3);
+    expect(list[0].version).toBe(3);
+    expect(list[0].config.skills).toEqual([b, a]);
+
+    // Detach one.
+    await setSkills([b]);
+    list = await versions();
+    expect(list).toHaveLength(4);
+    expect(list[0].config.skills).toEqual([b]);
+
+    await app.close();
+  });
+
+  it('does not burn a version when the posted skill list is unchanged', async () => {
+    const app = await makeApp();
+    const agentId = (
+      await app.inject({ method: 'POST', url: '/agents', payload: createBody })
+    ).json().id as string;
+    const skillId = (
+      await app.inject({
+        method: 'POST',
+        url: '/skills',
+        payload: {
+          name: `noop-${Math.random().toString(36).slice(2, 8)}`,
+          description: 'd',
+          type: 'rubric',
+          body: '- rule',
+        },
+      })
+    ).json().id as string;
+
+    const setSkills = () =>
+      app.inject({
+        method: 'POST',
+        url: `/agents/${agentId}/skills`,
+        payload: { skill_ids: [skillId] },
+      });
+
+    await setSkills();
+    // The editor posts the WHOLE list on every interaction, so a drag dropped
+    // where it started arrives as an identical save.
+    await setSkills();
+
+    const list = (
+      await app.inject({ method: 'GET', url: `/agents/${agentId}/versions` })
+    ).json();
+    expect(list).toHaveLength(2);
+    await app.close();
+  });
+
   it('GET /agents/:id/versions/:version returns one snapshot', async () => {
     const app = await makeApp();
     const agentId = (
