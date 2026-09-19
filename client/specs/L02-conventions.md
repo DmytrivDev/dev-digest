@@ -83,11 +83,15 @@ learns its own rules from an error is a form that wasted a round trip.
 The category picker and the two buttons share one row, so editing costs the card
 two lines rather than doubling its height — you are editing one card inside a
 list of a dozen, and a form that pushes the rest off screen loses the context
-that made you edit it. The picker itself needed a design-system fix: the app
-paints itself dark with CSS variables, but the browser paints the native
-`<select>` popup, and without `color-scheme` on the theme root that popup opens
-white-on-white. It is set in `vendor/ui/styles.css` per theme, so every select
-in the studio is fixed, not only this one.
+that made you edit it.
+
+The picker is the app's own `Dropdown`, not a native `<select>`. A select's
+popup is drawn by the browser, which takes no padding, radius, font or hover
+state from the page — on a dark studio it lands as a bare white list. Setting
+`color-scheme` on the theme root (done, in `vendor/ui/styles.css`, and it fixes
+every other select in the app) only repairs its COLOURS. Nine fixed options is
+exactly the case the vendored dropdown exists for, and it comes with the panel,
+the padding and a tick on the current row.
 
 ### R6 — Rejected candidates stay visible in their own view
 A filter of four chips with counts — All · Pending · Accepted · Rejected —

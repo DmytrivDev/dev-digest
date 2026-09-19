@@ -88,7 +88,10 @@ describe("CandidateCard", () => {
     expect(screen.getByText(CANDIDATE.evidence_snippet)).toBeInTheDocument();
 
     fireEvent.change(textarea, { target: { value: "Validate every body with Zod." } });
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "typing" } });
+    // The category picker is the app's own dropdown (a native select's popup
+    // cannot be styled), so it opens on a click and the rows are buttons.
+    fireEvent.click(screen.getByRole("button", { name: "validation" }));
+    fireEvent.click(screen.getByRole("button", { name: "typing" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(onSaveEdit).toHaveBeenCalledWith({

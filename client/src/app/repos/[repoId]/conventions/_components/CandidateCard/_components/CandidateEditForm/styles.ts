@@ -22,10 +22,6 @@ export const s = {
     fontSize: 12,
     fontWeight: 600,
     color: "var(--text-secondary)",
-    cursor: "pointer",
   } satisfies CSSProperties,
-  // Wide enough for "error handling", narrow enough to leave the row to the
-  // buttons — a full-width picker made the form look like a page of its own.
-  select: { width: 190 } satisfies CSSProperties,
   buttons: { marginLeft: "auto", display: "flex", gap: 8 } satisfies CSSProperties,
 } as const;
