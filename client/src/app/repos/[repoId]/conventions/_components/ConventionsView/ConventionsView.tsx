@@ -103,18 +103,26 @@ export function ConventionsView() {
                 : t("page.subtitle")}
             </p>
           </div>
-          {candidates.length > 0 && (
-            <Button
-              kind="secondary"
-              size="sm"
-              icon="RefreshCw"
-              disabled={extract.isPending}
-              loading={extract.isPending}
-              onClick={() => extract.mutate()}
-            >
-              {extract.isPending ? t("page.scanning") : t("page.rescan")}
-            </Button>
-          )}
+          {/* The scan lives in the header in BOTH states, so the action is
+              always in the same place: `Run Scan` while the page has nothing,
+              `ReScan` once it has candidates. They are not one button with two
+              labels — the first is the invitation, the second re-runs a model
+              call over work you are already triaging, which is why it is the
+              quieter of the two. */}
+          <Button
+            kind={candidates.length > 0 ? "secondary" : "primary"}
+            size="sm"
+            icon={candidates.length > 0 ? "RefreshCw" : "Play"}
+            disabled={extract.isPending}
+            loading={extract.isPending}
+            onClick={() => extract.mutate()}
+          >
+            {extract.isPending
+              ? t("page.scanning")
+              : candidates.length > 0
+                ? t("page.rescan")
+                : t("page.runExtraction")}
+          </Button>
         </div>
 
         {extract.isPending && <div style={s.scanHint}>{t("page.scanHint")}</div>}

@@ -3,11 +3,19 @@ name: pr-self-review
 description: "Reviews all open local changes before a Pull Request is opened: collects the full diff (committed on the branch + staged + unstaged + untracked), routes each changed file to the domain skills that govern it, fans those out as parallel read-only review subagents, runs the deterministic checks (typecheck, arch:check, vendor lock-step, migrations, lockfiles), and returns a BLOCKED or PASS verdict. Use before any git push or Pull Request, and on \"self review\", \"review my changes\", \"check my changes before the PR\", \"am I ready to open a PR\", or when /pr-self-review is invoked. At least one CRITICAL finding blocks: the PR is not opened until it is fixed or explicitly waived."
 metadata:
   version: 1.0.0
+  type: workflow
 ---
 
 # PR self-review
 
 Answers one question: **is this change safe to open a PR for?**
+
+This is a **workflow skill — a dispatcher, not a reviewer**. It holds no review
+rules of its own: it cuts the diff, routes each changed file to the domain skills
+that already govern it ([routing.json](routing.json)), fans those out as parallel
+read-only subagents, runs the deterministic checks, and merges what comes back
+into one verdict. Every rule it enforces belongs to another skill, which is why a
+change to a rule is a change to that skill and never to this file.
 
 This repo has no linter, no `arch:check` CI job and no PR template. Its skills encode real
 rules, but they only fire when an agent happens to load them —

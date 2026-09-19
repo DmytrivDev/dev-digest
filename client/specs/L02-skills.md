@@ -58,7 +58,9 @@ prompt verbatim.
 
 ### R3 — `/skills/:id` mirrors the agent editor
 A 280px rail of `SkillCard`s on the left, the editor on the right, tab state in
-`?tab=`, and `Tabs` = **Preview · Config · Stats · Versions**. Switching skills
+`?tab=`, and `Tabs` = **Preview · Config · Stats · Versioning**. The history
+tab is labelled `Versioning` rather than `Versions` because that is the name the
+course criteria give it; the route key stays `versions`. Switching skills
 remounts the form via `key={skill.id}` rather than mirroring props into state
 with an effect.
 
@@ -161,7 +163,7 @@ that run actually used. A trace written before the field existed renders **no
 section at all** — absent is not the same as none, and claiming zero would
 invent a fact.
 
-### R10 — The editor's Versions tab is the body's history
+### R10 — The editor's Versioning tab is the body's history
 `?tab=versions` lists every body snapshot, newest first: the `v{n}` chip, the
 timestamp, a `Current` badge on the version the skill row is on, and
 `Diff` / `Restore` on the others.
@@ -238,7 +240,7 @@ dead end.
    cost, marks a disabled one `skipped` with no token count, marks an imported
    one `untrusted`, and does not render at all for a trace that predates the
    field.
-11. The Versions tab lists snapshots newest-first, marks the skill's own version
+11. The Versioning tab lists snapshots newest-first, marks the skill's own version
     `Current`, diffs an older one against the current body, and restoring writes
     a new version rather than rewinding.
 12. The Stats tab shows `—` for an untriaged accept rate, keeps the

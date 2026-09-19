@@ -62,7 +62,7 @@ describe("SkillEditor — tab strip", () => {
     // Compare DOM order rather than indices into a container, so the assertion
     // survives however the Tabs primitive wraps its items.
     // By role: the Preview TAB and the Preview tab's own <h2> share their text.
-    const order = ["Preview", "Config", "Stats", "Versions"].map((name) =>
+    const order = ["Preview", "Config", "Stats", "Versioning"].map((name) =>
       screen.getByRole("button", { name }),
     );
     for (let i = 1; i < order.length; i++) {

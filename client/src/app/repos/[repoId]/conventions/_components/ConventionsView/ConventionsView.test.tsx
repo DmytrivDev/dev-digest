@@ -120,7 +120,7 @@ describe("ConventionsView", () => {
   it("offers the scan when nothing has been extracted yet", () => {
     renderView();
     expect(screen.getByText("No conventions extracted yet")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Run extraction" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Run Scan" })[0]!);
     expect(mutateExtract).toHaveBeenCalled();
   });
 
@@ -158,11 +158,11 @@ describe("ConventionsView", () => {
     expect(screen.getByText("line outside the sampled range")).toBeInTheDocument();
   });
 
-  it("swaps Run extraction for Re-scan once candidates exist", () => {
+  it("swaps Run Scan for ReScan once candidates exist", () => {
     state.candidates = [candidate()];
     renderView();
-    expect(screen.getByRole("button", { name: "Re-scan" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Run extraction" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ReScan" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run Scan" })).not.toBeInTheDocument();
   });
 
   // Criterion 50: nothing to assemble until at least one rule is accepted.

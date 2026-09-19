@@ -10,7 +10,7 @@
 | 2 | AGENTS.md (server/client/reviewer-core) | ❌ | `server/CLAUDE.md`, `client/CLAUDE.md`, `reviewer-core/CLAUDE.md` (+ `e2e/`) — той самий патерн |
 | 3 | Скіл UI-архітектури | ✅ | `.claude/skills/frontend-ui-architecture/SKILL.md` (+ `component-anatomy.md`) |
 | 4 | Скіл Onion-архітектури | ✅ | `.claude/skills/onion-architecture/SKILL.md` (+ `enforcement.md`, `pnpm arch:check`) |
-| 5 | Скіл pr-self-review | ✅ | `.claude/skills/pr-self-review/SKILL.md` — диспетчер через `routing.json` |
+| 5 | Скіл pr-self-review | ✅ | `.claude/skills/pr-self-review/SKILL.md`, `metadata.type: workflow`; у тексті прямо сказано, що це диспетчер без власних правил (`routing.json`) |
 | 6 | Agents у секції SKILLS LAB | ✅ | `client/src/vendor/ui/nav.ts` — Agents і Skills в одній секції; перевірено на живій сторінці |
 | 7 | Сторінка Agents — сітка карток | ✅ | `client/src/app/agents/_components/AgentsListView` |
 | 8 | CRUD `/skills` у Postgres | ✅ | `server/src/modules/skills/routes.ts` — GET/POST/PUT/DELETE + repository на Drizzle |
@@ -30,7 +30,7 @@
 | 22 | Картка скіла: версія + `agent_count` | ✅ | `agent_count` у контракті (обидві копії), один груповий запит у `skills/repository.ts`, бейдж на картці; absent ≠ 0 |
 | 23 | Кнопка «Видалити» на картці скіла | ✅ | `SkillCard.tsx:44` |
 | 24 | Підтвердження видалення скіла — модалка | ✅ | `components/ConfirmDialog` (confirm / cancel / X) — на картці, у danger zone і на Restore |
-| 25 | Вкладки `/skills/:id` | ✅ | Preview · Config · Stats · Versions |
+| 25 | Вкладки `/skills/:id` | ✅ | Preview · Config · **Versioning** · Stats (остання необов'язкова за критерієм) |
 | 26 | Preview — рендерений markdown | ✅ | `PreviewTab` через `Markdown` |
 | 27 | Versioning — список версій | ✅ | `VersionsTab` + `GET /skills/:id/versions` |
 | 28 | Кнопка Diff | ✅ | `VersionsTab.tsx:70` — line diff проти поточного тіла |
@@ -47,10 +47,10 @@
 | 39 | Відбір зразків без моделі | ✅ | `service.ts:342` — `repoIntel.getConventionSamples` (top-N за рангом) плюс окреме читання `CONFIG_SAMPLE_PATHS` по пакетних теках (`helpers.ts:37`) — вибір чисто кодовий |
 | 40 | Формат кандидата від моделі | ✅ | `prompt.ts:144` — Zod-схема `ExtractedConventions` для `completeStructured`: category/rule/evidence/confidence, докази перевіряються по реальних файлах (`helpers.ts:120`) |
 | 41 | Модалка створення — редагування тіла | ✅ | `SkillDraftModal` — draft із сервера в редагованих Name/Description/Body; незмінене поле не йде в POST |
-| 42 | Approved → скіл `repo-conventions` | ✅ | `helpers.ts:239` `buildSkillDraft` + `POST /repos/:id/conventions/skill` через `SkillsService` — незмінений набір не палить версію |
+| 42 | Approved → скіл `repo-conventions` (прилінкований) | ✅ | прилінкований до агента (`agent_count: 1`) — `helpers.ts:239` `buildSkillDraft` + `POST /repos/:id/conventions/skill` через `SkillsService` — незмінений набір не палить версію |
 | 43 | 4 скіли API Contract Reviewer | ✅ | `docs/skills/api-contract/` — breaking-change, response-schema, semver-discipline, deprecation-policy; у кожного директивний опис (172–190 симв.) і пари «добре/погано» |
 | 44 | Conventions у SKILLS LAB | ✅ | `client/src/vendor/ui/nav.ts` — четвертий пункт із токеном `:repoId`; перевірено на живій сторінці |
-| 45 | Кнопки Run Scan / ReScan | ✅ | `Run extraction` у порожньому стані, `Re-scan` у шапці; на час скану кнопка заблокована (`Scanning…`) |
+| 45 | Кнопки Run Scan / ReScan | ✅ | обидві в шапці сторінки: `Run Scan` (primary), поки кандидатів немає, `ReScan` (secondary), коли вони є; порожній стан повторює `Run Scan` як CTA |
 | 46 | Картки кандидатів після скану | ✅ | `CandidateCard` — правило, категорія, доказ-permalink, confidence |
 | 47 | Accept / Reject / Edit на картці | ✅ | усі три через один `PUT /conventions/:id` (`useUpdateConvention`) |
 | 48 | Reject зберігається | ✅ | UI-половина: таб `Rejected` + `?status=` в URL — відхилений не повертається в Pending після перезавантаження |

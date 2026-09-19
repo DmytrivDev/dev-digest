@@ -7,8 +7,8 @@
     "subtitle": "Scan the cloned repo to surface house-rules — each backed by evidence you can turn into a Skill.",
     "scanning": "Scanning…",
     "scanHint": "One model call over sampled files. It can take up to a minute.",
-    "rescan": "Re-scan",
-    "runExtraction": "Run extraction",
+    "rescan": "ReScan",
+    "runExtraction": "Run Scan",
     "extractionFailed": "Extraction failed",
     "loadError": "Could not load conventions.",
     "retry": "Retry",
@@ -16,7 +16,7 @@
     "empty": {
       "title": "No conventions extracted yet",
       "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
-      "cta": "Run extraction"
+      "cta": "Run Scan"
     },
     "emptyFilter": {
       "title": "Nothing in this view",

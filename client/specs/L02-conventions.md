@@ -25,13 +25,17 @@ A stale or unknown `:repoId` (including the `_` placeholder the sidebar renders
 when no repo is active) shows the shared `RepoNotFound` screen rather than an
 API error, exactly as the PR list does.
 
-### R2 — Run extraction and Re-scan are two buttons, not one
-The empty state carries `Run extraction`; once candidates exist the header
-carries `Re-scan`. They are not the same affordance: the first is an invitation
-on a page with nothing else to do, the second is a secondary action on a page
-whose content you are already working through. Keeping both under one label
-would make the second look like a refresh, which it is not — it costs a model
-call.
+### R2 — Run Scan and ReScan are two buttons, not one
+The header carries the scan in both states — `Run Scan` (primary) while the
+page has no candidates, `ReScan` (secondary) once it has them — and the empty
+state repeats `Run Scan` as its call to action. They are not one button with
+two labels: the first is an invitation on a page with nothing else to do, the
+second re-runs a model call across work you are already triaging, which is why
+it is the quieter of the two. Keeping both under one label would make the
+second look like a refresh, which it is not — it costs a model call.
+
+The action stays in the header in both states so it is findable in one place,
+and the labels are the ones the course criteria name.
 
 While a scan runs the button is disabled and reads `Scanning…`, with a line
 saying it is one model call and may take up to a minute. That is not decoration:
@@ -163,8 +167,8 @@ reversible action trains people to click through confirmations.
 1. `Conventions` appears in the sidebar's `SKILLS LAB` section and resolves to
    `/repos/:repoId/conventions` for the active repo; an unknown repo id shows
    `RepoNotFound` rather than an error.
-2. With no candidates the page shows the empty state and `Run extraction`;
-   with candidates it shows `Re-scan` in the header and no `Run extraction`.
+2. With no candidates the header shows `Run Scan` and the empty state repeats
+   it; with candidates the header shows `ReScan` and `Run Scan` is gone.
 3. While a scan is in flight the button is disabled and reads `Scanning…`.
 4. A 429 renders in place as the rate-limit explanation, and a 422 renders the
    server's own cause; neither raises a system toast.
