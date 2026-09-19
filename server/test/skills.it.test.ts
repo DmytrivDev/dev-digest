@@ -500,6 +500,60 @@ d('skills module', () => {
     await app.close();
   });
 
+  // The card uses this to answer "will deleting this break something", so an
+  // unlinked skill must report a counted 0 while a single-skill read reports
+  // nothing at all — absent and zero are different facts.
+  it('reports how many agents carry each skill, but only on the list', async () => {
+    const app = await makeApp();
+    const a = (await app.inject({ method: 'POST', url: '/skills', payload: body() })).json();
+    const b = (await app.inject({ method: 'POST', url: '/skills', payload: body() })).json();
+
+    const makeAgent = async () =>
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/agents',
+          payload: {
+            name: `Counter ${Math.random().toString(36).slice(2, 8)}`,
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            system_prompt: 'Review the diff.',
+          },
+        })
+      ).json();
+
+    const one = await makeAgent();
+    const two = await makeAgent();
+    for (const agent of [one, two]) {
+      await app.inject({
+        method: 'POST',
+        url: `/agents/${agent.id}/skills`,
+        payload: { skill_ids: [a.id] },
+      });
+    }
+
+    const byId = (list: { id: string; agent_count?: number | null }[], id: string) =>
+      list.find((s) => s.id === id);
+    const list = (await app.inject({ method: 'GET', url: '/skills' })).json();
+    expect(byId(list, a.id)?.agent_count).toBe(2);
+    expect(byId(list, b.id)?.agent_count).toBe(0);
+
+    // A single-skill read never ran the count, so it must omit the field
+    // rather than serialize a zero it did not measure.
+    const single = (await app.inject({ method: 'GET', url: `/skills/${a.id}` })).json();
+    expect(single.agent_count).toBeUndefined();
+
+    // Unlinking is reflected immediately — the number is derived, not stored.
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${one.id}/skills`,
+      payload: { skill_ids: [] },
+    });
+    const after = (await app.inject({ method: 'GET', url: '/skills' })).json();
+    expect(byId(after, a.id)?.agent_count).toBe(1);
+    await app.close();
+  });
+
   it('previews an imported archive without persisting anything', async () => {
     const app = await makeApp();
     const before = (await app.inject({ method: 'GET', url: '/skills' })).json().length;

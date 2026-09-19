@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { SkillSource, SkillType } from '@devdigest/shared';
@@ -50,6 +50,33 @@ export class SkillsRepository {
       .from(t.skills)
       .where(eq(t.skills.workspaceId, workspaceId))
       .orderBy(asc(t.skills.name));
+  }
+
+  /**
+   * How many agents carry each skill in this workspace, as skillId -> count.
+   *
+   * ONE grouped query for the whole list, not one per card: the list renders
+   * every skill, so a per-skill count would be N round trips to answer a
+   * question the page asks N times at once. Skills with no link are simply
+   * absent from the map — the caller decides whether that reads as 0 or as
+   * "unknown", which is not a repository's call to make.
+   *
+   * `agent_skills` is written by the AGENTS repository (that module owns
+   * linking and ordering). This is a read-only aggregate over the same table,
+   * scoped through `skills` rather than `agents` because the workspace the
+   * caller asked about is the skill's.
+   */
+  async countAgentsBySkill(workspaceId: string): Promise<Map<string, number>> {
+    const rows = await this.db
+      .select({
+        skillId: t.agentSkills.skillId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(t.agentSkills)
+      .innerJoin(t.skills, eq(t.skills.id, t.agentSkills.skillId))
+      .where(eq(t.skills.workspaceId, workspaceId))
+      .groupBy(t.agentSkills.skillId);
+    return new Map(rows.map((r) => [r.skillId, r.count]));
   }
 
   async getById(workspaceId: string, id: string): Promise<SkillRow | undefined> {

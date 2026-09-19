@@ -150,6 +150,20 @@ export const Skill = z.object({
   body: z.string(),
   enabled: z.boolean(),
   version: z.number().int(),
+  /**
+   * How many agents carry this skill right now, from `agent_skills`.
+   *
+   * Only the LIST endpoint reports it: the whole page costs one grouped query,
+   * while a single-skill read would need a second query nobody asked for.
+   * Absent therefore means "not reported here" and NEVER zero — the same rule
+   * the run trace's per-slot token counts follow. A card that shows nothing is
+   * correct; a card that shows 0 for an unreported count is a lie.
+   *
+   * Counts every link, regardless of whether the agent itself is enabled — the
+   * question the card answers is "will deleting this break something", and a
+   * disabled agent is still something.
+   */
+  agent_count: z.number().int().nullish(),
   evidence_files: z.array(z.string()).nullish(),
 });
 export type Skill = z.infer<typeof Skill>;

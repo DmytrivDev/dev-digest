@@ -43,8 +43,15 @@ export class SkillsService {
   constructor(private repo: SkillsRepository) {}
 
   async list(workspaceId: string): Promise<Skill[]> {
-    const rows = await this.repo.list(workspaceId);
-    return rows.map(toSkillDto);
+    // Two queries for the page, not one per card: the rows and one grouped
+    // count over agent_skills. A skill nobody links is absent from the map and
+    // reports 0 — here that IS a counted zero, unlike a single-skill read,
+    // which omits the field because it never ran the count.
+    const [rows, counts] = await Promise.all([
+      this.repo.list(workspaceId),
+      this.repo.countAgentsBySkill(workspaceId),
+    ]);
+    return rows.map((row) => toSkillDto(row, counts.get(row.id) ?? 0));
   }
 
   async get(workspaceId: string, id: string): Promise<Skill | undefined> {

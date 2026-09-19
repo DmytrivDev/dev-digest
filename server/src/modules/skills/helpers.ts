@@ -6,8 +6,15 @@ import type { SkillRow, SkillVersionRow } from '../../db/rows.js';
  * body-version-bump rule. No I/O.
  */
 
-/** Map a persisted skill row to the public `Skill` DTO. */
-export function toSkillDto(row: SkillRow): Skill {
+/**
+ * Map a persisted skill row to the public `Skill` DTO.
+ *
+ * `agentCount` is optional on purpose: only the list knows it (one grouped
+ * query for the page), so a single-skill read omits the field entirely rather
+ * than serializing a 0 it never counted. See the contract for why absent and
+ * zero must stay distinguishable.
+ */
+export function toSkillDto(row: SkillRow, agentCount?: number): Skill {
   return {
     id: row.id,
     name: row.name,
@@ -17,6 +24,7 @@ export function toSkillDto(row: SkillRow): Skill {
     body: row.body,
     enabled: row.enabled,
     version: row.version,
+    ...(agentCount !== undefined ? { agent_count: agentCount } : {}),
     evidence_files: row.evidenceFiles ?? null,
   };
 }
