@@ -81,11 +81,24 @@ export class ReviewService {
    * checkpoint AND marks the DB row cancelled + completes the bus immediately —
    * so cancel also works for ORPHANED runs (whose background process died on a
    * server restart) where signalling alone would do nothing.
+   *
+   * The workspace-scoped UPDATE runs FIRST and gates everything after it. That
+   * order is the whole tenancy check: `RunBus` is a process-wide singleton
+   * keyed by an opaque `runId` and has no workspace concept, so signalling
+   * before the update would let one tenant stop another tenant's live review —
+   * the update would no-op, but the executor sees `isCancelled(runId)` at its
+   * next checkpoint, aborts, and persists `status: 'cancelled'` itself. The
+   * row would be scoped and the cancellation would still happen.
+   *
+   * `cancelRunIfRunning` returns false for a run this workspace does not own,
+   * and equally for one that is no longer running — in both cases there is
+   * nothing to signal, so returning early is correct rather than merely safe.
    */
   async cancelRun(workspaceId: string, runId: string): Promise<void> {
+    const cancelled = await this.repo.cancelRunIfRunning(workspaceId, runId);
+    if (!cancelled) return;
     this.publish(runId, 'info', 'Cancellation requested — stopping…');
     this.container.runBus.cancel(runId);
-    await this.repo.cancelRunIfRunning(workspaceId, runId);
     this.container.runBus.complete(runId);
   }
 

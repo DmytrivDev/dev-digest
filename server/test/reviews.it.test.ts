@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { waitForPrRuns, waitForRunTrace } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
+import { ReviewService } from '../src/modules/reviews/service.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
@@ -481,6 +482,44 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     // The replay buffer should contain our log lines as SSE `data:` frames.
     expect(sse.payload).toContain('Starting review');
     expect(sse.payload).toContain('Citation grounding');
+    await app.close();
+  });
+
+  // The bus is a process-wide singleton keyed by an opaque runId with no
+  // workspace concept, so the workspace-scoped UPDATE has to come FIRST and
+  // gate it. Signalling before the update would leave the row correctly
+  // untouched while the executor aborted the run anyway and persisted
+  // 'cancelled' itself — a scoped row and an unscoped cancellation.
+  it('never lets another tenant cancel a live run', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { db } = pg.handle;
+    const [otherWs] = await db.insert(t.workspaces).values({ name: 'other-cancel' }).returning();
+    const { pr } = await setupRepoAndPr(db, workspaceId);
+    const [run] = await db
+      .insert(t.agentRuns)
+      .values({ workspaceId, prId: pr.id, status: 'running' })
+      .returning();
+
+    const service = new ReviewService(app.container);
+    await service.cancelRun(otherWs!.id, run!.id);
+
+    const [foreignAttempt] = await db
+      .select()
+      .from(t.agentRuns)
+      .where(eq(t.agentRuns.id, run!.id));
+    expect(foreignAttempt!.status).toBe('running');
+    // Neither half of the bus was touched: no stop signal for the runner to
+    // see, and no completion to tear its stream down.
+    expect(app.container.runBus.isCancelled(run!.id)).toBe(false);
+    expect(app.container.runBus.isComplete(run!.id)).toBe(false);
+
+    // The owning workspace still cancels, row and bus together. `complete()`
+    // clears the cancelled flag by design, so completion is what is observable
+    // afterwards — not `isCancelled`.
+    await service.cancelRun(workspaceId, run!.id);
+    const [owned] = await db.select().from(t.agentRuns).where(eq(t.agentRuns.id, run!.id));
+    expect(owned!.status).toBe('cancelled');
+    expect(app.container.runBus.isComplete(run!.id)).toBe(true);
     await app.close();
   });
 
