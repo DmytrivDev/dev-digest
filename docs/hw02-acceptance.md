@@ -46,18 +46,18 @@
 | 38 | `POST /repos/:id/conventions/extract` | ❌ | модуля conventions немає (`server/src/modules/index.ts`) |
 | 39 | Відбір зразків без моделі | 🟡 | `repoIntel.getConventionSamples()` існує (`repo-intel/service.ts:640`), але його ніхто не викликає; конфігів (eslint/tsconfig/prettier) у вибірці немає |
 | 40 | Формат кандидата від моделі | ❌ | немає промпта/схеми кандидата |
-| 41 | Модалка створення — редагування тіла | ❌ | немає сторінки Conventions |
+| 41 | Модалка створення — редагування тіла | ✅ | `SkillDraftModal` — draft із сервера в редагованих Name/Description/Body; незмінене поле не йде в POST |
 | 42 | Approved → скіл `repo-conventions` | ❌ | таблиця `conventions` є (`db/schema/knowledge.ts:31`), логіки збірки немає |
 | 43 | 4 скіли API Contract Reviewer | ❌ | у сиді один `api-contract-guard`; треба breaking-change, response-schema, semver-discipline, deprecation-policy |
-| 44 | Conventions у SKILLS LAB | ❌ | пункту немає в `nav.ts` |
-| 45 | Кнопки Run Scan / ReScan | ❌ | — |
-| 46 | Картки кандидатів після скану | ❌ | — |
-| 47 | Accept / Reject / Edit на картці | ❌ | — |
-| 48 | Reject зберігається | ❌ | у таблиці лише `accepted boolean` — стану «відхилено» немає |
-| 49 | Edit inline | ❌ | — |
-| 50 | Кнопка Create skill | ❌ | — |
-| 51 | Модалка Create skill | ❌ | — |
-| 52 | Новий скіл видно на сторінці Skills | ❌ | наслідок 42/50 |
+| 44 | Conventions у SKILLS LAB | ✅ | `client/src/vendor/ui/nav.ts` — четвертий пункт із токеном `:repoId`; перевірено на живій сторінці |
+| 45 | Кнопки Run Scan / ReScan | ✅ | `Run extraction` у порожньому стані, `Re-scan` у шапці; на час скану кнопка заблокована (`Scanning…`) |
+| 46 | Картки кандидатів після скану | ✅ | `CandidateCard` — правило, категорія, доказ-permalink, confidence |
+| 47 | Accept / Reject / Edit на картці | ✅ | усі три через один `PUT /conventions/:id` (`useUpdateConvention`) |
+| 48 | Reject зберігається | ✅ | UI-половина: таб `Rejected` + `?status=` в URL — відхилений не повертається в Pending після перезавантаження |
+| 49 | Edit inline | ✅ | картка стає формою на місці, блок доказу лишається на екрані |
+| 50 | Кнопка Create skill | ✅ | з'являється, коли `accepted > 0` (похідний стан, не прапорець) |
+| 51 | Модалка Create skill | ✅ | пояснення «merged from N», Name/Description/Body, Cancel і Create |
+| 52 | Новий скіл видно на сторінці Skills | ✅ | інвалідація `["skills"]` у `useCreateConventionSkill`; перевірено живим переходом без перезавантаження |
 | 53 | Settings → Models → Conventions | ✅ | `FEATURE_MODELS` містить `conventions`; `SettingsModels` малює рядок із `SearchableSelect` (список живий з OpenRouter) |
 
 ## Підсумок
@@ -68,6 +68,23 @@
 - ❌ **17** — AGENTS.md (1–2, свідомо відкинуто як необовʼязкове), Conventions у сайдбарі (44,
   разом зі сторінкою), імпортований скіл (16), 4 скіли API Contract (43) і вся фіча
   Conventions (38, 40–42, 45–52).
+
+> Рядки **38–40 і 42** ще описують стан ДО кроку 2 — серверний модуль
+> `conventions` уже існує (`server/src/modules/conventions/`), тож підсумкові
+> лічильники вище застарілі рівно на ці чотири рядки. Оновлюється власником
+> кроку 2, щоб не переписувати чужу оцінку наосліп.
+
+### Крок 3 (зроблено 2026-09-19)
+Сторінка `/repos/:repoId/conventions`: скан із заблокованою на час виконання
+кнопкою, картки кандидатів із клікабельним доказом, Accept / Reject / inline
+Edit через один `PUT`, фільтр триажу з `?status=` в URL, звіт скану і модалка
+створення скіла з серверного драфта. Рішення й обґрунтування —
+`client/specs/L02-conventions.md`. Перевірено: `pnpm typecheck`, `pnpm test`
+(client 179, було 144), `pnpm build` (обовʼязковий — зʼявилися value-імпорти з
+`@devdigest/shared`), і живий прохід на репозиторії `DmytrivDev/dev-digest`:
+Re-scan (12 запропоновано / 12 залишено, триаж збережено), Accept, Create skill
+і новий `repo-conventions` на `/skills` без перезавантаження; посилання на доказ
+відкриває реальний файл на GitHub (HTTP 200 на permalink із sha скану).
 
 ### Крок 1 (зроблено 2026-09-19)
 Сайдбар · бічна панель прев'ю · `agent_count` · модалки підтвердження. Перевірено:
