@@ -8,6 +8,11 @@
 
 :root,
 [data-theme="dark"] {
+  /* Tells the browser to paint its OWN widgets dark — the native <select>
+     popup, scrollbars, focus rings. Without it a dark page opens a white
+     option list, which is what the Conventions category picker looked like:
+     `<option>` colours alone are not honoured everywhere, `color-scheme` is. */
+  color-scheme: dark;
   --bg-primary: #0a0a0a;
   --bg-surface: #141414;
   --bg-elevated: #1c1c1c;
@@ -50,6 +55,7 @@
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg-primary: #ffffff;
   --bg-surface: #fafafa;
   --bg-elevated: #ffffff;

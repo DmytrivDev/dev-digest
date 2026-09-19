@@ -14,13 +14,14 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, FormField, Modal, TextInput, Textarea } from "@devdigest/ui";
+import { Button, FormField, Icon, Modal, TextInput, Textarea } from "@devdigest/ui";
 import { SKILL_LIMITS } from "@devdigest/shared";
 import type { ConventionSkillDraft, Skill } from "@devdigest/shared";
 import {
   useConventionSkillDraft,
   useCreateConventionSkill,
 } from "@/lib/hooks/conventions";
+import { useSkills } from "@/lib/hooks/skills";
 import { BODY_ROWS, MODAL_WIDTH } from "./constants";
 import { s } from "./styles";
 
@@ -40,6 +41,11 @@ export function SkillDraftModal({
   const t = useTranslations("conventions");
   const draft = useConventionSkillDraft(repoId);
   const create = useCreateConventionSkill(repoId);
+  // The save matches an existing skill BY NAME, so the same name is an UPDATE
+  // and any other name is a second skill. Neither is wrong, but the modal has
+  // to say which one the button is about to do — silently replacing a body an
+  // agent already carries is the kind of thing you find out from a review.
+  const { data: skills } = useSkills();
 
   // null = untouched, so the POST can omit it. Deriving the shown value from
   // the draft keeps the fields correct when it arrives after the first render.
@@ -52,6 +58,8 @@ export function SkillDraftModal({
     description: description ?? draft.data?.description ?? "",
     body: body ?? draft.data?.body ?? "",
   };
+
+  const existing = (skills ?? []).find((sk) => sk.name === shown.name.trim());
 
   const valid =
     shown.name.trim().length > 0 &&
@@ -106,6 +114,17 @@ export function SkillDraftModal({
           <>
             <FormField label={t("modal.name")} hint={t("modal.nameHint")} required>
               <TextInput value={shown.name} onChange={setName} mono />
+              {existing && (
+                <div style={s.warning} role="note">
+                  <Icon.AlertTriangle size={14} style={s.warningIcon} />
+                  <span>
+                    {t("modal.nameTaken", {
+                      name: existing.name,
+                      version: existing.version,
+                    })}
+                  </span>
+                </div>
+              )}
             </FormField>
             <FormField label={t("modal.description")}>
               <TextInput value={shown.description} onChange={setDescription} />

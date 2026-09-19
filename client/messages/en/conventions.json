@@ -82,6 +82,7 @@
     "explain": "Merged from {count, plural, one {# accepted convention} other {# accepted conventions}} in {repo}. The body is assembled by the server — everything below is editable before you save.",
     "name": "Name",
     "nameHint": "Saving under a different name creates a second skill rather than renaming this one.",
+    "nameTaken": "A skill named {name} already exists (v{version}). Saving REPLACES its body and writes a new version — every agent carrying it is affected. Change the name above to create a separate skill instead.",
     "description": "Description",
     "body": "Skill body",
     "bodyHint": "The only text sent to the model. Edit freely — what you save is what an agent reads.",

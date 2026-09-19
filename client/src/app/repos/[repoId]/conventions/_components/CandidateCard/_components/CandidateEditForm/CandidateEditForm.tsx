@@ -29,6 +29,7 @@ export function CandidateEditForm({
   onSave: (patch: { rule: string; category: Category }) => void;
 }) {
   const t = useTranslations("conventions");
+  const selectId = React.useId();
   const [draftRule, setDraftRule] = React.useState(rule);
   const [draftCategory, setDraftCategory] = React.useState<Category>(category);
 
@@ -51,30 +52,40 @@ export function CandidateEditForm({
         </span>
       </div>
 
-      <label style={s.label}>{t("card.categoryLabel")}</label>
-      <SelectInput
-        value={draftCategory}
-        onChange={(v) => setDraftCategory(v as Category)}
-        options={ConventionCategory.options.map((value) => ({
-          value,
-          label: t(`category.${value}`),
-        }))}
-      />
-
+      {/* Category and the actions share one row: the form then costs the card a
+          couple of lines rather than doubling its height, which matters when
+          you are editing one card in a list of a dozen. */}
       <div style={s.actions}>
-        <Button kind="ghost" size="sm" onClick={onCancel} disabled={busy}>
-          {t("card.cancel")}
-        </Button>
-        <Button
-          kind="primary"
-          size="sm"
-          icon="Check"
-          disabled={!canSave}
-          loading={busy}
-          onClick={() => onSave({ rule: trimmed, category: draftCategory })}
-        >
-          {busy ? t("card.saving") : t("card.save")}
-        </Button>
+        <label style={s.inlineLabel} htmlFor={selectId}>
+          {t("card.categoryLabel")}
+        </label>
+        <div style={s.select}>
+          <SelectInput
+            id={selectId}
+            value={draftCategory}
+            onChange={(v) => setDraftCategory(v as Category)}
+            options={ConventionCategory.options.map((value) => ({
+              value,
+              label: t(`category.${value}`),
+            }))}
+            mono={false}
+          />
+        </div>
+        <div style={s.buttons}>
+          <Button kind="ghost" size="sm" onClick={onCancel} disabled={busy}>
+            {t("card.cancel")}
+          </Button>
+          <Button
+            kind="primary"
+            size="sm"
+            icon="Check"
+            disabled={!canSave}
+            loading={busy}
+            onClick={() => onSave({ rule: trimmed, category: draftCategory })}
+          >
+            {busy ? t("card.saving") : t("card.save")}
+          </Button>
+        </div>
       </div>
     </div>
   );

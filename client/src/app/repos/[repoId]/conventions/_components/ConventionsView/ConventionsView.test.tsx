@@ -38,6 +38,10 @@ vi.mock("@/lib/repo-context", () => ({
   useActiveRepo: () => ({ activeRepo: { id: "r1", full_name: "acme/api" } }),
   useRepoNotFound: () => false,
 }));
+// The draft modal reads the skills list to warn about a name already in use.
+vi.mock("@/lib/hooks/skills", () => ({
+  useSkills: () => ({ data: [] }),
+}));
 vi.mock("@/lib/hooks/conventions", () => ({
   useConventions: () => ({
     data: { candidates: state.candidates },

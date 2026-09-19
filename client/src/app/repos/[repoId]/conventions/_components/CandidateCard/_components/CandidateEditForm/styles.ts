@@ -13,8 +13,19 @@ export const s = {
   counterOver: { fontSize: 11.5, color: "var(--crit)" } satisfies CSSProperties,
   actions: {
     display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
-    marginTop: 4,
+    alignItems: "center",
+    gap: 10,
+    marginTop: 2,
+    flexWrap: "wrap",
   } satisfies CSSProperties,
+  inlineLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+  } satisfies CSSProperties,
+  // Wide enough for "error handling", narrow enough to leave the row to the
+  // buttons — a full-width picker made the form look like a page of its own.
+  select: { width: 190 } satisfies CSSProperties,
+  buttons: { marginLeft: "auto", display: "flex", gap: 8 } satisfies CSSProperties,
 } as const;

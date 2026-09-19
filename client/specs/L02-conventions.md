@@ -80,6 +80,15 @@ The editor enforces the contract's `CONVENTION_LIMITS.rule` and a non-empty
 rule before the request, because the server answers 422 for both and a form that
 learns its own rules from an error is a form that wasted a round trip.
 
+The category picker and the two buttons share one row, so editing costs the card
+two lines rather than doubling its height — you are editing one card inside a
+list of a dozen, and a form that pushes the rest off screen loses the context
+that made you edit it. The picker itself needed a design-system fix: the app
+paints itself dark with CSS variables, but the browser paints the native
+`<select>` popup, and without `color-scheme` on the theme root that popup opens
+white-on-white. It is set in `vendor/ui/styles.css` per theme, so every select
+in the studio is fixed, not only this one.
+
 ### R6 — Rejected candidates stay visible in their own view
 A filter of four chips with counts — All · Pending · Accepted · Rejected —
 defaulting to **Pending**, with the choice kept in `?status=`.
@@ -121,6 +130,16 @@ which is precisely how the route reads a missing field.
 
 The draft is fetched per opening (`staleTime: 0`, and the modal mounts the hook
 only while open), because accepting one more rule changes the body.
+
+**A name already in use is called out before the save, not after.** The route
+matches an existing skill BY NAME, so the default name is usually an UPDATE:
+the body is replaced and a new version written, and every agent carrying that
+skill is affected from its next run. That is the right default — this is the
+same repo's conventions — but it is invisible from a button labelled `Create
+skill`, so the modal warns, names the version it would replace, and points at
+the name field as the way to make a separate skill instead. The warning is
+derived from the skills list against the CURRENT field value, so it disappears
+the moment the name is free.
 
 ### R10 — A saved skill is announced with a way to reach it
 Saving does not navigate. Triage rarely stops at the first skill, and a redirect
@@ -167,6 +186,9 @@ reversible action trains people to click through confirmations.
     offers `Cancel` and `Create skill`. Cancel writes nothing.
 13. Saving an untouched draft posts `{}`; changing only the body posts only
     `body`.
+13a. When a skill already carries the name in the field, the modal shows a
+    warning naming it and its current version and saying the save replaces its
+    body; renaming to a free name removes the warning.
 14. After a save the page stays put, shows the skill's name with a link to
     `/skills/:id`, and the skill is on `/skills` without a reload.
 15. `pnpm typecheck`, `pnpm test` and `pnpm build` all pass. The build is not

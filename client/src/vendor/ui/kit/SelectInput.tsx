@@ -7,11 +7,14 @@ export function SelectInput({
   onChange,
   options,
   mono = true,
+  id,
 }: {
   value: string;
   onChange?: (v: string) => void;
   options: (string | { value: string; label: string })[];
   mono?: boolean;
+  /** Set it to point a <label htmlFor> at the real <select> inside. */
+  id?: string;
 }) {
   return (
     <div
@@ -27,6 +30,7 @@ export function SelectInput({
       }}
     >
       <select
+        id={id}
         className={mono ? "mono" : undefined}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
@@ -34,7 +38,10 @@ export function SelectInput({
           flex: 1,
           fontSize: 14,
           color: "var(--text-primary)",
-          background: "transparent",
+          // NOT transparent: the popup the browser opens inherits the select's
+          // own colours, and a transparent one falls back to the UA's white.
+          // `color-scheme` on the theme root does the rest (vendor/ui/styles.css).
+          backgroundColor: "var(--bg-elevated)",
           border: "none",
           outline: "none",
           appearance: "none",
@@ -45,7 +52,14 @@ export function SelectInput({
           const v = typeof o === "string" ? o : o.value;
           const l = typeof o === "string" ? o : o.label;
           return (
-            <option key={v} value={v}>
+            <option
+              key={v}
+              value={v}
+              // Chromium honours these on the option rows themselves; Firefox
+              // and Safari take the colour from `color-scheme`. Both paths are
+              // needed for the list to be readable in a dark theme.
+              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-primary)" }}
+            >
               {l}
             </option>
           );

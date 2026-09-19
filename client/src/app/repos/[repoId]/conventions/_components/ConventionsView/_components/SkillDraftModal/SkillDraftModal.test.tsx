@@ -12,6 +12,11 @@ const state = vi.hoisted(() => ({
   } as { name: string; description: string; body: string } | undefined,
   isLoading: false,
   isError: false,
+  skills: [] as { id: string; name: string; version: number }[],
+}));
+
+vi.mock("@/lib/hooks/skills", () => ({
+  useSkills: () => ({ data: state.skills }),
 }));
 
 vi.mock("@/lib/hooks/conventions", () => ({
@@ -55,6 +60,7 @@ afterEach(() => {
   };
   state.isLoading = false;
   state.isError = false;
+  state.skills = [];
 });
 
 describe("SkillDraftModal", () => {
@@ -111,6 +117,32 @@ describe("SkillDraftModal", () => {
     renderModal();
     fireEvent.click(screen.getByRole("button", { name: "Create skill" }));
     await waitFor(() => expect(createSkill).toHaveBeenCalledWith({}));
+  });
+
+  // Saving matches an existing skill BY NAME, so the default name is usually
+  // an update, not a create — and it changes the body of a skill agents may
+  // already carry. The modal has to say so before the button is pressed.
+  it("warns that the name is taken, and says what saving will do", () => {
+    state.skills = [{ id: "s1", name: "repo-conventions", version: 3 }];
+    renderModal();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      /A skill named repo-conventions already exists \(v3\)/,
+    );
+    expect(screen.getByRole("note")).toHaveTextContent(/REPLACES its body/);
+  });
+
+  it("drops the warning once the name is free again", () => {
+    state.skills = [{ id: "s1", name: "repo-conventions", version: 3 }];
+    renderModal();
+    fireEvent.change(screen.getByDisplayValue("repo-conventions"), {
+      target: { value: "dev-digest-conventions" },
+    });
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("says nothing when no skill carries that name", () => {
+    renderModal();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("refuses an empty name", () => {
