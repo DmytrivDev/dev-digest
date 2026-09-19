@@ -64,16 +64,28 @@ export const CODE_SAMPLE_COUNT = 12;
  * Per-file line budget. Conventions live in the top of a file — imports, the
  * export shape, the first handler — so a head slice is not a compromise here.
  */
-export const MAX_SAMPLE_LINES = 160;
+export const MAX_SAMPLE_LINES = 100;
 
 /** Per-file character budget, applied after the line budget. */
-export const MAX_SAMPLE_CHARS = 6_000;
+export const MAX_SAMPLE_CHARS = 4_000;
 
-/** Total character budget across every sample, so a big repo cannot blow the context. */
-export const MAX_TOTAL_SAMPLE_CHARS = 90_000;
+/**
+ * Total character budget across every sample.
+ *
+ * Deliberately modest. This is a SYNCHRONOUS route, so the budget is a latency
+ * decision as much as a cost one: the first live scan sent ~10k input tokens and
+ * took 5-9 minutes, which no client waits out.
+ */
+export const MAX_TOTAL_SAMPLE_CHARS = 40_000;
 
-/** How many candidates the model may return. */
-export const MAX_CANDIDATES = 20;
+/**
+ * How many candidates the model may return.
+ *
+ * The binding constraint on latency is OUTPUT tokens, not input: the first live
+ * scan spent 9,197 of them on 20 candidates. Fewer, better-evidenced rules are
+ * also what a human can actually triage.
+ */
+export const MAX_CANDIDATES = 12;
 
 /**
  * How far from the cited line the snippet may actually be found. Off-by-one from
@@ -83,11 +95,23 @@ export const MAX_CANDIDATES = 20;
 export const EVIDENCE_LINE_TOLERANCE = 2;
 
 /**
- * Per-request timeout. Honoured by the OpenAI and Anthropic adapters; OpenRouter
- * fixes its own timeout at construction and ignores this, so it is a ceiling for
- * two providers out of three, not a guarantee.
+ * Per-request timeout passed to the provider. Honoured by the OpenAI and
+ * Anthropic adapters; OpenRouter fixes its own timeout at construction and
+ * ignores this, so it is a ceiling for two providers out of three, not a
+ * guarantee. `EXTRACT_DEADLINE_MS` is the guarantee.
  */
 export const EXTRACT_TIMEOUT_MS = 120_000;
+
+/**
+ * Hard server-side deadline on the whole model call, enforced by this module.
+ *
+ * This route answers synchronously, so an unbounded call is a connection held
+ * open until the client gives up — which then reports a failure and gets no
+ * result while the scan runs on. Because the one provider that matters here
+ * ignores the per-request timeout, the bound has to be ours. On expiry the route
+ * fails fast and says so, instead of going quiet.
+ */
+export const EXTRACT_DEADLINE_MS = 240_000;
 
 /**
  * Schema-repair attempts. One, not the default two: each repair is a full extra

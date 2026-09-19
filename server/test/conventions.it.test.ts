@@ -19,7 +19,12 @@ import { ConventionsRepository } from '../src/modules/conventions/repository.js'
 import { ConventionsService } from '../src/modules/conventions/service.js';
 import { SkillsRepository } from '../src/modules/skills/repository.js';
 import { SkillsService } from '../src/modules/skills/service.js';
-import type { ConventionCandidate, ConventionScanResult, Skill } from '@devdigest/shared';
+import type {
+  ConventionCandidate,
+  ConventionScanResult,
+  LLMProvider,
+  Skill,
+} from '@devdigest/shared';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
@@ -461,6 +466,37 @@ d('conventions extractor', () => {
     // The row is untouched by the foreign attempt.
     const [row] = await db.select().from(t.conventions).where(eq(t.conventions.id, candidates[0]!.id));
     expect(row!.status).toBe('pending');
+  });
+
+  it('fails fast when the model does not answer within the deadline', async () => {
+    // The route answers synchronously, so an unbounded call is a connection held
+    // open until the client gives up. The deadline is ours to enforce, because the
+    // provider this feature runs on ignores the per-request timeoutMs.
+    const db = pg.handle.db;
+    const repo = await makeRepo();
+    const hung: LLMProvider = {
+      id: 'openai',
+      listModels: async () => [],
+      complete: async () => {
+        throw new Error('not used');
+      },
+      embed: async () => [],
+      completeStructured: () => new Promise(() => {}), // never settles
+    };
+
+    const service = new ConventionsService({
+      repo: new ConventionsRepository(db),
+      git: new MockGitClient({ files: FILES, head: 'headsha1' }),
+      repoIntel: fakeRepoIntel(['src/routes.ts']),
+      llm: async () => hung,
+      resolveModel: async () => ({ provider: 'openai', model: 'stalls' }),
+      skills: new SkillsService(new SkillsRepository(db)),
+      deadlineMs: 150,
+    });
+
+    await expect(service.extract(workspaceId, repo.id)).rejects.toThrow(/did not answer within/);
+    // Nothing was written — a scan that never returned proposes nothing.
+    expect(await service.list(workspaceId, repo.id)).toEqual([]);
   });
 
   it('refuses to spend a model call on a repo with no index', async () => {

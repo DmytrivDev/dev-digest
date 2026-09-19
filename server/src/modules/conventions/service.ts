@@ -7,6 +7,7 @@
  * from its own signature, and forces every test to build a container.
  */
 import type {
+  ChatMessage,
   ConventionCandidate,
   ConventionScanReport,
   ConventionScanResult,
@@ -16,8 +17,10 @@ import type {
   LLMProvider,
   Provider,
   Skill,
+  StructuredResult,
 } from '@devdigest/shared';
-import { ValidationError } from '../../platform/errors.js';
+import { ExternalServiceError, ValidationError } from '../../platform/errors.js';
+import { TimeoutError, withTimeout } from '../../platform/resilience.js';
 import type { RepoIntel } from '../repo-intel/types.js';
 import type { SkillsService } from '../skills/service.js';
 import { SKILL_BODY_MAX } from '../skills/constants.js';
@@ -25,6 +28,7 @@ import {
   CODE_SAMPLE_COUNT,
   CONFIG_SAMPLE_PATHS,
   CONVENTIONS_SKILL_NAME,
+  EXTRACT_DEADLINE_MS,
   EXTRACT_MAX_RETRIES,
   EXTRACT_TIMEOUT_MS,
   MAX_CANDIDATES,
@@ -60,6 +64,11 @@ export interface ConventionsDeps {
    */
   resolveModel: () => Promise<FeatureModelChoice>;
   skills: SkillsService;
+  /**
+   * Override the hard deadline. Injected only by the test that proves the bound
+   * fires — waiting out the real one would make the suite useless.
+   */
+  deadlineMs?: number;
 }
 
 export class ConventionsService {
@@ -107,18 +116,7 @@ export class ConventionsService {
 
     const { messages, included } = buildConventionsMessages(repo.fullName, samples);
     const llm = await this.deps.llm(choice.provider);
-    const res = await llm.completeStructured({
-      model: choice.model,
-      schema: ExtractedConventions,
-      schemaName: 'RepoConventions',
-      messages,
-      // `timeoutMs` binds the OpenAI and Anthropic adapters, but NOT OpenRouter:
-      // that provider fixes its timeout in its constructor and ignores the
-      // per-request value. `maxRetries` is the bound that works everywhere —
-      // it caps the schema-repair loop, which is the real latency multiplier.
-      timeoutMs: EXTRACT_TIMEOUT_MS,
-      maxRetries: EXTRACT_MAX_RETRIES,
-    });
+    const res = await this.completeWithinDeadline(llm, choice.model, messages);
 
     // Validate against what was actually SENT (clipped the same way), so a line
     // past the end of the sample is out of range rather than silently trusted.
@@ -220,6 +218,51 @@ export class ConventionsService {
       );
     }
     return updated;
+  }
+
+  /**
+   * The one model call, under a deadline we enforce ourselves.
+   *
+   * `timeoutMs` is passed too, but it cannot be relied on: `OpenRouterProvider`
+   * fixes its timeout when it is constructed and ignores the per-request value,
+   * so on the provider this feature actually runs the SDK's own ceiling times the
+   * schema-repair attempts is the real bound — minutes. Since the route answers
+   * synchronously, an unbounded call means the client times out, reports a
+   * failure and gets nothing while the scan continues. `withTimeout` turns that
+   * into a fast, explicit 502.
+   *
+   * The in-flight HTTP request is not aborted — no port here carries an
+   * AbortSignal — so this bounds the RESPONSE, not the provider's work. That is
+   * the half that matters to a caller.
+   */
+  private async completeWithinDeadline(
+    llm: LLMProvider,
+    model: string,
+    messages: ChatMessage[],
+  ): Promise<StructuredResult<ExtractedConventions>> {
+    try {
+      return await withTimeout(
+        llm.completeStructured({
+          model,
+          schema: ExtractedConventions,
+          schemaName: 'RepoConventions',
+          messages,
+          timeoutMs: EXTRACT_TIMEOUT_MS,
+          // Caps the schema-repair loop — the multiplier that turns one slow call
+          // into several.
+          maxRetries: EXTRACT_MAX_RETRIES,
+        }),
+        this.deps.deadlineMs ?? EXTRACT_DEADLINE_MS,
+      );
+    } catch (err) {
+      if (err instanceof TimeoutError) {
+        const seconds = Math.round((this.deps.deadlineMs ?? EXTRACT_DEADLINE_MS) / 1000);
+        throw new ExternalServiceError(
+          `The conventions model did not answer within ${seconds}s — try again, or pick a faster model in Settings.`,
+        );
+      }
+      throw err;
+    }
   }
 
   /**

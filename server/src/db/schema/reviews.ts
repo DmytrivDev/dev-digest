@@ -29,6 +29,9 @@ export const reviews = pgTable('reviews', {
     // reviews filters on pr_id and orders by created_at desc — without this the
     // PR list and PR detail both sequential-scan the whole table.
     byPr: index('reviews_pr_created_idx').on(t.prId, t.createdAt.desc()),
+    // `SkillsRepository.findingsForRuns` resolves run_id -> review rows before
+    // joining findings, so /skills/:id/stats scans this table without it.
+    byRun: index('reviews_run_idx').on(t.runId),
   }),
 );
 
