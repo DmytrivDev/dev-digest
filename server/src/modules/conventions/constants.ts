@@ -100,7 +100,7 @@ export const EVIDENCE_LINE_TOLERANCE = 2;
  * ignores this, so it is a ceiling for two providers out of three, not a
  * guarantee. `EXTRACT_DEADLINE_MS` is the guarantee.
  */
-export const EXTRACT_TIMEOUT_MS = 120_000;
+export const EXTRACT_TIMEOUT_MS = 90_000;
 
 /**
  * Hard server-side deadline on the whole model call, enforced by this module.
@@ -110,8 +110,14 @@ export const EXTRACT_TIMEOUT_MS = 120_000;
  * result while the scan runs on. Because the one provider that matters here
  * ignores the per-request timeout, the bound has to be ours. On expiry the route
  * fails fast and says so, instead of going quiet.
+ *
+ * The ordering is what makes it work: provider timeout (90s) < this deadline
+ * (120s) < any plausible client or proxy timeout. A deadline set ABOVE the
+ * client's — the first attempt used 240s, against a client that gave up at
+ * 180s — reproduces the original bug in a narrower window instead of fixing it.
+ * A measured scan is 45.6s, so this leaves ~2.6x headroom.
  */
-export const EXTRACT_DEADLINE_MS = 240_000;
+export const EXTRACT_DEADLINE_MS = 120_000;
 
 /**
  * Schema-repair attempts. One, not the default two: each repair is a full extra
