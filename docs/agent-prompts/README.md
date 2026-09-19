@@ -10,6 +10,7 @@ in the DB). The canonical, reviewable copies live next to this file:
 - [`security-reviewer.md`](./security-reviewer.md)
 - [`performance-reviewer.md`](./performance-reviewer.md)
 - [`test-quality-reviewer.md`](./test-quality-reviewer.md) (L02)
+- [`api-contract-reviewer.md`](./api-contract-reviewer.md) (L02) — deliberately rule-free; its rules live in [`docs/skills/api-contract/`](../skills/api-contract/README.md)
 
 > The DB is the source of truth at run time. These files are the human-readable
 > originals — when you change a prompt, edit the file here **and** push it to the
