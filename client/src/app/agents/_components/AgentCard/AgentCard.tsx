@@ -6,6 +6,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, Badge, Toggle } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
+import { ConfirmDialog } from "../../../../components/ConfirmDialog";
 import { useDeleteAgent } from "../../../../lib/hooks/agents";
 import { modelColor } from "./helpers";
 import { s } from "./styles";
@@ -25,6 +26,7 @@ export function AgentCard({
 }) {
   const t = useTranslations("agents");
   const del = useDeleteAgent();
+  const [confirming, setConfirming] = React.useState(false);
   const color = modelColor(ag.model);
   return (
     <div onClick={onClick} style={s.card(!!active, ag.enabled)}>
@@ -41,21 +43,14 @@ export function AgentCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`Delete agent "${ag.name}"? This cannot be undone.`)) del.mutate(ag.id);
+            setConfirming(true);
           }}
           disabled={del.isPending}
-          title="Delete agent"
-          aria-label="Delete agent"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: del.isPending ? "not-allowed" : "pointer",
-            color: "var(--text-muted)",
-            display: "inline-flex",
-            padding: 4,
-          }}
+          title={t("card.delete")}
+          aria-label={t("card.delete")}
+          style={s.iconButton(del.isPending)}
         >
-          <Icon.Trash size={14} style={del.isPending ? { animation: "ddspin 1s linear infinite" } : undefined} />
+          <Icon.Trash size={14} style={del.isPending ? s.spinning : undefined} />
         </button>
       </div>
       <div style={s.description}>{ag.description || t("card.noDescription")}</div>
@@ -69,6 +64,21 @@ export function AgentCard({
           </Badge>
         )}
       </div>
+
+      {confirming && (
+        // The dialog is a DOM descendant of the clickable card, so a click on
+        // Cancel would bubble into the card and open the agent.
+        <div onClick={(e) => e.stopPropagation()}>
+          <ConfirmDialog
+            title={t("card.deleteTitle", { name: ag.name })}
+            body={t("card.deleteBody")}
+            confirmLabel={t("card.deleteCta")}
+            busy={del.isPending}
+            onCancel={() => setConfirming(false)}
+            onConfirm={() => del.mutate(ag.id)}
+          />
+        </div>
+      )}
     </div>
   );
 }

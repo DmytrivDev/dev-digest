@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import type { Skill } from "@devdigest/shared";
 import messages from "../../../../../messages/en/skills.json";
 import shellMessages from "../../../../../messages/en/shell.json";
+import common from "../../../../../messages/en/common.json";
 
 const push = vi.fn();
 const skills = vi.hoisted(() => ({ current: [] as Skill[] }));
@@ -45,7 +46,7 @@ const skill = (id: string, name: string): Skill => ({
 
 function renderList() {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ skills: messages, shell: shellMessages }}>
+    <NextIntlClientProvider locale="en" messages={{ skills: messages, shell: shellMessages, common }}>
       <SkillsListView />
     </NextIntlClientProvider>,
   );
@@ -58,16 +59,55 @@ afterEach(() => {
 });
 
 describe("SkillsListView", () => {
-  // The card used to open a side drawer that re-rendered the same body and
-  // carried an "Edit skill" button to the editor — two steps to one place.
-  it("opens the skill's editor instead of a side preview", () => {
+  // Reading a skill must not cost a page: the list stays put and the body
+  // opens beside it. The editor is one click further, and still the only
+  // place a body can be changed.
+  it("opens the skill in a side panel instead of navigating", () => {
     skills.current = [skill("sk1", "test-quality-rubric")];
     renderList();
 
     fireEvent.click(screen.getByText("test-quality-rubric"));
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Preview — rendered as the reviewing agent receives it")).toBeInTheDocument();
+    expect(screen.getByText("rule")).toBeInTheDocument();
+  });
+
+  it("reaches the editor from the panel, not from the card", () => {
+    skills.current = [skill("sk1", "test-quality-rubric")];
+    renderList();
+
+    fireEvent.click(screen.getByText("test-quality-rubric"));
+    fireEvent.click(screen.getByText("Open editor"));
     expect(push).toHaveBeenCalledWith("/skills/sk1");
-    // Nothing from the old drawer is left behind.
-    expect(screen.queryByText("Edit skill")).not.toBeInTheDocument();
+  });
+
+  it("closes the panel without navigating", () => {
+    skills.current = [skill("sk1", "test-quality-rubric")];
+    renderList();
+
+    fireEvent.click(screen.getByText("test-quality-rubric"));
+    fireEvent.click(screen.getByText("Close"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  // The panel reads the row by id, so a list that refetches under it (a toggle
+  // elsewhere, a window focus) shows the CURRENT body, not the copy it opened.
+  it("follows the list when the previewed skill changes underneath it", () => {
+    skills.current = [skill("sk1", "test-quality-rubric")];
+    const { rerender } = renderList();
+
+    fireEvent.click(screen.getByText("test-quality-rubric"));
+    expect(screen.getByText("rule")).toBeInTheDocument();
+
+    skills.current = [{ ...skill("sk1", "test-quality-rubric"), body: "- edited elsewhere" }];
+    rerender(
+      <NextIntlClientProvider locale="en" messages={{ skills: messages, shell: shellMessages, common }}>
+        <SkillsListView />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("edited elsewhere")).toBeInTheDocument();
   });
 
   it("filters the grid by the search box", () => {

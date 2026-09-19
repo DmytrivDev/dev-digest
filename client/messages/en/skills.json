@@ -20,8 +20,12 @@
   "card": {
     "noDescription": "No description",
     "delete": "Delete skill",
-    "deleteConfirm": "Delete skill \"{name}\"? It will be removed from every agent. This cannot be undone.",
+    "deleteTitle": "Delete \"{name}\"?",
+    "deleteBody": "The skill is removed from every agent carrying it, together with its version history. This cannot be undone.",
+    "deleteCta": "Delete skill",
     "version": "v{version}",
+    "agentCount": "{count, plural, =0 {No agents} one {# agent} other {# agents}}",
+    "agentCountTitle": "Agents carrying this skill right now",
     "disabled": "disabled"
   },
   "listItem": {
@@ -76,6 +80,11 @@
     "delete": "Delete",
     "charCount": "{count}/{max}"
   },
+  "panel": {
+    "subtitle": "Preview — rendered as the reviewing agent receives it",
+    "bodyLabel": "BODY",
+    "openEditor": "Open editor"
+  },
   "preview": {
     "title": "Preview",
     "subtitle": "Rendered as the reviewing agent receives it.",
@@ -118,7 +127,9 @@
     "diffTitle": "v{version} compared with the current body",
     "noChanges": "This snapshot is identical to the current body.",
     "restore": "Restore",
-    "restoreConfirm": "Restore v{version}? Its text becomes the current body and is saved as a new version.",
+    "restoreTitle": "Restore v{version}?",
+    "restoreCta": "Restore this version",
+    "restoreBody": "Its text becomes the current body and is saved as a new version. The history is not rewound, so a run that cited an older version stays explainable.",
     "restoring": "Restoring…",
     "loadError": "Could not load the version history.",
     "empty": "No snapshots yet."

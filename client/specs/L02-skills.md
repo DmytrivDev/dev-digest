@@ -13,19 +13,44 @@ The list mirrors the agents list: the same page chrome (title, subtitle, search
 box, `Add Skill` dropdown) and the same responsive `SkillCard` grid, with
 `Skeleton` / `ErrorState` / `EmptyState` for the three empty states. A card
 shows the type-tinted icon, the mono name, the description, the type and source
-chips, the version, an **enabled** toggle and a delete button. Toggle and delete
-stop propagation so they never open the card. Disabled cards are dimmed.
+chips, the version, the number of agents carrying it, an **enabled** toggle and
+a delete button. Toggle and delete stop propagation so they never open the card.
+Disabled cards are dimmed.
+
+The agent count comes from the list endpoint, which counts every link in one
+grouped query. A single-skill read does not count, and the contract lets the
+field be absent for exactly that case — the card then shows **no badge**, since
+a 0 that was never counted is a claim the data did not make.
+
+Deleting asks first, in the app's own `ConfirmDialog` rather than
+`window.confirm`: a browser dialog cannot be styled, cannot be dismissed any
+way but its own two buttons, and forces every test that touches delete to stub
+a global. The first click only opens the dialog; nothing is deleted until its
+`Delete skill` button is pressed, and neither click may open the card beneath.
 
 An imported skill that is still disabled carries a `needs vetting` badge. Once
 enabled it does not — the badge means "you have not read this yet", and a badge
 that never goes away is a badge nobody reads.
 
-### R2 — A card click opens the skill, not a copy of it
-Clicking a card navigates to `/skills/:id`, which lands on **Preview**. There is
-deliberately no side drawer: a drawer would render the same body through the
-same `Markdown` primitive as the Preview tab and then need an `Edit skill`
-button to reach the page the click could have opened directly — two steps and
-two renderings for one destination.
+### R2 — A card click opens the body beside the list
+Clicking a card opens a **read-only side panel** showing the skill's body
+rendered exactly as the Preview tab renders it, with the type and source chips,
+the version, the agent count, and one button — `Open editor` — that navigates
+to `/skills/:id`.
+
+**This reverses the first revision of R2**, which navigated on click and argued
+against any drawer. That argument was aimed at a drawer that duplicated the
+Preview tab *and* offered a way to edit: two steps and two renderings for one
+destination. The panel specified here is not that. Browsing skills is a reading
+task — you open several in a row to find the one that says what you meant — and
+a navigation per skill makes you find your place in the list again each time.
+The duplication objection is answered by the panel being **read-only**:
+`/skills/:id` remains the single place a body can be written, so there is never
+a second editor to keep in step.
+
+The panel holds the skill's **id**, not a copy of the row: the list refetches
+underneath it (a toggle elsewhere, a window focus), and a panel rendering the
+snapshot it opened with would quietly show a stale body.
 
 A skill with an empty body says so rather than rendering a blank panel, and an
 imported one carries the notice explaining that its text goes into an agent's
@@ -180,43 +205,49 @@ dead end.
 ## Acceptance criteria
 
 1. `/skills` renders a card per skill with name, description, type, source,
-   version and a working enabled toggle; searching filters on name, description
-   and type.
+   version, agent count and a working enabled toggle; searching filters on name,
+   description and type. A skill nobody links shows a counted `No agents`; a
+   skill whose count was not reported shows no badge at all.
 2. A disabled imported skill shows `needs vetting`; the same skill enabled, and
    a disabled hand-written skill, do not.
-3. Clicking a card navigates to that skill's editor and opens no drawer; the
-   editor's first tab is Preview and it is what `?tab=` defaults to.
-4. In Config, `Save` is disabled on a pristine form, enabled after any change,
+3. Clicking a card opens the read-only side panel with the body rendered and
+   navigates nowhere; `Open editor` in the panel navigates to `/skills/:id`, and
+   closing it navigates nowhere either. A list that changes under an open panel
+   is reflected in it. The editor's first tab is Preview and it is what `?tab=`
+   defaults to.
+4. Deleting a skill or an agent from its card asks in an in-app dialog with
+   confirm / cancel / close; cancelling deletes nothing and opens nothing.
+5. In Config, `Save` is disabled on a pristine form, enabled after any change,
    and sends name + description + type + body + enabled in one patch; `Revert`
    returns the form to pristine.
-5. The `v{n+1}` note and the `unsaved` marker appear for a body edit and not for
+6. The `v{n+1}` note and the `unsaved` marker appear for a body edit and not for
    a name edit.
-6. The import drawer cannot save before a preview exists; the preview lists
+7. The import drawer cannot save before a preview exists; the preview lists
    every skipped archive entry; confirming saves `source: "imported_url"` with
    `enabled: false`; a rejected file shows inline and leaves Save disabled.
-7. The agent Skills tab lists linked skills first in order; ticking appends;
+8. The agent Skills tab lists linked skills first in order; ticking appends;
    unticking removes; dragging a linked row onto another reorders it and posts
    the complete ordered set exactly once, on drop; dragging over several rows
    without dropping saves nothing, and ending the drag without a drop abandons
    the reorder; an unlinked row is not draggable and its handle is disabled;
    `↑` / `↓` on a focused handle performs the same move and saves nothing when
    it would fall off either end.
-8. The run trace shows a token badge on the Skills block and none on a slot with
+9. The run trace shows a token badge on the Skills block and none on a slot with
    no count.
-9. The trace's Skills used section lists each skill with its version and token
+10. The trace's Skills used section lists each skill with its version and token
    cost, marks a disabled one `skipped` with no token count, marks an imported
    one `untrusted`, and does not render at all for a trace that predates the
    field.
-10. The Versions tab lists snapshots newest-first, marks the skill's own version
+11. The Versions tab lists snapshots newest-first, marks the skill's own version
     `Current`, diffs an older one against the current body, and restoring writes
     a new version rather than rewinding.
-11. The Stats tab shows `—` for an untriaged accept rate, keeps the
+12. The Stats tab shows `—` for an untriaged accept rate, keeps the
     co-occurrence caveat on screen, and shows the empty state for a skill with
     no links and no runs.
-12. A 422 toast names the offending field and its reason; the name and
+13. A 422 toast names the offending field and its reason; the name and
     description fields show a character counter that turns red over the cap and
     block Save while it is.
-13. `pnpm typecheck` and `pnpm test` pass; the card, every editor tab, the
+14. `pnpm typecheck` and `pnpm test` pass; the card, every editor tab, the
     import flow, the Skills tab's drag and keyboard reordering, the trace's
     token badge and Skills used section, the line diff and the error formatter
     all have coverage.

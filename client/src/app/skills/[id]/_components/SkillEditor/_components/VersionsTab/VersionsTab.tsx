@@ -9,6 +9,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, ErrorState, Modal, Skeleton } from "@devdigest/ui";
 import type { Skill, SkillVersion } from "@devdigest/shared";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useRestoreSkillVersion, useSkillVersions } from "@/lib/hooks/skills";
 import { diffLines, hasChanges } from "./helpers";
 import { s } from "./styles";
@@ -18,6 +19,7 @@ export function VersionsTab({ skill }: { skill: Skill }) {
   const { data, isLoading, isError } = useSkillVersions(skill.id);
   const restore = useRestoreSkillVersion();
   const [diffOf, setDiffOf] = React.useState<SkillVersion | null>(null);
+  const [restoreOf, setRestoreOf] = React.useState<SkillVersion | null>(null);
 
   if (isLoading) {
     return (
@@ -75,11 +77,7 @@ export function VersionsTab({ skill }: { skill: Skill }) {
                       size="sm"
                       icon="History"
                       disabled={restore.isPending}
-                      onClick={() => {
-                        if (!window.confirm(t("versions.restoreConfirm", { version: v.version })))
-                          return;
-                        restore.mutate({ id: skill.id, version: v.version });
-                      }}
+                      onClick={() => setRestoreOf(v)}
                     >
                       {restore.isPending ? t("versions.restoring") : t("versions.restore")}
                     </Button>
@@ -89,6 +87,23 @@ export function VersionsTab({ skill }: { skill: Skill }) {
             );
           })}
         </div>
+      )}
+
+      {restoreOf && (
+        <ConfirmDialog
+          kind="primary"
+          title={t("versions.restoreTitle", { version: restoreOf.version })}
+          body={t("versions.restoreBody")}
+          confirmLabel={t("versions.restoreCta")}
+          busy={restore.isPending}
+          onCancel={() => setRestoreOf(null)}
+          onConfirm={() =>
+            restore.mutate(
+              { id: skill.id, version: restoreOf.version },
+              { onSuccess: () => setRestoreOf(null) },
+            )
+          }
+        />
       )}
 
       {diffOf && (

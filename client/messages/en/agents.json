@@ -1,7 +1,11 @@
 {
   "card": {
     "noDescription": "No description",
-    "skillCount": "{count} skills"
+    "skillCount": "{count} skills",
+    "delete": "Delete agent",
+    "deleteTitle": "Delete \"{name}\"?",
+    "deleteBody": "The agent, its configuration and its skill links are removed. Past runs stay, but they no longer name this agent. This cannot be undone.",
+    "deleteCta": "Delete agent"
   },
   "list": {
     "breadcrumbLab": "Skills Lab",

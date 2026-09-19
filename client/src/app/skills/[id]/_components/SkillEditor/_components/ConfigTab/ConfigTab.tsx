@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, FormField, Icon, SelectInput, Textarea, TextInput, Toggle } from "@devdigest/ui";
 import type { Skill, SkillType } from "@devdigest/shared";
 import { SKILL_LIMITS } from "@devdigest/shared";
+import { ConfirmDialog } from "../../../../../../../components/ConfirmDialog";
 import { useDeleteSkill, useUpdateSkill } from "../../../../../../../lib/hooks/skills";
 import { useToast } from "../../../../../../../lib/toast";
 import { approxTokens, TYPE_OPTIONS } from "../../../../../../../lib/skills";
@@ -40,6 +41,7 @@ export function ConfigTab({ skill }: { skill: Skill }) {
   const [type, setType] = React.useState<SkillType>(skill.type);
   const [body, setBody] = React.useState(skill.body);
   const [enabled, setEnabled] = React.useState(skill.enabled);
+  const [confirming, setConfirming] = React.useState(false);
 
   // Switching skills resets this form by REMOUNTING it — SkillEditor passes
   // `key={skill.id}` — so there is no effect mirroring props into state.
@@ -167,19 +169,21 @@ export function ConfigTab({ skill }: { skill: Skill }) {
           <div style={s.dangerTitle}>{t("config.dangerTitle")}</div>
           <div style={s.dangerBody}>{t("config.dangerBody")}</div>
         </div>
-        <Button
-          kind="danger"
-          size="sm"
-          icon="Trash"
-          disabled={del.isPending}
-          onClick={() => {
-            if (!window.confirm(t("card.deleteConfirm", { name: skill.name }))) return;
-            del.mutate(skill.id, { onSuccess: () => router.push("/skills") });
-          }}
-        >
+        <Button kind="danger" size="sm" icon="Trash" disabled={del.isPending} onClick={() => setConfirming(true)}>
           {t("config.delete")}
         </Button>
       </div>
+
+      {confirming && (
+        <ConfirmDialog
+          title={t("card.deleteTitle", { name: skill.name })}
+          body={t("card.deleteBody")}
+          confirmLabel={t("card.deleteCta")}
+          busy={del.isPending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => del.mutate(skill.id, { onSuccess: () => router.push("/skills") })}
+        />
+      )}
     </div>
   );
 }

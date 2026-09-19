@@ -1,13 +1,17 @@
 /* /skills — Skills list (L02). A grid of SkillCards, like the agents list.
 
-   Clicking a card opens the skill's editor on its Preview tab. It used to open
-   a side drawer that duplicated that tab and carried an "Edit skill" button to
-   reach it — two steps and two renderings of the same body, for one
-   destination. */
+   Clicking a card opens the body in a side panel, not a new page. Browsing
+   skills is a reading task — you open several in a row to find the one that
+   says what you meant — and a navigation per skill turns that into
+   back-and-forth through a list you have to find your place in again.
+
+   The panel is read-only and carries `Open editor`, so /skills/:id stays the
+   single place a body can be written. An earlier revision navigated straight
+   there on click; the duplication that argued against a panel back then was a
+   drawer that ALSO offered editing. */
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
 import { AppShell } from "../../../../components/app-shell";
@@ -16,23 +20,28 @@ import { SkillCard } from "../SkillCard";
 import { filterSkills } from "../../../../lib/skills";
 import { CreateSkillModal } from "./_components/CreateSkillModal";
 import { ImportSkillDrawer } from "./_components/ImportSkillDrawer";
+import { SkillPreviewPanel } from "./_components/SkillPreviewPanel";
 import { s } from "./styles";
 
 export function SkillsListView() {
   const t = useTranslations("skills");
-  const router = useRouter();
   const { data: skills, isLoading, isError, refetch } = useSkills();
   const update = useUpdateSkill();
   const [creating, setCreating] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  // The id, not the skill: the list refetches (a toggle, another tab) and the
+  // panel must show the CURRENT row rather than the copy it opened with.
+  const [previewId, setPreviewId] = React.useState<string | null>(null);
 
   const list = filterSkills(skills ?? [], search);
+  const previewing = previewId ? (skills ?? []).find((sk) => sk.id === previewId) : undefined;
 
   return (
     <AppShell crumb={[{ label: t("page.crumbLab") }, { label: t("page.crumbSkills") }]}>
       {creating && <CreateSkillModal onClose={() => setCreating(false)} />}
       {importing && <ImportSkillDrawer onClose={() => setImporting(false)} />}
+      {previewing && <SkillPreviewPanel skill={previewing} onClose={() => setPreviewId(null)} />}
 
       <div style={s.page}>
         <div style={s.header}>
@@ -92,7 +101,8 @@ export function SkillsListView() {
               <SkillCard
                 key={sk.id}
                 skill={sk}
-                onClick={() => router.push(`/skills/${sk.id}`)}
+                active={sk.id === previewId}
+                onClick={() => setPreviewId(sk.id)}
                 onToggle={(enabled) => update.mutate({ id: sk.id, patch: { enabled } })}
               />
             ))}

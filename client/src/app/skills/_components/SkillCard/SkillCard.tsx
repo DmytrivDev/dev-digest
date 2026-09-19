@@ -6,6 +6,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, Badge, Toggle } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
+import { ConfirmDialog } from "../../../../components/ConfirmDialog";
 import { useDeleteSkill } from "../../../../lib/hooks/skills";
 import { needsVetting, sourceIcon, typeColor } from "../../../../lib/skills";
 import { s } from "./styles";
@@ -23,6 +24,7 @@ export function SkillCard({
 }) {
   const t = useTranslations("skills");
   const del = useDeleteSkill();
+  const [confirming, setConfirming] = React.useState(false);
   const color = typeColor(skill.type);
   const SourceIcon = Icon[sourceIcon(skill.source)];
 
@@ -43,9 +45,7 @@ export function SkillCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(t("card.deleteConfirm", { name: skill.name }))) {
-              del.mutate(skill.id);
-            }
+            setConfirming(true);
           }}
           disabled={del.isPending}
           title={t("card.delete")}
@@ -67,12 +67,36 @@ export function SkillCard({
         <Badge color="var(--text-muted)" mono>
           {t("card.version", { version: skill.version })}
         </Badge>
+        {/* Absent (a single-skill read) is not zero, so there is nothing to
+            show for it — only a counted number gets a badge. */}
+        {skill.agent_count != null && (
+          <span title={t("card.agentCountTitle")}>
+            <Badge color="var(--text-secondary)" icon="Cpu">
+              {t("card.agentCount", { count: skill.agent_count })}
+            </Badge>
+          </span>
+        )}
         {needsVetting(skill) && (
           <Badge color="var(--warn)" bg="var(--warn-bg)" icon="AlertTriangle">
             {t("listItem.needsVetting")}
           </Badge>
         )}
       </div>
+
+      {confirming && (
+        // The dialog is a DOM descendant of the clickable card, so a click on
+        // Cancel would bubble into the card and navigate to the skill.
+        <div onClick={(e) => e.stopPropagation()}>
+          <ConfirmDialog
+            title={t("card.deleteTitle", { name: skill.name })}
+            body={t("card.deleteBody")}
+            confirmLabel={t("card.deleteCta")}
+            busy={del.isPending}
+            onCancel={() => setConfirming(false)}
+            onConfirm={() => del.mutate(skill.id)}
+          />
+        </div>
+      )}
     </div>
   );
 }

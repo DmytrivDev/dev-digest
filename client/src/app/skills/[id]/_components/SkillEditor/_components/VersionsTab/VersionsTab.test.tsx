@@ -3,6 +3,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Skill, SkillVersion } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/skills.json";
+import common from "../../../../../../../../messages/en/common.json";
 
 const restore = vi.fn();
 const versions = vi.hoisted(() => ({ current: [] as SkillVersion[] }));
@@ -35,7 +36,7 @@ const version = (v: number, body: string): SkillVersion => ({
 
 function renderTab(skill: Skill = SKILL) {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
+    <NextIntlClientProvider locale="en" messages={{ skills: messages, common }}>
       <VersionsTab skill={skill} />
     </NextIntlClientProvider>,
   );
@@ -70,20 +71,29 @@ describe("VersionsTab", () => {
     expect(screen.getAllByText("Restore")).toHaveLength(1);
   });
 
-  it("restores an older version through the confirm, sending its number", () => {
+  // The row's Restore only OPENS the dialog; the mutation is the dialog's own
+  // button. Asserting both halves is the point — a restore that fired on the
+  // first click would make the confirmation decorative.
+  it("restores an older version through the confirm dialog, sending its number", () => {
     versions.current = [version(3, SKILL.body), version(1, "first")];
-    vi.stubGlobal("confirm", () => true);
-    renderTab();
-    fireEvent.click(screen.getByText("Restore"));
-    expect(restore).toHaveBeenCalledWith({ id: "sk1", version: 1 });
-  });
-
-  it("does not restore when the confirm is declined", () => {
-    versions.current = [version(3, SKILL.body), version(1, "first")];
-    vi.stubGlobal("confirm", () => false);
     renderTab();
     fireEvent.click(screen.getByText("Restore"));
     expect(restore).not.toHaveBeenCalled();
+    expect(screen.getByText("Restore v1?")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Restore this version"));
+    expect(restore).toHaveBeenCalledWith(
+      { id: "sk1", version: 1 },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it("does not restore when the dialog is cancelled", () => {
+    versions.current = [version(3, SKILL.body), version(1, "first")];
+    renderTab();
+    fireEvent.click(screen.getByText("Restore"));
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(restore).not.toHaveBeenCalled();
+    expect(screen.queryByText("Restore v1?")).not.toBeInTheDocument();
   });
 
   it("diffs a snapshot against the body in the editor", () => {
