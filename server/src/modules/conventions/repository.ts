@@ -29,15 +29,21 @@ export interface InsertConvention {
   fingerprint: string;
 }
 
+/** Only what a fresh scan may overwrite on an untriaged row — never the wording. */
 export interface RefreshConvention {
   id: string;
-  category: ConventionCategory;
-  rule: string;
   evidencePath: string;
   evidenceLine: number;
   evidenceSnippet: string;
   evidenceSha: string | null;
   confidence: number;
+}
+
+/** A triage decision, a hand edit, or both. Absent keys are left alone. */
+export interface UpdateConvention {
+  status?: ConventionStatus;
+  rule?: string;
+  category?: ConventionCategory;
 }
 
 /**
@@ -90,14 +96,22 @@ export class ConventionsRepository {
     return row;
   }
 
-  async setStatus(
+  /**
+   * Triage and/or hand-edit one candidate.
+   *
+   * `fingerprint` is deliberately NOT recomputed when `rule` changes — see
+   * `ConventionsService.update` for why. Callers pass only the keys they mean to
+   * change; an empty patch is rejected at the route, because `.set({})` is a
+   * Postgres syntax error.
+   */
+  async updateById(
     workspaceId: string,
     id: string,
-    status: ConventionStatus,
+    values: UpdateConvention,
   ): Promise<ConventionRow | undefined> {
     const [row] = await this.db
       .update(t.conventions)
-      .set({ status })
+      .set(values)
       .where(and(eq(t.conventions.workspaceId, workspaceId), eq(t.conventions.id, id)))
       .returning();
     return row;
@@ -132,13 +146,20 @@ export class ConventionsRepository {
     return deleted.length;
   }
 
-  /** Re-point an untriaged row at the fresh scan's evidence. Never touches a triaged one. */
+  /**
+   * Re-point an untriaged row at the fresh scan's evidence. Never touches a
+   * triaged one — and never touches `rule` or `category` either.
+   *
+   * That second exclusion is what makes hand-editing safe: the user can reword a
+   * PENDING candidate, and a later scan re-proposing it (same fingerprint, so
+   * same rule modulo normalization) refreshes where the evidence points without
+   * silently reverting the wording. Only the facts that belong to the CODE —
+   * path, line, snippet, sha, and the model's confidence in it — are refreshed.
+   */
   async refreshPending(workspaceId: string, values: RefreshConvention): Promise<void> {
     await this.db
       .update(t.conventions)
       .set({
-        category: values.category,
-        rule: values.rule,
         evidencePath: values.evidencePath,
         evidenceLine: values.evidenceLine,
         evidenceSnippet: values.evidenceSnippet,

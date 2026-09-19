@@ -10,6 +10,7 @@ import {
   buildGithubBlobUrl,
   buildSkillBody,
   buildSkillDescription,
+  buildSkillDraft,
   configSearchDirs,
   fingerprintRule,
   normalizeRule,
@@ -344,5 +345,48 @@ describe('buildSkillBody', () => {
     const body = buildSkillBody('acme/api', [], 10_000);
     expect(body).toContain('# Repo conventions — acme/api');
     expect(body).toContain('No conventions have been accepted yet');
+  });
+});
+
+describe('buildSkillDraft', () => {
+  function candidate(over: Partial<ConventionCandidate> = {}): ConventionCandidate {
+    return {
+      id: 'c1',
+      category: 'validation',
+      rule: 'Validate the body with Zod',
+      evidence_path: 'src/routes.ts',
+      evidence_line: 3,
+      evidence_snippet: 'z.object({})',
+      evidence_url: null,
+      confidence: 0.9,
+      status: 'accepted',
+      created_at: '2026-09-19T10:00:00.000Z',
+      ...over,
+    };
+  }
+
+  it('names the skill exactly repo-conventions (criterion 42) as the modal default', () => {
+    expect(buildSkillDraft('acme/api', [candidate()], 10_000).name).toBe('repo-conventions');
+  });
+
+  it('is the same assembly the save path uses — draft and save cannot drift', () => {
+    const rules = [candidate()];
+    const draft = buildSkillDraft('acme/api', rules, 10_000);
+    expect(draft.body).toBe(buildSkillBody('acme/api', rules, 10_000));
+    expect(draft.description).toBe(buildSkillDescription('acme/api'));
+  });
+
+  it('is deterministic, so drafting then saving untouched burns no skill version', () => {
+    const rules = [candidate({ id: 'c1' }), candidate({ id: 'c2', category: 'naming' })];
+    expect(buildSkillDraft('acme/api', rules, 10_000)).toEqual(
+      buildSkillDraft('acme/api', rules, 10_000),
+    );
+  });
+
+  it('respects the body cap it is given', () => {
+    const many = Array.from({ length: 200 }, (_, i) =>
+      candidate({ id: `c${i}`, rule: `Rule ${i} `.repeat(20) }),
+    );
+    expect(buildSkillDraft('acme/api', many, 800).body.length).toBeLessThanOrEqual(800);
   });
 });

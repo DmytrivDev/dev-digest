@@ -413,3 +413,28 @@ export const ConventionScanResult = z.object({
   scan: ConventionScanReport,
 });
 export type ConventionScanResult = z.infer<typeof ConventionScanResult>;
+
+/**
+ * Write caps for a candidate the user edits by hand.
+ *
+ * In the contract, like `SKILL_LIMITS`, so the editor can warn before the round
+ * trip instead of learning the cap from a 422. `rule` is rendered into a review
+ * prompt once the skill is assembled, which is why it is capped at all.
+ */
+export const CONVENTION_LIMITS = { rule: 300 } as const;
+
+/**
+ * The `repo-conventions` skill as it WOULD be saved — `GET .../skill/draft`.
+ *
+ * Exists so the modal can show and edit the real thing before anything is
+ * written. The body is assembled SERVER-side by the same pure function the save
+ * path uses, so a draft shown and then saved unchanged is byte-identical — which
+ * is what keeps "an unchanged set burns no skill version" true rather than
+ * something the client could accidentally defeat by re-rendering the markdown.
+ */
+export const ConventionSkillDraft = z.object({
+  name: z.string(),
+  description: z.string(),
+  body: z.string(),
+});
+export type ConventionSkillDraft = z.infer<typeof ConventionSkillDraft>;

@@ -12,6 +12,7 @@ import {
 } from '@devdigest/shared';
 import type { ConventionRow } from '../../db/rows.js';
 import {
+  CONVENTIONS_SKILL_NAME,
   EVIDENCE_LINE_TOLERANCE,
   MAX_CONFIG_DIRS,
   PACKAGE_CONTAINER_DIRS,
@@ -224,6 +225,29 @@ export function buildSkillDescription(fullName: string): string {
  * Each rule carries its `path:line`. That is not decoration: it is the only
  * claim to authority the rule has when a reviewer model reads it.
  */
+/**
+ * The whole `repo-conventions` skill as it would be saved, assembled in ONE place.
+ *
+ * `GET .../skill/draft` and `POST .../skill` both call this, which is the only
+ * reason a draft shown in the modal and then saved untouched produces a
+ * byte-identical body — and therefore burns no skill version. Two call sites each
+ * assembling "the same" body is exactly how that guarantee rots.
+ *
+ * Assembly stays on the server for the same reason: if the client re-rendered the
+ * markdown, determinism would depend on its formatter matching ours.
+ */
+export function buildSkillDraft(
+  fullName: string,
+  candidates: ConventionCandidate[],
+  maxChars: number,
+): { name: string; description: string; body: string } {
+  return {
+    name: CONVENTIONS_SKILL_NAME,
+    description: buildSkillDescription(fullName),
+    body: buildSkillBody(fullName, candidates, maxChars),
+  };
+}
+
 export function buildSkillBody(
   fullName: string,
   candidates: ConventionCandidate[],

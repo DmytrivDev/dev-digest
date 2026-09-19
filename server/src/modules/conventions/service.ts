@@ -9,6 +9,8 @@
 import type {
   ChatMessage,
   ConventionCandidate,
+  ConventionCategory,
+  ConventionSkillDraft,
   ConventionScanReport,
   ConventionScanResult,
   ConventionStatus,
@@ -27,7 +29,6 @@ import { SKILL_BODY_MAX } from '../skills/constants.js';
 import {
   CODE_SAMPLE_COUNT,
   CONFIG_SAMPLE_PATHS,
-  CONVENTIONS_SKILL_NAME,
   EXTRACT_DEADLINE_MS,
   EXTRACT_MAX_RETRIES,
   EXTRACT_TIMEOUT_MS,
@@ -35,8 +36,7 @@ import {
   MAX_CONFIG_SAMPLES,
 } from './constants.js';
 import {
-  buildSkillBody,
-  buildSkillDescription,
+  buildSkillDraft,
   configSearchDirs,
   fingerprintRule,
   toConventionDto,
@@ -86,12 +86,27 @@ export class ConventionsService {
     return rows.map((row) => toConventionDto(row, repo));
   }
 
-  async setStatus(
+  /**
+   * Triage a candidate, hand-edit its wording/category, or both in one call.
+   *
+   * `fingerprint` is NOT recomputed when `rule` changes, and that is the load-
+   * bearing decision here. The fingerprint identifies the PROPOSAL this row came
+   * from, not the text currently displayed: what a future scan will propose is the
+   * MODEL's phrasing, so keying on the user's edit would leave the original
+   * wording unmatched and re-offered as a brand-new pending candidate — precisely
+   * the resurrection R7 exists to prevent. The cost is that the stored hash no
+   * longer hashes the stored text, which is why it is spelled out here.
+   *
+   * `evidence_*` is untouched too: evidence is a claim about the CODE, and
+   * rewording a rule does not change which line demonstrates it. Re-pointing it
+   * would be inventing a citation.
+   */
+  async update(
     workspaceId: string,
     id: string,
-    status: ConventionStatus,
+    patch: { status?: ConventionStatus; rule?: string; category?: ConventionCategory },
   ): Promise<ConventionCandidate | undefined> {
-    const row = await this.deps.repo.setStatus(workspaceId, id, status);
+    const row = await this.deps.repo.updateById(workspaceId, id, patch);
     if (!row) return undefined;
     // The DTO carries an evidence permalink, which needs the repo's owner/name.
     const repo = row.repoId
@@ -181,27 +196,55 @@ export class ConventionsService {
    * and a rebuild that changes nothing burns no version, because `isBodyChange`
    * sees an identical body.
    */
-  async buildSkill(workspaceId: string, repoId: string): Promise<Skill | undefined> {
+  /**
+   * The skill as it WOULD be saved, writing nothing.
+   *
+   * Exists so the save modal can show and edit the real body rather than a
+   * client-side guess. Same pure assembly the save path uses, so a draft saved
+   * untouched is byte-identical and burns no version.
+   */
+  async skillDraft(workspaceId: string, repoId: string): Promise<ConventionSkillDraft | undefined> {
+    const repo = await this.deps.repo.getRepo(workspaceId, repoId);
+    if (!repo) return undefined;
+    const accepted = await this.acceptedDtos(workspaceId, repo);
+    return buildSkillDraft(repo.fullName, accepted, SKILL_BODY_MAX);
+  }
+
+  /**
+   * Assemble the accepted candidates into the `repo-conventions` skill.
+   *
+   * Goes through `SkillsService` rather than writing `skills` directly, so the
+   * body snapshot and the version bump come from the one place that owns them —
+   * and a rebuild that changes nothing burns no version, because `isBodyChange`
+   * sees an identical body.
+   *
+   * `overrides` are what the user edited in the modal. They REPLACE the generated
+   * values rather than being merged into the markdown, because the body is one
+   * document: a server that re-assembled around an edited body would fight the
+   * user for it. Assembly itself stays here (never on the client) so determinism
+   * does not depend on a client formatter.
+   */
+  async buildSkill(
+    workspaceId: string,
+    repoId: string,
+    overrides: { name?: string; description?: string; body?: string } = {},
+  ): Promise<Skill | undefined> {
     const repo = await this.deps.repo.getRepo(workspaceId, repoId);
     if (!repo) return undefined;
 
-    const rows = await this.deps.repo.listByRepo(workspaceId, repoId, 'accepted');
-    if (rows.length === 0) {
-      // A skill with no rules would link to an agent and contribute nothing while
-      // looking like a working one.
-      throw new ValidationError('No accepted conventions to assemble — accept at least one first.');
-    }
+    const accepted = await this.acceptedDtos(workspaceId, repo);
+    const draft = buildSkillDraft(repo.fullName, accepted, SKILL_BODY_MAX);
+    const name = overrides.name ?? draft.name;
+    const description = overrides.description ?? draft.description;
+    const body = overrides.body ?? draft.body;
 
-    const accepted = rows.map((row) => toConventionDto(row, repo));
-    const body = buildSkillBody(repo.fullName, accepted, SKILL_BODY_MAX);
-    const description = buildSkillDescription(repo.fullName);
-
-    const existing = (await this.deps.skills.list(workspaceId)).find(
-      (s) => s.name === CONVENTIONS_SKILL_NAME,
-    );
+    // Matched by NAME, so saving under a different name creates a SECOND skill
+    // rather than renaming this one. That is deliberate — the name is the identity
+    // criterion 42 fixes — and it is why the modal defaults to `repo-conventions`.
+    const existing = (await this.deps.skills.list(workspaceId)).find((s) => s.name === name);
     if (!existing) {
       return this.deps.skills.create(workspaceId, {
-        name: CONVENTIONS_SKILL_NAME,
+        name,
         description,
         type: 'convention',
         source: 'extracted',
@@ -210,14 +253,31 @@ export class ConventionsService {
       });
     }
 
-    const updated = await this.deps.skills.update(workspaceId, existing.id, { description, body });
+    const updated = await this.deps.skills.update(workspaceId, existing.id, {
+      description,
+      body,
+    });
     if (!updated) {
       // `SkillsRepository.update` holds an optimistic lock on `skills.version`.
-      throw new ValidationError(
-        `The '${CONVENTIONS_SKILL_NAME}' skill was edited concurrently — try again.`,
-      );
+      throw new ValidationError(`The '${name}' skill was edited concurrently — try again.`);
     }
     return updated;
+  }
+
+  /**
+   * The accepted candidates as DTOs. Refuses an empty set in one place, so the
+   * draft and the save agree about what "nothing to assemble" means: a skill with
+   * no rules would link to an agent and contribute nothing while looking real.
+   */
+  private async acceptedDtos(
+    workspaceId: string,
+    repo: ConventionRepoRef,
+  ): Promise<ConventionCandidate[]> {
+    const rows = await this.deps.repo.listByRepo(workspaceId, repo.id, 'accepted');
+    if (rows.length === 0) {
+      throw new ValidationError('No accepted conventions to assemble — accept at least one first.');
+    }
+    return rows.map((row) => toConventionDto(row, repo));
   }
 
   /**
@@ -353,10 +413,10 @@ export class ConventionsService {
       const prior = byFingerprint.get(v.fingerprint);
       if (prior) {
         if (prior.status === 'pending') {
+          // Wording and category are NOT refreshed — the user may have edited
+          // them, and the fresh text is the same rule modulo normalization anyway.
           await this.deps.repo.refreshPending(workspaceId, {
             id: prior.id,
-            category: v.category,
-            rule: v.rule,
             evidencePath: v.evidence_path,
             evidenceLine: v.evidence_line,
             evidenceSnippet: v.evidence_snippet,

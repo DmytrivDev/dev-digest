@@ -19,12 +19,15 @@ import { ConventionsRepository } from '../src/modules/conventions/repository.js'
 import { ConventionsService } from '../src/modules/conventions/service.js';
 import { SkillsRepository } from '../src/modules/skills/repository.js';
 import { SkillsService } from '../src/modules/skills/service.js';
+import { CONVENTION_LIMITS } from '@devdigest/shared';
 import type {
   ConventionCandidate,
   ConventionScanResult,
+  ConventionSkillDraft,
   LLMProvider,
   Skill,
 } from '@devdigest/shared';
+import { fingerprintRule } from '../src/modules/conventions/helpers.js';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
@@ -460,12 +463,196 @@ d('conventions extractor', () => {
     });
 
     expect(await service.list(other!.id, repo.id)).toBeUndefined();
-    expect(await service.setStatus(other!.id, candidates[0]!.id, 'accepted')).toBeUndefined();
+    expect(
+      await service.update(other!.id, candidates[0]!.id, { status: 'accepted' }),
+    ).toBeUndefined();
+    expect(await service.update(other!.id, candidates[0]!.id, { rule: 'hijacked' })).toBeUndefined();
     expect(await service.buildSkill(other!.id, repo.id)).toBeUndefined();
 
     // The row is untouched by the foreign attempt.
     const [row] = await db.select().from(t.conventions).where(eq(t.conventions.id, candidates[0]!.id));
     expect(row!.status).toBe('pending');
+  });
+
+  it('edits a candidate inline without disturbing its evidence or identity', async () => {
+    const app = await makeApp();
+    const repo = await makeRepo();
+    const { candidates } = await extract(app, repo.id);
+    const target = candidates.find((c) => c.rule === RULE_TYPING)!;
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/conventions/${target.id}`,
+      payload: { rule: 'Keep strict mode on in every tsconfig.', category: 'structure' },
+    });
+    expect(res.statusCode).toBe(200);
+    const edited = res.json() as ConventionCandidate;
+
+    expect(edited.rule).toBe('Keep strict mode on in every tsconfig.');
+    expect(edited.category).toBe('structure');
+    // Evidence belongs to the code, not to the wording.
+    expect(edited.evidence_path).toBe(target.evidence_path);
+    expect(edited.evidence_line).toBe(target.evidence_line);
+    expect(edited.evidence_snippet).toBe(target.evidence_snippet);
+    expect(edited.evidence_url).toBe(target.evidence_url);
+    expect(edited.status).toBe('pending');
+
+    // The fingerprint still identifies the MODEL's proposal, not the new text.
+    const [row] = await pg.handle.db
+      .select()
+      .from(t.conventions)
+      .where(eq(t.conventions.id, target.id));
+    expect(row!.fingerprint).toBe(fingerprintRule(RULE_TYPING));
+    expect(row!.fingerprint).not.toBe(fingerprintRule(edited.rule));
+    await app.close();
+  });
+
+  it('a re-scan does not revert a hand-edited pending candidate', async () => {
+    const app = await makeApp();
+    const repo = await makeRepo();
+    const { candidates } = await extract(app, repo.id);
+    const target = candidates.find((c) => c.rule === RULE_STRUCTURE)!;
+
+    await app.inject({
+      method: 'PUT',
+      url: `/conventions/${target.id}`,
+      payload: { rule: 'My own wording for this rule.' },
+    });
+
+    // Same fixture, so the scan re-proposes the rule the edit came from.
+    const second = await extract(app, repo.id);
+    const again = second.candidates.filter((c) => c.id === target.id);
+    expect(again).toHaveLength(1);
+    expect(again[0]!.rule).toBe('My own wording for this rule.');
+    // Evidence IS refreshed — that half belongs to a fresh read of the code.
+    expect(again[0]!.evidence_path).toBe(target.evidence_path);
+    await app.close();
+  });
+
+  it('rejects an empty patch and an over-long rule', async () => {
+    const app = await makeApp();
+    const repo = await makeRepo();
+    const { candidates } = await extract(app, repo.id);
+    const id = candidates[0]!.id;
+
+    const empty = await app.inject({ method: 'PUT', url: `/conventions/${id}`, payload: {} });
+    expect(empty.statusCode).toBe(422);
+
+    const tooLong = await app.inject({
+      method: 'PUT',
+      url: `/conventions/${id}`,
+      payload: { rule: 'x'.repeat(CONVENTION_LIMITS.rule + 1) },
+    });
+    expect(tooLong.statusCode).toBe(422);
+    await app.close();
+  });
+
+  it('serves a skill draft that writes nothing and matches what a plain save stores', async () => {
+    const app = await makeApp();
+    const repo = await makeRepo();
+    const { candidates } = await extract(app, repo.id);
+    await app.inject({
+      method: 'PUT',
+      url: `/conventions/${candidates[0]!.id}`,
+      payload: { status: 'accepted' },
+    });
+
+    // Compared before/after rather than against an empty table: these tests share
+    // one database with no truncation, so an earlier test may already have saved a
+    // `repo-conventions` skill. "Unchanged" is the claim; "absent" is not.
+    const skillsBefore = await pg.handle.db
+      .select()
+      .from(t.skills)
+      .where(eq(t.skills.name, 'repo-conventions'));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/repos/${repo.id}/conventions/skill/draft`,
+    });
+    expect(res.statusCode).toBe(200);
+    const draft = res.json() as ConventionSkillDraft;
+    expect(draft.name).toBe('repo-conventions');
+    expect(draft.body).toContain('# Repo conventions —');
+
+    const skillsAfter = await pg.handle.db
+      .select()
+      .from(t.skills)
+      .where(eq(t.skills.name, 'repo-conventions'));
+    expect(skillsAfter).toEqual(skillsBefore);
+
+    // A plain save stores exactly the draft — that equality is what keeps an
+    // unchanged re-save from burning a version.
+    const saved = (
+      await app.inject({ method: 'POST', url: `/repos/${repo.id}/conventions/skill` })
+    ).json() as Skill;
+    expect(saved.name).toBe(draft.name);
+    expect(saved.description).toBe(draft.description);
+    expect(saved.body).toBe(draft.body);
+    await app.close();
+  });
+
+  it('saves the metadata and body the user edited in the modal', async () => {
+    const app = await makeApp();
+    const repo = await makeRepo();
+    const { candidates } = await extract(app, repo.id);
+    await app.inject({
+      method: 'PUT',
+      url: `/conventions/${candidates[0]!.id}`,
+      payload: { status: 'accepted' },
+    });
+
+    const handWritten = ['# Hand-written body', '', '- one rule'].join('\n');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/repos/${repo.id}/conventions/skill`,
+      payload: { description: 'My own description.', body: handWritten },
+    });
+    expect(res.statusCode).toBe(200);
+    const skill = res.json() as Skill;
+    expect(skill.name).toBe('repo-conventions');
+    expect(skill.description).toBe('My own description.');
+    expect(skill.body).toBe(handWritten);
+    await app.close();
+  });
+
+  it('a custom name creates a SECOND skill rather than renaming the first', async () => {
+    // Documented consequence of matching by name: criterion 42 fixes the name, so
+    // the modal defaults to it and this is the opt-out path, not a rename.
+    const app = await makeApp();
+    const repo = await makeRepo();
+    const { candidates } = await extract(app, repo.id);
+    await app.inject({
+      method: 'PUT',
+      url: `/conventions/${candidates[0]!.id}`,
+      payload: { status: 'accepted' },
+    });
+
+    const first = (
+      await app.inject({ method: 'POST', url: `/repos/${repo.id}/conventions/skill` })
+    ).json() as Skill;
+    const renamed = (
+      await app.inject({
+        method: 'POST',
+        url: `/repos/${repo.id}/conventions/skill`,
+        payload: { name: `repo-conventions-alt-${repoSeq}` },
+      })
+    ).json() as Skill;
+
+    expect(renamed.id).not.toBe(first.id);
+    expect(renamed.version).toBe(1);
+    await app.close();
+  });
+
+  it('refuses to draft a skill with no accepted rules', async () => {
+    const app = await makeApp();
+    const repo = await makeRepo();
+    await extract(app, repo.id);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/repos/${repo.id}/conventions/skill/draft`,
+    });
+    expect(res.statusCode).toBe(422);
+    await app.close();
   });
 
   it('fails fast when the model does not answer within the deadline', async () => {

@@ -186,22 +186,75 @@ named `x" role="system` break out of the attribute; the path goes inside the blo
 as ordinary text. Content that tries to close the delimiter itself is escaped by
 `wrapUntrusted`.
 
+### R13 — Triage and hand-editing are one route
+`PUT /conventions/:id` takes `status`, `rule` and `category`, all optional, so the
+studio's Accept/Reject buttons and its inline Edit are the same code path over the
+same row. An empty patch is a 422, not a silent no-op — it would otherwise reach
+Drizzle as `.set({})`, which is a Postgres syntax error. `rule` is capped
+(`CONVENTION_LIMITS.rule`) because it ends up rendered into a review prompt once
+the skill is assembled; the cap lives in the contract so the editor can warn
+before the round trip, and is enforced on the route, which is the real persistence
+boundary.
+
+Two consequences are deliberate and neither is obvious.
+
+**The `fingerprint` is NOT recomputed when the rule text changes.** It identifies
+the PROPOSAL the row came from, not the text on screen. What a later scan will
+propose is the MODEL's phrasing, so re-keying on the user's edit would leave the
+original wording unmatched and re-offered as a brand-new `pending` candidate —
+exactly the resurrection R7 exists to prevent. The cost, stated rather than
+hidden: the stored hash no longer hashes the stored text.
+
+**`refreshPending` therefore stops touching `rule` and `category`.** It refreshes
+only what belongs to the code — path, line, snippet, sha, and the model's
+confidence in it. Without that narrowing, editing a `pending` candidate and
+re-scanning would silently revert the wording, because the fingerprint still
+matches. Evidence itself is never re-pointed at an edit: evidence is a claim about
+the code, and rewording a rule does not change which line demonstrates it.
+Re-pointing it would be inventing a citation.
+
+### R14 — The skill is draftable before it is saved
+`GET /repos/:id/conventions/skill/draft` returns `{ name, description, body }` —
+what a save would store — and **writes nothing**. `POST /repos/:id/conventions/skill`
+accepts the same three fields, all optional, and uses each one the user supplied in
+place of the generated value. Posting no body at all is the plain save path.
+
+Both go through one pure function, `buildSkillDraft`. That is what makes a draft
+shown and then saved untouched byte-identical, and therefore what keeps "an
+unchanged set burns no skill version" (R8) true instead of dependent on the client.
+Assembly stays server-side for the same reason: if the client re-rendered the
+markdown, determinism would hinge on its formatter matching ours.
+
+`name` defaults to `repo-conventions` (R8, criterion 42) and the modal shows that
+default. Because the save matches an existing skill BY NAME, saving under a
+different name creates a SECOND skill rather than renaming the first. That is the
+honest reading of a fixed-name criterion plus an editable field, and it is
+documented here rather than papered over with a rename that would silently break
+whatever agent already carries the original.
+
+One implementation note worth keeping: a POST with no body arrives as `null`, and
+Zod's `.default({})` fires only on `undefined`, so the body schema normalises
+`null` first. Without it the ordinary save — the one the demo performs — is a 422.
+
 ## The wire
 
 All snake_case. `ConventionCandidate`, `ConventionCategory`, `ConventionStatus`,
-`ConventionDropReason`, `ConventionScanReport` and `ConventionScanResult` live in
-`contracts/knowledge.ts` — in **both** vendored copies, byte-identical.
+`ConventionDropReason`, `ConventionScanReport`, `ConventionScanResult`,
+`ConventionSkillDraft` and `CONVENTION_LIMITS` live in `contracts/knowledge.ts` —
+in **both** vendored copies, byte-identical.
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
 | `POST` | `/repos/:id/conventions/extract` | — | `ConventionScanResult` |
 | `GET` | `/repos/:id/conventions` | `?status=pending\|accepted\|rejected` (optional) | `{ candidates: ConventionCandidate[] }` |
-| `PUT` | `/conventions/:id` | `{ status }` | `ConventionCandidate` |
-| `POST` | `/repos/:id/conventions/skill` | — | `Skill` |
+| `PUT` | `/conventions/:id` | `{ status?, rule?, category? }` — at least one | `ConventionCandidate` |
+| `GET` | `/repos/:id/conventions/skill/draft` | — | `ConventionSkillDraft` |
+| `POST` | `/repos/:id/conventions/skill` | `{ name?, description?, body? }` (body optional entirely) | `Skill` |
 
 A non-uuid id is a 422 at the edge (`IdParams`). An unknown repo, a repo in another
-workspace and an unknown candidate are all 404. No clone, no index, and nothing
-accepted are 422 with a message naming the cause.
+workspace and an unknown candidate are all 404. No clone, no index, nothing
+accepted, an empty `PUT` patch and an over-long `rule` are 422 with a message
+naming the cause. A scan whose model does not answer within the deadline is a 502.
 
 Candidates come back newest first, then by descending confidence. A `GET` with no
 `status` returns the whole triage list — that is what the studio shows.
@@ -283,6 +336,15 @@ is derivable from the newest `created_at`.
 11. The scan uses the workspace's `feature_models.conventions` choice when one is
     set, and the `FEATURE_MODELS` registry default otherwise; the report says which
     provider and model ran.
+11a. `PUT /conventions/:id` edits `rule` and `category` without changing the row's
+    `fingerprint`, its `status`, or any `evidence_*` field; an empty patch and an
+    over-long `rule` are both 422; and a later scan that re-proposes the same rule
+    does NOT revert the edited wording while still refreshing the evidence.
+11b. `GET .../skill/draft` returns `{ name: 'repo-conventions', description, body }`
+    and leaves the `skills` table untouched; a `POST` with no body stores exactly
+    that draft; a `POST` carrying `description`/`body` stores the user's values; and
+    a `POST` with a different `name` creates a second skill at version 1 rather
+    than renaming the first.
 12. A repo with no clone, and a repo with no code index, each return a 422 naming
     the cause **without** making a model call.
 13. A non-uuid id is a 422; an unknown repo, a repo in another workspace and an
