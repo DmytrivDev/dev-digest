@@ -43,11 +43,11 @@
 | 35 | Сторінка агента — рівно 2 вкладки | ✅ | `AgentEditor/constants.ts` — config + skills |
 | 36 | Config агента — поля | ✅ | name/description/provider/model(SearchableSelect)/strategy/system prompt |
 | 37 | Skills-таб — усі скіли + тип | ✅ | список усіх скілів воркспейсу, чекбокс + type chip |
-| 38 | `POST /repos/:id/conventions/extract` | ❌ | модуля conventions немає (`server/src/modules/index.ts`) |
-| 39 | Відбір зразків без моделі | 🟡 | `repoIntel.getConventionSamples()` існує (`repo-intel/service.ts:640`), але його ніхто не викликає; конфігів (eslint/tsconfig/prettier) у вибірці немає |
-| 40 | Формат кандидата від моделі | ❌ | немає промпта/схеми кандидата |
+| 38 | `POST /repos/:id/conventions/extract` | ✅ | `server/src/modules/conventions/routes.ts:91` — синхронний скан з лімітом 5/хв; модуль зареєстрований у `modules/index.ts:34` |
+| 39 | Відбір зразків без моделі | ✅ | `service.ts:342` — `repoIntel.getConventionSamples` (top-N за рангом) плюс окреме читання `CONFIG_SAMPLE_PATHS` по пакетних теках (`helpers.ts:37`) — вибір чисто кодовий |
+| 40 | Формат кандидата від моделі | ✅ | `prompt.ts:144` — Zod-схема `ExtractedConventions` для `completeStructured`: category/rule/evidence/confidence, докази перевіряються по реальних файлах (`helpers.ts:120`) |
 | 41 | Модалка створення — редагування тіла | ✅ | `SkillDraftModal` — draft із сервера в редагованих Name/Description/Body; незмінене поле не йде в POST |
-| 42 | Approved → скіл `repo-conventions` | ❌ | таблиця `conventions` є (`db/schema/knowledge.ts:31`), логіки збірки немає |
+| 42 | Approved → скіл `repo-conventions` | ✅ | `helpers.ts:239` `buildSkillDraft` + `POST /repos/:id/conventions/skill` через `SkillsService` — незмінений набір не палить версію |
 | 43 | 4 скіли API Contract Reviewer | ❌ | у сиді один `api-contract-guard`; треба breaking-change, response-schema, semver-discipline, deprecation-policy |
 | 44 | Conventions у SKILLS LAB | ✅ | `client/src/vendor/ui/nav.ts` — четвертий пункт із токеном `:repoId`; перевірено на живій сторінці |
 | 45 | Кнопки Run Scan / ReScan | ✅ | `Run extraction` у порожньому стані, `Re-scan` у шапці; на час скану кнопка заблокована (`Scanning…`) |
@@ -62,17 +62,12 @@
 
 ## Підсумок
 
-- ✅ **33** — L02 (скіли, редактор, імпорт, траса) + три `.claude` скіли + крок 1 ДЗ
-  (6, 10, 22, 24, 34).
-- 🟡 **3** — 17, 18 (експерименти не прогнані), 39 (є хелпер, немає виклику).
-- ❌ **17** — AGENTS.md (1–2, свідомо відкинуто як необовʼязкове), Conventions у сайдбарі (44,
-  разом зі сторінкою), імпортований скіл (16), 4 скіли API Contract (43) і вся фіча
-  Conventions (38, 40–42, 45–52).
-
-> Рядки **38–40 і 42** ще описують стан ДО кроку 2 — серверний модуль
-> `conventions` уже існує (`server/src/modules/conventions/`), тож підсумкові
-> лічильники вище застарілі рівно на ці чотири рядки. Оновлюється власником
-> кроку 2, щоб не переписувати чужу оцінку наосліп.
+- ✅ **47** — L02 (скіли, редактор, імпорт, траса) + три `.claude` скіли + крок 1 (6, 10, 22,
+  24, 34) + крок 2, серверна фіча Conventions (38–42) + крок 3, сторінка у студії
+  (44–52).
+- 🟡 **2** — 17, 18: контрольні експерименти (Test Quality, API Contract) ще не прогнані.
+- ❌ **4** — AGENTS.md (1–2, свідомо відкинуто як необов'язкове), імпортований скіл (16),
+  чотири скіли API Contract Reviewer (43).
 
 ### Крок 3 (зроблено 2026-09-19)
 Сторінка `/repos/:repoId/conventions`: скан із заблокованою на час виконання
