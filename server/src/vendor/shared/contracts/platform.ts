@@ -270,7 +270,10 @@ export type IndexStatus = z.infer<typeof IndexStatus>;
 
 // ---- Run request (review trigger; owned by A2, contract lives here) ----
 export const RunRequest = z.object({
-  agentId: z.string().optional(),
+  // A uuid, not a bare string: an unvalidated value reached Drizzle and made
+  // Postgres raise `22P02 invalid input syntax for type uuid`, surfacing as a
+  // 500 with raw database text instead of a clean 422.
+  agentId: z.string().uuid().optional(),
   all: z.boolean().optional(),
 });
 export type RunRequest = z.infer<typeof RunRequest>;

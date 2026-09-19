@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
@@ -145,9 +145,22 @@ export class AgentsRepository {
     return row;
   }
 
-  private async snapshotVersion(row: AgentRow, version: number): Promise<void> {
-    const skills = await this.skillIdsForAgent(row.id);
-    await this.db
+  /**
+   * Write one immutable config snapshot.
+   *
+   * `db` and `skills` are injectable so a caller inside a TRANSACTION can pass
+   * the transaction handle and the ids it just wrote: `skillIdsForAgent` reads
+   * through `this.db`, a different connection, and would therefore snapshot the
+   * PRE-transaction link list — recording a version whose `skills` array is the
+   * one it replaced.
+   */
+  private async snapshotVersion(
+    row: AgentRow,
+    version: number,
+    opts: { db?: Pick<Db, 'insert'>; skills?: string[] } = {},
+  ): Promise<void> {
+    const skills = opts.skills ?? (await this.skillIdsForAgent(row.id));
+    await (opts.db ?? this.db)
       .insert(t.agentVersions)
       .values({
         agentId: row.id,
@@ -199,38 +212,116 @@ export class AgentsRepository {
     return rows.map((r) => ({ skill: r.skill, order: r.order }));
   }
 
+  /**
+   * Of `skillIds`, the ones that exist IN THIS WORKSPACE.
+   *
+   * The link table's foreign key only proves a skill exists somewhere, so
+   * without this an agent could be linked to another tenant's skill and that
+   * skill's BODY would be assembled into this workspace's review prompt — and
+   * then read back out of the run trace. `agent_skills` has no `workspace_id`
+   * of its own, so the check has to happen before the link is written.
+   */
+  async skillIdsInWorkspace(workspaceId: string, skillIds: string[]): Promise<Set<string>> {
+    if (skillIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ id: t.skills.id })
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), inArray(t.skills.id, skillIds)));
+    return new Set(rows.map((r) => r.id));
+  }
+
   async skillIdsForAgent(agentId: string): Promise<string[]> {
     const links = await this.linkedSkills(agentId);
     return links.map((l) => l.skill.id);
   }
 
-  /** Link a skill to an agent at a given order (idempotent: upserts order). */
-  async linkSkill(agentId: string, skillId: string, order: number): Promise<void> {
-    await this.db
-      .insert(t.agentSkills)
-      .values({ agentId, skillId, order })
-      .onConflictDoUpdate({
-        target: [t.agentSkills.agentId, t.agentSkills.skillId],
-        set: { order },
-      });
+  /**
+   * Apply a change to an agent's links AND record it as a config change.
+   *
+   * Linking, unlinking or REORDERING skills changes the agent's assembled
+   * prompt just as editing its system prompt does, so it has to move
+   * `agents.version` and write an `agent_versions` row — otherwise two runs can
+   * share a version number and a config snapshot while having been given
+   * different skill blocks, which is exactly the reproducibility
+   * `agent_versions` exists to provide.
+   *
+   * The whole thing is one transaction: the links, the bump and the snapshot
+   * describe one state, and a crash between them leaves a version number whose
+   * recorded config never existed. The version is incremented in SQL and read
+   * back rather than computed from `agent.version`, so a concurrent config edit
+   * cannot make two writers agree on the same next number.
+   */
+  private async applySkillChange(
+    agent: AgentRow,
+    mutate: (tx: Parameters<Parameters<Db['transaction']>[0]>[0]) => Promise<void>,
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await mutate(tx);
+      // Read the resulting order INSIDE the transaction — see snapshotVersion.
+      const rows = await tx
+        .select({ skillId: t.agentSkills.skillId })
+        .from(t.agentSkills)
+        .where(eq(t.agentSkills.agentId, agent.id))
+        .orderBy(asc(t.agentSkills.order));
+      const [row] = await tx
+        .update(t.agents)
+        .set({ version: sql`${t.agents.version} + 1` })
+        .where(eq(t.agents.id, agent.id))
+        .returning();
+      if (row) {
+        await this.snapshotVersion(row, row.version, {
+          db: tx,
+          skills: rows.map((r) => r.skillId),
+        });
+      }
+    });
   }
 
-  async unlinkSkill(agentId: string, skillId: string): Promise<void> {
-    await this.db
-      .delete(t.agentSkills)
-      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.agentSkills.skillId, skillId)));
+  /** Link a skill to an agent at a given order (idempotent: upserts order). */
+  async linkSkill(agent: AgentRow, skillId: string, order: number): Promise<void> {
+    await this.applySkillChange(agent, async (tx) => {
+      await tx
+        .insert(t.agentSkills)
+        .values({ agentId: agent.id, skillId, order })
+        .onConflictDoUpdate({
+          target: [t.agentSkills.agentId, t.agentSkills.skillId],
+          set: { order },
+        });
+    });
+  }
+
+  async unlinkSkill(agent: AgentRow, skillId: string): Promise<void> {
+    await this.applySkillChange(agent, async (tx) => {
+      await tx
+        .delete(t.agentSkills)
+        .where(and(eq(t.agentSkills.agentId, agent.id), eq(t.agentSkills.skillId, skillId)));
+    });
   }
 
   /**
    * Replace the full set of linked skills for an agent with `skillIds`, assigning
-   * order = index. Used by the "Skills" editor tab (attach/reorder). Skills not in
-   * the list are unlinked.
+   * order = index. Used by the "Skills" editor tab (attach/detach/reorder). Skills
+   * not in the list are unlinked.
+   *
+   * A save that changes nothing writes nothing: the editor posts the WHOLE list
+   * on every interaction, so without this check a dropped-where-it-started drag
+   * would burn an agent version on a no-op.
    */
-  async setSkills(agentId: string, skillIds: string[]): Promise<void> {
-    await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (skillIds.length === 0) return;
-    await this.db
-      .insert(t.agentSkills)
-      .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+  async setSkills(agent: AgentRow, skillIds: string[]): Promise<void> {
+    const current = await this.skillIdsForAgent(agent.id);
+    const unchanged =
+      current.length === skillIds.length && current.every((id, i) => id === skillIds[i]);
+    if (unchanged) return;
+
+    // Delete-then-insert, so it has to be atomic: a failed insert (a bad
+    // skill_id violating the FK is reachable from the editor) would otherwise
+    // leave the agent with NO skills at all — silent data loss on save.
+    await this.applySkillChange(agent, async (tx) => {
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agent.id));
+      if (skillIds.length === 0) return;
+      await tx
+        .insert(t.agentSkills)
+        .values(skillIds.map((skillId, i) => ({ agentId: agent.id, skillId, order: i })));
+    });
   }
 }

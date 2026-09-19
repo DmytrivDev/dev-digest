@@ -11,12 +11,7 @@ import {
 import { ThemeProvider } from "./theme";
 import { RepoProvider } from "./repo-context";
 import { ToastProvider, notify } from "./toast";
-import { ApiError } from "./api";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong";
-}
+import { ApiError, describeApiError } from "./api";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [qc] = React.useState(
@@ -35,11 +30,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
         queryCache: new QueryCache({
           onError: (err) => {
             const status = err instanceof ApiError ? err.status : 500;
-            if (status === 0 || status >= 500) notify.error(errorMessage(err));
+            if (status === 0 || status >= 500) notify.error(describeApiError(err));
           },
         }),
         mutationCache: new MutationCache({
-          onError: (err) => notify.error(errorMessage(err)),
+          // `meta: { quietError: true }` opts a mutation out of the toast. It
+          // exists for calls whose 4xx is an ANSWER rather than a malfunction —
+          // the conventions scan replies 422 "no clone"/"no index" and 429 for
+          // its rate limit, and the page shows both in place with the server's
+          // own wording. A system toast on top would read as a broken app.
+          onError: (err, _vars, _ctx, mutation) => {
+            if (mutation.meta?.quietError) return;
+            notify.error(describeApiError(err));
+          },
         }),
       })
   );

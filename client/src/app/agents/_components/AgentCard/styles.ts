@@ -48,4 +48,13 @@ export const s = {
     padding: "1px 8px",
     borderRadius: 4,
   }),
+  iconButton: (busy: boolean): CSSProperties => ({
+    background: "none",
+    border: "none",
+    cursor: busy ? "not-allowed" : "pointer",
+    color: "var(--text-muted)",
+    display: "inline-flex",
+    padding: 4,
+  }),
+  spinning: { animation: "ddspin 1s linear infinite" } satisfies CSSProperties,
 } as const;

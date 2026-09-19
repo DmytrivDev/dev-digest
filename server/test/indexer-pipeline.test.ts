@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { runFullIndex } from '../src/modules/repo-intel/pipeline/full.js';
 import { runIncremental } from '../src/modules/repo-intel/pipeline/incremental.js';
 import type { RepoIntelRepository } from '../src/modules/repo-intel/repository.js';
@@ -139,8 +139,10 @@ function makeContainer(git: MiniGit): Container {
 
 async function writeFileAt(root: string, rel: string, contents: string): Promise<void> {
   const full = join(root, rel);
-  const slash = full.lastIndexOf('/');
-  if (slash > 0) await mkdir(full.slice(0, slash), { recursive: true });
+  // `dirname` handles both separators — a hand-rolled lastIndexOf('/') finds
+  // nothing on Windows, where join() emits '\', so the mkdir was skipped and
+  // writeFile failed with ENOENT for every nested fixture path.
+  await mkdir(dirname(full), { recursive: true });
   await writeFile(full, contents);
 }
 

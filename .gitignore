@@ -23,3 +23,16 @@ test-results/
 
 # emdash worktree config (local)
 .emdash.json
+
+# Machine-local artifacts — never committed, so a clone is not forced onto one
+# developer's setup. Every pattern is anchored with a leading slash: reviewer-core/
+# and e2e/ ship their own package-lock.json and those ARE tracked.
+# (Note: .gitignore has no inline comments — a trailing "# …" becomes part of the pattern.)
+
+# local port remap, e.g. Postgres on 5433 when 5432 is taken
+/docker-compose.override.yml
+# npm stub at the repo root; makes Next.js infer the wrong workspace root
+/package-lock.json
+# `pnpm approve-builds` output — machine-specific, ships placeholder values
+/client/pnpm-workspace.yaml
+/server/pnpm-workspace.yaml

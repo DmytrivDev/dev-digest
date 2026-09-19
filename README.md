@@ -66,11 +66,12 @@ Each package has its own README with deeper diagrams:
 ## What works on day 1
 
 - **Local launch** — one command brings up Postgres (Docker) + API + web.
-- **Settings** — store your LLM API key (OpenAI / Anthropic) and GitHub token.
+- **Settings** — store your LLM API key (OpenRouter / OpenAI / Anthropic) and GitHub token.
+  The seeded agents default to **OpenRouter**, so `OPENROUTER_API_KEY` is the one to set first.
 - **Add repository** — paste a repo URL; the server clones and indexes it.
 - **Import pull requests** — pull open PRs and their diff, commits, body, and linked issue.
 - **View diff** — GitHub-like diff in the browser.
-- **Agents** — two built-in reviewers (General + Security); create/edit your own (model + system prompt).
+- **Agents** — three built-in reviewers (General + Security + Performance); create/edit your own (model + system prompt).
 - **Run a review** — single-pass analysis returning structured findings (severity + score), with the grounding gate and repo-map context working from the start.
 
 ## What you build in the course
@@ -101,7 +102,9 @@ These are intentionally **not** in the starter — each lesson adds one back:
 This script:
 1. starts Postgres (`docker compose up -d`) and waits until it's healthy,
 2. creates `server/.env` and `client/.env` from `.env.example` if missing,
-3. installs deps in `server/` and `client/` (only when `node_modules` is absent),
+3. installs deps in `server/`, `client/` (pnpm) and `reviewer-core/` (npm — it ships a
+   `package-lock.json`), only when `node_modules` is absent. reviewer-core's raw source is
+   imported by the API at runtime, so without its deps the API cannot boot,
 4. applies DB migrations and seeds demo data,
 5. launches the API (`:3001`) and the web app (`:3000`).
 
@@ -110,8 +113,10 @@ Postgres keeps running (`docker compose down` to stop it).
 
 Flags: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
-> Add your keys in `server/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`,
-> `GITHUB_TOKEN`) or via the Settings UI at runtime.
+> Add your keys in `server/.env` (`OPENROUTER_API_KEY` — the default provider for every
+> seeded agent — and/or `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, plus `GITHUB_TOKEN`) or via
+> the Settings UI at runtime. Running a seeded agent without `OPENROUTER_API_KEY` fails with
+> `ConfigError: OPENROUTER_API_KEY is not configured`.
 
 ## Manual steps (what the script does)
 
@@ -157,5 +162,7 @@ Postgres); everything else is hermetic. The browser e2e flows live in
   host port in `docker-compose.yml`.
 - **`vector` type errors** — the pgvector extension is enabled by migration `0000`;
   make sure migrations ran against the Dockerized DB, not a different one.
-- **Reset everything** — `docker compose down -v` drops the volume, then re-run
-  `./scripts/dev.sh`.
+- **Reset everything** — re-run migrations and the seed (`cd server && pnpm db:migrate &&
+  pnpm db:seed`). Do **not** reach for `docker compose down -v`: the `-v` drops the volume
+  and with it every imported repo, review and run on your machine. Use it only against a
+  database you are certain is disposable.

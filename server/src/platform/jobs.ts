@@ -97,6 +97,18 @@ export class JobRunner {
       }
     }) as Promise<void>;
 
+    // `done` rejects when the job ultimately fails, which is the documented
+    // contract for a caller that awaits it. But every current call site takes
+    // only `{ id }` and drops `done` on the floor, so without a handler here an
+    // ordinary failure (cloning a repo that does not exist) became an unhandled
+    // rejection — and under Node 22's default `--unhandled-rejections=throw`
+    // that takes the whole API process down. The symptom is badly misleading:
+    // Next.js keeps serving :3000, so the UI renders empty lists and looks like
+    // the database was wiped. Attaching a no-op handler marks the rejection as
+    // observed; awaiting `done` still surfaces the error to anyone who asks.
+    // The `jobs` row (status 'failed' + error text) remains the durable channel.
+    void done.catch(() => {});
+
     return { id: jobId, done };
   }
 

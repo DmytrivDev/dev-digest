@@ -53,12 +53,21 @@
       "copy": "Copy",
       "fullscreen": "Open fullscreen",
       "search": "Search in this block…",
-      "noMatches": "No matches for “{q}”."
+      "noMatches": "No matches for “{q}”.",
+      "tokens": "{count} tokens"
     },
     "tools": {
       "args": "args",
       "result": "result",
       "previewTruncated": "(preview truncated)"
+    },
+    "skillsUsed": {
+      "title": "Skills used",
+      "count": "{attached} of {total} in prompt",
+      "hint": "Resolved when this run assembled its prompt — a skill edited or detached since then still shows the version this run carried.",
+      "none": "This agent had no skills attached.",
+      "skipped": "skipped",
+      "untrusted": "untrusted"
     }
   },
   "drawer": {
@@ -68,7 +77,7 @@
     "running": "running",
     "completed": "completed",
     "copyRawOutput": "Copy raw output",
-  "copied": "Copied!",
+    "copied": "Copied!",
     "tracePending": "Trace is written when the run completes — see the Live log tab.",
     "loadingTrace": "Loading trace…",
     "noTrace": "No trace available yet."

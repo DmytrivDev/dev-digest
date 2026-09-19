@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
 import { RunCostBadge } from "@/components/RunCostBadge";
+import { formatTime } from "@/lib/datetime";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
@@ -140,7 +141,7 @@ export function RunHistory({
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{c.author}</span>
               {c.committed_at && (
                 <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
-                  {new Date(c.committed_at).toLocaleTimeString()}
+                  {formatTime(c.committed_at)}
                 </span>
               )}
             </div>
@@ -197,7 +198,7 @@ export function RunHistory({
               )}
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
-              {r.ran_at && <span>{new Date(r.ran_at).toLocaleTimeString()}</span>}
+              {r.ran_at && <span>{formatTime(r.ran_at)}</span>}
               {settled && (
                 <span style={{ fontSize: 11 }}>
                   <RunCostBadge

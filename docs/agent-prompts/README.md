@@ -9,6 +9,8 @@ in the DB). The canonical, reviewable copies live next to this file:
 - [`general-reviewer.md`](./general-reviewer.md)
 - [`security-reviewer.md`](./security-reviewer.md)
 - [`performance-reviewer.md`](./performance-reviewer.md)
+- [`test-quality-reviewer.md`](./test-quality-reviewer.md) (L02)
+- [`api-contract-reviewer.md`](./api-contract-reviewer.md) (L02) — deliberately rule-free; its rules live in [`docs/skills/api-contract/`](../skills/api-contract/README.md)
 
 > The DB is the source of truth at run time. These files are the human-readable
 > originals — when you change a prompt, edit the file here **and** push it to the
@@ -78,6 +80,24 @@ that doesn't match it. Consequences for prompt authors:
 - **Field *meaning* belongs in the schema's `.describe()`, field *judgment* belongs
   in the prompt.** The prompt's job is to tell the model *what to flag and at what
   severity*, and *when each verdict applies* — not what the JSON looks like.
+
+## Skills are appended, not merged into the prompt
+
+From L02 a prompt is no longer only the agent's `system_prompt`. Each skill
+linked to the agent and globally enabled is rendered as `### <name>` + its
+description + its body, and the blocks are joined into the `## Skills / rules`
+section of the user message, in `agent_skills.order`.
+
+That has two consequences for a prompt author:
+
+- **Do not restate in the system prompt what a skill says.** Two copies of a
+  rule drift, and the model weighs the duplicate as emphasis.
+- **Keep the skill's own description directive** ("Use when the diff adds or
+  changes tests"). It is the only thing telling the model when the block below
+  it applies.
+
+A skill's token cost is attributed per prompt slot in the run trace, so an
+expensive skill is visible rather than inferred.
 
 ## Required conventions (every reviewer prompt)
 

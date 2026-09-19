@@ -6,21 +6,101 @@
     "repoFallback": "repo",
     "subtitle": "Scan the cloned repo to surface house-rules — each backed by evidence you can turn into a Skill.",
     "scanning": "Scanning…",
-    "rescan": "Re-scan",
-    "runExtraction": "Run extraction",
+    "scanHint": "One model call over sampled files. It can take up to a minute.",
+    "rescan": "ReScan",
+    "runExtraction": "Run Scan",
     "extractionFailed": "Extraction failed",
     "loadError": "Could not load conventions.",
+    "retry": "Retry",
+    "createSkill": "Create skill",
     "empty": {
       "title": "No conventions extracted yet",
       "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
-      "cta": "Run extraction"
+      "cta": "Run Scan"
     },
-    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files"
+    "emptyFilter": {
+      "title": "Nothing in this view",
+      "body": "No candidate carries this triage state yet."
+    },
+    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files",
+    "skillSaved": "Saved as {name}",
+    "viewSkill": "Open in Skills",
+    "dismiss": "Dismiss"
+  },
+  "errors": {
+    "rateLimited": "Too many scans — this repo allows 5 per minute. Try again shortly.",
+    "network": "Cannot reach the DevDigest engine. Is the API running?",
+    "generic": "Something went wrong."
+  },
+  "filter": {
+    "all": "All",
+    "pending": "Pending",
+    "accepted": "Accepted",
+    "rejected": "Rejected"
   },
   "card": {
     "confidence": "Confidence",
+    "accept": "Accept",
     "accepted": "Accepted",
     "accepting": "Accepting…",
-    "acceptAsSkill": "Accept as Skill"
+    "acceptAsSkill": "Accept as Skill",
+    "reject": "Reject",
+    "rejected": "Rejected",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "ruleLabel": "Rule",
+    "categoryLabel": "Category",
+    "charsLeft": "{count} characters left",
+    "tooLong": "Over the {max}-character limit.",
+    "evidenceHint": "Evidence — opens the file at this line on GitHub",
+    "evidenceNoLink": "Evidence — no permalink for this scan"
+  },
+  "scan": {
+    "title": "Scan report",
+    "show": "Show details",
+    "hide": "Hide details",
+    "model": "Model",
+    "headSha": "Head",
+    "codeSamples": "Code samples",
+    "configSamples": "Config samples",
+    "counts": "{proposed} proposed · {kept} kept · {created} new",
+    "droppedTitle": "Dropped before storage",
+    "cost": "Cost",
+    "tokens": "{in} in · {out} out",
+    "reason": {
+      "empty_rule": "empty rule",
+      "unknown_file": "cited a file the scan never sent",
+      "line_out_of_range": "line outside the sampled range",
+      "snippet_mismatch": "snippet not found on that line",
+      "duplicate_in_batch": "re-wording of another candidate"
+    }
+  },
+  "modal": {
+    "title": "Create skill from conventions",
+    "explain": "Merged from {count, plural, one {# accepted convention} other {# accepted conventions}} in {repo}. The body is assembled by the server — everything below is editable before you save.",
+    "name": "Name",
+    "nameHint": "Saving under a different name creates a second skill rather than renaming this one.",
+    "nameTaken": "A skill named {name} already exists (v{version}). Saving REPLACES its body and writes a new version — every agent carrying it is affected. Change the name above to create a separate skill instead.",
+    "description": "Description",
+    "body": "Skill body",
+    "bodyHint": "The only text sent to the model. Edit freely — what you save is what an agent reads.",
+    "cancel": "Cancel",
+    "create": "Create skill",
+    "creating": "Creating…",
+    "loading": "Assembling the draft…",
+    "loadError": "Could not assemble the draft."
+  },
+  "category": {
+    "naming": "naming",
+    "structure": "structure",
+    "typing": "typing",
+    "validation": "validation",
+    "error_handling": "error handling",
+    "testing": "testing",
+    "imports": "imports",
+    "formatting": "formatting",
+    "other": "other"
   }
 }

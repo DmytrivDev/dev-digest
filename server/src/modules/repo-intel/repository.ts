@@ -133,6 +133,17 @@ export interface ResolvedCallerRow {
 export class RepoIntelRepository {
   constructor(private db: Db) {}
 
+  /** True when `repoId` belongs to `workspaceId`. The repo-intel facade is
+   *  deliberately tenant-agnostic, so its routes need this to prove ownership
+   *  before acting on a repo id taken from the URL. */
+  async existsInWorkspace(workspaceId: string, repoId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: t.repos.id })
+      .from(t.repos)
+      .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, repoId)));
+    return row !== undefined;
+  }
+
   async getRepoBasics(repoId: string): Promise<RepoBasics | null> {
     const [row] = await this.db
       .select({

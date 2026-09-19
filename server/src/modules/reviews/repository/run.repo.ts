@@ -90,12 +90,24 @@ export async function deleteAgentRun(
   return rows.length > 0;
 }
 
-/** Mark a still-running run as cancelled (no-op if it already finished). */
-export async function cancelRunIfRunning(db: Db, runId: string): Promise<boolean> {
+/** Mark a still-running run as cancelled (no-op if it already finished).
+ *  Scoped by workspace: without it any caller who knows a run id could cancel
+ *  another tenant's in-flight review. */
+export async function cancelRunIfRunning(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<boolean> {
   const rows = await db
     .update(t.agentRuns)
     .set({ status: 'cancelled' })
-    .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.status, 'running')))
+    .where(
+      and(
+        eq(t.agentRuns.id, runId),
+        eq(t.agentRuns.workspaceId, workspaceId),
+        eq(t.agentRuns.status, 'running'),
+      ),
+    )
     .returning({ id: t.agentRuns.id });
   return rows.length > 0;
 }
@@ -176,6 +188,26 @@ export async function completeAgentRun(
     .where(eq(t.agentRuns.id, runId));
 }
 
+/**
+ * Index which skills this run's prompt carried, one row per skill.
+ *
+ * The queryable twin of the trace's `skills_used`; see `db/schema/runs.ts` for
+ * why the table exists. `onConflictDoNothing` because a re-run of the same
+ * runId (a retry writing its trace twice) must not explode — the set is
+ * determined by the prompt, so a second write carries the same rows.
+ */
+export async function recordRunSkills(
+  db: Db,
+  runId: string,
+  rows: { skillId: string; skillVersion: number; order: number; tokens: number | null }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await db
+    .insert(t.runSkills)
+    .values(rows.map((r) => ({ runId, ...r })))
+    .onConflictDoNothing();
+}
+
 /** Persist the WHOLE run log as ONE document. PK = runId → agent_runs. */
 export async function saveRunTrace(db: Db, runId: string, trace: RunTrace): Promise<void> {
   await db
@@ -184,7 +216,21 @@ export async function saveRunTrace(db: Db, runId: string, trace: RunTrace): Prom
     .onConflictDoUpdate({ target: t.runTraces.runId, set: { trace } });
 }
 
-export async function getRunTrace(db: Db, runId: string): Promise<RunTrace | undefined> {
-  const [row] = await db.select().from(t.runTraces).where(eq(t.runTraces.runId, runId));
+/** A run's trace, scoped by workspace.
+ *
+ *  `run_traces` carries no workspace_id of its own — its only FK is `run_id` —
+ *  so tenancy is inherited transitively and MUST be enforced by joining
+ *  `agent_runs`. A trace holds the fully assembled prompt and the raw diff, so
+ *  an unscoped read is a cross-tenant source-code disclosure. */
+export async function getRunTrace(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<RunTrace | undefined> {
+  const [row] = await db
+    .select({ trace: t.runTraces.trace })
+    .from(t.runTraces)
+    .innerJoin(t.agentRuns, eq(t.agentRuns.id, t.runTraces.runId))
+    .where(and(eq(t.runTraces.runId, runId), eq(t.agentRuns.workspaceId, workspaceId)));
   return row ? (row.trace as RunTrace) : undefined;
 }

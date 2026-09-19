@@ -1,7 +1,11 @@
 {
   "card": {
     "noDescription": "No description",
-    "skillCount": "{count} skills"
+    "skillCount": "{count} skills",
+    "delete": "Delete agent",
+    "deleteTitle": "Delete \"{name}\"?",
+    "deleteBody": "The agent, its configuration and its skill links are removed. Past runs stay, but they no longer name this agent. This cannot be undone.",
+    "deleteCta": "Delete agent"
   },
   "list": {
     "breadcrumbLab": "Skills Lab",
@@ -91,7 +95,8 @@
     "title": "Skills",
     "enabledCount": "{linked} of {total} enabled",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach."
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Drag a handle to reorder, or focus one and use ↑ / ↓. A disabled skill stays attached but is left out of the prompt.",
+    "dragHandle": "Reorder {name} — drag, or use the up and down arrow keys"
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

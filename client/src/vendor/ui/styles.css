@@ -8,6 +8,11 @@
 
 :root,
 [data-theme="dark"] {
+  /* Tells the browser to paint its OWN widgets dark — the native <select>
+     popup, scrollbars, focus rings. Without it a dark page opens a white
+     option list, which is what the Conventions category picker looked like:
+     `<option>` colours alone are not honoured everywhere, `color-scheme` is. */
+  color-scheme: dark;
   --bg-primary: #0a0a0a;
   --bg-surface: #141414;
   --bg-elevated: #1c1c1c;
@@ -33,6 +38,9 @@
 
   --ok: #10b981;
   --ok-bg: rgba(16, 185, 129, 0.12);
+  /* Finding-category accent with no severity token of its own (perf). Charts
+     colour categories, and severity must not be borrowed to mean category. */
+  --cat-perf: #8b5cf6;
   --pending: #f59e0b;
   --failed: #ef4444;
   --stale: #6b7280;
@@ -47,6 +55,7 @@
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg-primary: #ffffff;
   --bg-surface: #fafafa;
   --bg-elevated: #ffffff;
@@ -72,6 +81,7 @@
 
   --ok: #059669;
   --ok-bg: rgba(5, 150, 105, 0.08);
+  --cat-perf: #7c3aed;
   --pending: #d97706;
   --failed: #dc2626;
   --stale: #9ca3af;

@@ -19,6 +19,7 @@
  */
 import type { CodeSymbol, RepoRef } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
+import { NotFoundError } from '../../platform/errors.js';
 import { extractEndpoints } from '../../adapters/codeindex/extract.js';
 import {
   parseImports,
@@ -103,6 +104,15 @@ export class RepoIntelService implements RepoIntel {
 
   constructor(private container: Container) {
     this.repo = new RepoIntelRepository(container.db);
+  }
+
+  /** Throw unless `repoId` belongs to `workspaceId`. Routes call this before
+   *  reading index state or enqueuing a resync: `getContext` resolves WHO is
+   *  asking, which is not the same as checking WHAT they may touch. */
+  async assertRepoInWorkspace(workspaceId: string, repoId: string): Promise<void> {
+    if (!(await this.repo.existsInWorkspace(workspaceId, repoId))) {
+      throw new NotFoundError('Repo not found');
+    }
   }
 
   // -------------------------------------------------------------------------
