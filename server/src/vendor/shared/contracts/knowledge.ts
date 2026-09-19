@@ -241,17 +241,6 @@ export const CommunitySkill = z.object({
 });
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
-// ---- Conventions ----
-export const ConventionCandidate = z.object({
-  id: z.string(),
-  rule: z.string(),
-  evidence_path: z.string(),
-  evidence_snippet: z.string(),
-  confidence: z.number().min(0).max(1),
-  accepted: z.boolean(),
-});
-export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
-
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
 // custom baseURL) — used by the CI runner for cheap models (DeepSeek/GLM/MiniMax).
@@ -323,3 +312,104 @@ export const AgentVersion = z.object({
   created_at: z.string(),
 });
 export type AgentVersion = z.infer<typeof AgentVersion>;
+
+// ---- Conventions ----
+// Declared after Agents on purpose: `ConventionScanReport` reuses `Provider`,
+// and a `const` referenced above its own declaration throws at import time.
+
+/**
+ * What kind of rule a candidate is. A fixed list rather than free text: the
+ * studio groups candidates by category, and the enum goes into the model's
+ * output schema so it cannot invent a tenth bucket that nothing renders.
+ */
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'typing',
+  'validation',
+  'error_handling',
+  'testing',
+  'imports',
+  'formatting',
+  'other',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
+/**
+ * Triage state — three values, not a boolean. A REJECTED candidate and one
+ * NOBODY HAS TRIAGED YET must stay apart: a re-scan replaces the untriaged ones
+ * and must never resurrect a rejection.
+ */
+export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
+/**
+ * Why a proposal was thrown away before anyone saw it. Reported per scan, not
+ * stored: a dropped candidate has no row.
+ */
+export const ConventionDropReason = z.enum([
+  'empty_rule',
+  'unknown_file',
+  'line_out_of_range',
+  'snippet_mismatch',
+  'duplicate_in_batch',
+]);
+export type ConventionDropReason = z.infer<typeof ConventionDropReason>;
+
+/**
+ * One convention candidate as the API serves it.
+ *
+ * Evidence is the whole point: every candidate names a file AND a line, and the
+ * server has re-read that line and matched the snippet before a row ever
+ * reaches this shape — so `evidence_path` / `evidence_line` are required, not
+ * nullish, even though the columns behind them are nullable for legacy rows.
+ * `evidence_url` is a GitHub permalink pinned to the sha the scan ran against;
+ * it is null only when the repo had no resolvable head at that moment.
+ */
+export const ConventionCandidate = z.object({
+  id: z.string(),
+  category: ConventionCategory,
+  rule: z.string(),
+  evidence_path: z.string(),
+  evidence_line: z.number().int().positive(),
+  evidence_snippet: z.string(),
+  evidence_url: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+  status: ConventionStatus,
+  created_at: z.string(),
+});
+export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+/**
+ * What one scan did. Returned with the candidates and deliberately NOT stored —
+ * the candidates are the persisted result, and a report table would be a second
+ * source of truth for the same scan.
+ *
+ * It exists so a thin result is explainable instead of mysterious: `code_samples`
+ * and `config_samples` prove which files the model actually saw (selection is
+ * pure code, no model), and `dropped` says how many proposals failed evidence
+ * validation and why.
+ */
+export const ConventionScanReport = z.object({
+  head_sha: z.string().nullable(),
+  provider: Provider,
+  model: z.string(),
+  config_samples: z.array(z.string()),
+  code_samples: z.array(z.string()),
+  proposed: z.number().int(),
+  kept: z.number().int(),
+  dropped: z.array(z.object({ rule: z.string(), reason: ConventionDropReason })),
+  /** Candidates that were not already on file — the rest kept their triage. */
+  created: z.number().int(),
+  tokens_in: z.number().int(),
+  tokens_out: z.number().int(),
+  cost_usd: z.number().nullable(),
+});
+export type ConventionScanReport = z.infer<typeof ConventionScanReport>;
+
+/** `POST /repos/:id/conventions/extract` — the stored candidates plus what the scan did. */
+export const ConventionScanResult = z.object({
+  candidates: z.array(ConventionCandidate),
+  scan: ConventionScanReport,
+});
+export type ConventionScanResult = z.infer<typeof ConventionScanResult>;

@@ -92,6 +92,20 @@
       "when": 1789745830187,
       "tag": "0012_sharp_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789820709823,
+      "tag": "0013_sweet_captain_cross",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789820725060,
+      "tag": "0014_living_mad_thinker",
+      "breakpoints": true
     }
   ]
 }
