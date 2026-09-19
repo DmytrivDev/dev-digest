@@ -34,7 +34,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         }),
         mutationCache: new MutationCache({
-          onError: (err) => notify.error(describeApiError(err)),
+          // `meta: { quietError: true }` opts a mutation out of the toast. It
+          // exists for calls whose 4xx is an ANSWER rather than a malfunction —
+          // the conventions scan replies 422 "no clone"/"no index" and 429 for
+          // its rate limit, and the page shows both in place with the server's
+          // own wording. A system toast on top would read as a broken app.
+          onError: (err, _vars, _ctx, mutation) => {
+            if (mutation.meta?.quietError) return;
+            notify.error(describeApiError(err));
+          },
         }),
       })
   );

@@ -33,6 +33,17 @@ export const NAV: NavGroup[] = [
     items: [
       { key: "agents", label: "Agents", icon: "Cpu", href: "/agents", gKey: "a" },
       { key: "skills", label: "Skills", icon: "Sparkles", href: "/skills", gKey: "s" },
+      // Repo-scoped, unlike its two neighbours: conventions are extracted FROM a
+      // repository, so the href carries :repoId and `resolveHref` fills it in the
+      // same way Pull Requests does. It sits here rather than under WORKSPACE
+      // because its output is a skill, not a review.
+      {
+        key: "conventions",
+        label: "Conventions",
+        icon: "ListChecks",
+        href: "/repos/:repoId/conventions",
+        gKey: "c",
+      },
     ],
   },
 ];
@@ -63,6 +74,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "g p", label: "Go to Pull Requests", group: "Navigation" },
   { keys: "g a", label: "Go to Agents", group: "Navigation" },
   { keys: "g s", label: "Go to Skills", group: "Navigation" },
+  { keys: "g c", label: "Go to Conventions", group: "Navigation" },
   { keys: "j / k", label: "Next / previous finding", group: "Findings" },
   { keys: "a", label: "Accept finding", group: "Findings" },
   { keys: "d", label: "Dismiss finding", group: "Findings" },
