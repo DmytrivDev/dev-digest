@@ -14,6 +14,7 @@ import type {
   SecretsStatus,
   Repo,
   PrMeta,
+  PullsListResponse,
   PrDetail,
   SpecFile,
   IndexStatus,
@@ -102,7 +103,8 @@ export function useDeleteRepo() {
 export function usePulls(repoId: string | null | undefined) {
   return useQuery({
     queryKey: ["pulls", repoId],
-    queryFn: () => api.get<PrMeta[]>(`/repos/${repoId}/pulls`),
+    queryFn: async () =>
+      (await api.get<PullsListResponse>(`/repos/${repoId}/pulls`)).pulls,
     enabled: !!repoId,
     // Auto-refresh PR statuses: re-sync from GitHub every 60s while the page is
     // open, and whenever the window regains focus.

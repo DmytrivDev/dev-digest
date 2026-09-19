@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
+import type {
+  PrMeta,
+  PullsListResponse,
+  PrDetail,
+  GitHubClient,
+  PrReviewComment,
+} from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
 import { getContext } from '../_shared/context.js';
@@ -25,7 +31,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
 
-  app.get('/repos/:id/pulls', { schema: { params: IdParams } }, async (req): Promise<PrMeta[]> => {
+  app.get('/repos/:id/pulls', { schema: { params: IdParams } }, async (req): Promise<PullsListResponse> => {
     const { workspaceId } = await getContext(container, req);
     const [repo] = await container.db
       .select()
@@ -175,7 +181,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         : new Map<string, number>();
 
     const now = Date.now();
-    return rows.map((r) => {
+    const pulls = rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
       return {
         id: r.id,
@@ -198,10 +204,11 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
-        cost_usd: costByPr.get(r.id) ?? null,
+        cost: costByPr.get(r.id) ?? null,
         findings: findingsByPr.get(r.id) ?? null,
       };
     });
+    return { pulls };
   });
 
   app.get('/pulls/:id', { schema: { params: IdParams } }, async (req): Promise<PrDetail> => {

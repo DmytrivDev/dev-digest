@@ -39,7 +39,7 @@ function pr(o: Partial<PrMeta> = {}): PrMeta {
     opened_at: "2026-06-11T09:00:00.000Z",
     updated_at: "2026-06-11T12:00:00.000Z",
     score: 61,
-    cost_usd: 0.014,
+    cost: 0.014,
     findings: { critical: 1, warning: 2, suggestion: 0 },
     ...o,
   };
@@ -60,13 +60,13 @@ describe("PRRow — COST cell", () => {
   });
 
   it("renders '—' for a PR with no priced run, never '$0.00'", () => {
-    renderRow(pr({ cost_usd: null }));
+    renderRow(pr({ cost: null }));
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 
   it("keeps a genuine zero visible as $0.00", () => {
-    renderRow(pr({ cost_usd: 0 }));
+    renderRow(pr({ cost: 0 }));
     expect(screen.getByText("$0.00")).toBeInTheDocument();
   });
 });

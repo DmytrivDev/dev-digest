@@ -172,7 +172,7 @@ export const PrMeta = z.object({
   score: z.number().int().nullish(),
   // Cost (USD) of the latest review batch (list endpoint only). null/absent
   // when the PR has no priced run yet; UI shows "—", not "$0".
-  cost_usd: z.number().nullish(),
+  cost: z.number().nullish(),
   // Severity breakdown of the LATEST review's findings (list endpoint only) —
   // the same review the `score` above comes from. null/absent until the PR has
   // been reviewed; {0,0,0} means reviewed and clean. Re-reviewing replaces it.
@@ -185,6 +185,13 @@ export const PrMeta = z.object({
     .nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
+
+/**
+ * `GET /repos/:id/pulls` — the PR list, wrapped so the payload has somewhere to
+ * grow (paging, sync status) without changing shape again.
+ */
+export const PullsListResponse = z.object({ pulls: z.array(PrMeta) });
+export type PullsListResponse = z.infer<typeof PullsListResponse>;
 
 export const PrFile = z.object({
   path: z.string(),

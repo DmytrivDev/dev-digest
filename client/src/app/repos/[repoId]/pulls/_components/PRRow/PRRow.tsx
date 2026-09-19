@@ -76,7 +76,7 @@ export function PRRow({
         </Badge>
       </div>
       <div style={s.costCell}>
-        <RunCostBadge variant="compact" cost={pr.cost_usd} />
+        <RunCostBadge variant="compact" cost={pr.cost} />
       </div>
       <div style={s.updatedCell}>{relativeTime(pr.updated_at)}</div>
     </div>
