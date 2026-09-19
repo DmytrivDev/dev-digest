@@ -21,9 +21,9 @@
 | 13 | Вкладка Skills у редакторі агента (bind / toggle / drag&drop) | ✅ | `client/src/app/agents/[id]/.../SkillsTab` |
 | 14 | Порядок drag&drop впливає на промпт | ✅ | `server/src/modules/reviews/run-executor.ts:359` — блоки в link-order |
 | 15 | Імпорт `.md` / `.zip` з прев'ю | ✅ | `ImportSkillDrawer` + `POST /skills/import/preview`, `modules/skills/import-parse.ts` |
-| 16 | Хоча б один скіл походженням «імпортовано» | ❌ | сид пише `source: 'manual'` (`server/src/db/seed.ts:256`) — треба реальний імпорт і лінк до нового агента |
-| 17 | Контрольний експеримент — Test Quality | 🟡 | процедура є (`docs/visual-test-skills.md`, §6a–6c), самого прогону з доказами ще не робили |
-| 18 | Контрольний експеримент — API Contract | 🟡 | те саме, §6d — позначено як optional, не виконано |
+| 16 | Хоча б один скіл походженням «імпортовано» | ✅ | `response-schema` заведений шляхом драйвера (preview → save з `enabled:false`), `source: imported_url`, прилінкований до API Contract Reviewer; у трасі позначений `untrusted` |
+| 17 | Контрольний експеримент — Test Quality | ✅ | PR #4: без рубрики `approve` / 0 знахідок → з рубрикою WARNING про 5 непокритих гілок. Сидовий агент для цього НЕ годиться — правила вже в його промпті; деталі в `docs/experiment-skills-ab.md` |
+| 18 | Контрольний експеримент — API Contract | ✅ | PR #3: без скілів score 97 / `comment` / 1 SUGGESTION → зі скілами score 30 / `request_changes` / 2 CRITICAL із цитатами правил (`docs/experiment-skills-ab.md`) |
 | 19 | Скіли в трасі промпта + токени блоку | ✅ | `PromptAssembly.token_counts` + `SkillsUsedSection` у `RunTraceDrawer` |
 | 20 | Увімкнено/вимкнено видно в логах | ✅ | `skills: N of M linked skill(s) attached (K disabled)`; вимкнений скіл не дає блоку |
 | 21 | pr-self-review вручну на змішаний diff, без хука | ✅ | `.claude/settings.json` має лише insights-хуки; `routing.json` покриває і `client/**`, і `server/**` |
@@ -48,7 +48,7 @@
 | 40 | Формат кандидата від моделі | ✅ | `prompt.ts:144` — Zod-схема `ExtractedConventions` для `completeStructured`: category/rule/evidence/confidence, докази перевіряються по реальних файлах (`helpers.ts:120`) |
 | 41 | Модалка створення — редагування тіла | ✅ | `SkillDraftModal` — draft із сервера в редагованих Name/Description/Body; незмінене поле не йде в POST |
 | 42 | Approved → скіл `repo-conventions` | ✅ | `helpers.ts:239` `buildSkillDraft` + `POST /repos/:id/conventions/skill` через `SkillsService` — незмінений набір не палить версію |
-| 43 | 4 скіли API Contract Reviewer | ❌ | у сиді один `api-contract-guard`; треба breaking-change, response-schema, semver-discipline, deprecation-policy |
+| 43 | 4 скіли API Contract Reviewer | ✅ | `docs/skills/api-contract/` — breaking-change, response-schema, semver-discipline, deprecation-policy; у кожного директивний опис (172–190 симв.) і пари «добре/погано» |
 | 44 | Conventions у SKILLS LAB | ✅ | `client/src/vendor/ui/nav.ts` — четвертий пункт із токеном `:repoId`; перевірено на живій сторінці |
 | 45 | Кнопки Run Scan / ReScan | ✅ | `Run extraction` у порожньому стані, `Re-scan` у шапці; на час скану кнопка заблокована (`Scanning…`) |
 | 46 | Картки кандидатів після скану | ✅ | `CandidateCard` — правило, категорія, доказ-permalink, confidence |
@@ -62,12 +62,17 @@
 
 ## Підсумок
 
-- ✅ **47** — L02 (скіли, редактор, імпорт, траса) + три `.claude` скіли + крок 1 (6, 10, 22,
-  24, 34) + крок 2, серверна фіча Conventions (38–42) + крок 3, сторінка у студії
-  (44–52).
-- 🟡 **2** — 17, 18: контрольні експерименти (Test Quality, API Contract) ще не прогнані.
-- ❌ **4** — AGENTS.md (1–2, свідомо відкинуто як необов'язкове), імпортований скіл (16),
-  чотири скіли API Contract Reviewer (43).
+- ✅ **51** — усе, крім двох пунктів нижче: L02 + три `.claude` скіли + кроки 1–3
+  (сайдбар, панель, `agent_count`, модалки, фіча Conventions від роута до сторінки)
+  + крок 4–5 (чотири скіли API Contract, імпортований скіл і обидва контрольні
+  експерименти).
+- ❌ **2** — перехід на AGENTS.md (1–2), свідомо відкинутий як необов'язковий:
+  за формулюванням критерію він не застосовується, поки `AGENTS.md` у репо немає.
+
+### Кроки 4–5 (зроблено 2026-09-19)
+Чотири скіли API Contract Reviewer, агент на `deepseek-v4-flash`, і два A/B
+експерименти на навмисних PR #3 і #4 — числа, id прогонів і цитати знахідок у
+[experiment-skills-ab.md](experiment-skills-ab.md).
 
 ### Крок 3 (зроблено 2026-09-19)
 Сторінка `/repos/:repoId/conventions`: скан із заблокованою на час виконання
