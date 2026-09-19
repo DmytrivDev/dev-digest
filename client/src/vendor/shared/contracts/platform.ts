@@ -173,6 +173,9 @@ export const PrMeta = z.object({
   // Cost (USD) of the latest review batch (list endpoint only). null/absent
   // when the PR has no priced run yet; UI shows "—", not "$0".
   cost_usd: z.number().nullish(),
+  // Short label for how old the PR is (list endpoint only), e.g. "3 days".
+  // Additive: absent on older payloads, and no consumer is required to read it.
+  age_label: z.string().nullish(),
   // Severity breakdown of the LATEST review's findings (list endpoint only) —
   // the same review the `score` above comes from. null/absent until the PR has
   // been reviewed; {0,0,0} means reviewed and clean. Re-reviewing replaces it.

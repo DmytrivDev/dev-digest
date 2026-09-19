@@ -8,6 +8,7 @@ import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import { deriveReviewStatus, type SeverityCounts } from './status.js';
+import { prAgeLabel } from './age.js';
 import { costByPrFromRuns } from './cost.js';
 import { findingsByPrFromRows } from './findings.js';
 
@@ -196,6 +197,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
           now,
         }),
         opened_at: r.openedAt?.toISOString() ?? null,
+        age_label: prAgeLabel(r.openedAt ?? null, new Date(now)),
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
         cost_usd: costByPr.get(r.id) ?? null,
