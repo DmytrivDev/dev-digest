@@ -12,6 +12,29 @@ export function useAgents() {
   });
 }
 
+/**
+ * Persist the order the agent cards were dragged into.
+ *
+ * Sends the COMPLETE ordered id list, matching the server: a partial move would
+ * leave rows sharing a position. The cache is re-ordered immediately so the
+ * grid does not snap back mid-flight, and invalidated after so the server's
+ * answer is the one that survives.
+ */
+export function useReorderAgents() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api.post<{ ok: boolean }>("/agents/reorder", { ids }),
+    onMutate: (ids) => {
+      qc.setQueryData<Agent[]>(["agents"], (prev) => {
+        if (!prev) return prev;
+        const byId = new Map(prev.map((row) => [row.id, row]));
+        return ids.map((id) => byId.get(id)).filter((row): row is Agent => row !== undefined);
+      });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["agents"] }),
+  });
+}
+
 export function useAgent(id: string | null | undefined) {
   return useQuery({
     queryKey: ["agent", id],

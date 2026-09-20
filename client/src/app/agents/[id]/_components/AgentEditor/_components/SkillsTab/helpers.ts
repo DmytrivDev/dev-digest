@@ -1,5 +1,7 @@
 /** Pure list operations for the agent's linked-skill ordering. */
 
+import { reorderIds } from "@/lib/reorder";
+
 /** Toggle a skill's membership. Attaching appends, so it lands last in the prompt. */
 export function toggleLink(linked: readonly string[], skillId: string): string[] {
   return linked.includes(skillId)
@@ -24,26 +26,15 @@ export function moveLink(linked: readonly string[], skillId: string, delta: -1 |
 }
 
 /**
- * Move `fromId` to the position currently held by `toId`.
+ * Move a linked skill to the position held by another, drop-onto-row style.
  *
- * Drop-onto-row semantics, which is what a pointer actually expresses: the
- * dragged skill takes the target's place and everything between shifts by one.
- * Because the element is removed before it is re-inserted, dragging DOWN lands
- * it after the target and dragging UP lands it before — the behaviour a user
- * reads off the drop indicator.
- *
- * Returns the same contents when either id is not linked, so dropping onto an
- * unlinked row in the shared picker list is a no-op by construction rather than
- * by a guard the caller has to remember.
+ * The list operation itself lives in `lib/reorder.ts` now that the skills and
+ * agents grids drag too; this keeps the name the picker's callers use and the
+ * one behaviour that is specific to the picker — dropping onto an UNLINKED row
+ * is a no-op, because an unlinked skill has no position in the prompt.
  */
 export function reorderLink(linked: readonly string[], fromId: string, toId: string): string[] {
-  const from = linked.indexOf(fromId);
-  const to = linked.indexOf(toId);
-  if (from < 0 || to < 0 || from === to) return [...linked];
-  const next = [...linked];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved!);
-  return next;
+  return reorderIds(linked, fromId, toId);
 }
 
 /**

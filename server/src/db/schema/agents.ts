@@ -31,6 +31,8 @@ export const agents = pgTable('agents', {
   repoIntel: boolean('repo_intel').notNull().default(true),
   enabled: boolean('enabled').notNull().default(true),
   version: integer('version').notNull().default(1),
+  /** Manual sort position within the workspace — see `skills.position`. */
+  position: integer('position'),
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: now(),
 });

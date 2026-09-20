@@ -54,6 +54,11 @@ export class SkillsService {
     return rows.map((row) => toSkillDto(row, counts.get(row.id) ?? 0));
   }
 
+  /** Persist the order the user dragged the cards into. */
+  async reorder(workspaceId: string, ids: readonly string[]): Promise<void> {
+    await this.repo.reorder(workspaceId, ids);
+  }
+
   async get(workspaceId: string, id: string): Promise<Skill | undefined> {
     const row = await this.repo.getById(workspaceId, id);
     return row ? toSkillDto(row) : undefined;

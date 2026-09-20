@@ -5,6 +5,8 @@
     "title": "Skills",
     "subtitle": "Reusable instruction blocks. A skill is text — linked to an agent, it is appended to that agent's prompt in the order you set.",
     "addSkill": "Add Skill",
+    "dragHint": "Drag a card to reorder",
+    "dragWhileFiltering": "Clear the search to reorder — dragging a filtered list would save an order you cannot see",
     "searchPlaceholder": "Search skills…",
     "loadError": "Could not load skills.",
     "menu": {

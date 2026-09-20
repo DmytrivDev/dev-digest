@@ -15,7 +15,8 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
 import { AppShell } from "../../../../components/app-shell";
-import { useSkills, useUpdateSkill } from "../../../../lib/hooks/skills";
+import { useSkills, useReorderSkills, useUpdateSkill } from "../../../../lib/hooks/skills";
+import { reorderIds } from "../../../../lib/reorder";
 import { SkillCard } from "../SkillCard";
 import { filterSkills } from "../../../../lib/skills";
 import { CreateSkillModal } from "./_components/CreateSkillModal";
@@ -34,7 +35,25 @@ export function SkillsListView() {
   // panel must show the CURRENT row rather than the copy it opened with.
   const [previewId, setPreviewId] = React.useState<string | null>(null);
 
-  const list = filterSkills(skills ?? [], search);
+  const reorder = useReorderSkills();
+  // Only the drag IN FLIGHT is state. The displayed order is derived from the
+  // saved list, so a failed save cannot leave a local order behind that
+  // disagrees with the server.
+  const [drag, setDrag] = React.useState<{ from: string; over: string } | null>(null);
+
+  const all = React.useMemo(() => skills ?? [], [skills]);
+  // Dragging a FILTERED list would save an order for cards that are not on
+  // screen, so the handle is off while a search is active.
+  const canDrag = search.trim() === "";
+  const ordered = React.useMemo(() => {
+    if (!drag) return all;
+    const byId = new Map(all.map((sk) => [sk.id, sk]));
+    return reorderIds(all.map((sk) => sk.id), drag.from, drag.over)
+      .map((id) => byId.get(id))
+      .filter((sk): sk is NonNullable<typeof sk> => sk !== undefined);
+  }, [all, drag]);
+
+  const list = filterSkills(ordered, search);
   const previewing = previewId ? (skills ?? []).find((sk) => sk.id === previewId) : undefined;
 
   return (
@@ -98,13 +117,36 @@ export function SkillsListView() {
         {list.length > 0 && (
           <div style={s.grid}>
             {list.map((sk) => (
-              <SkillCard
+              <div
                 key={sk.id}
-                skill={sk}
-                active={sk.id === previewId}
-                onClick={() => setPreviewId(sk.id)}
-                onToggle={(enabled) => update.mutate({ id: sk.id, patch: { enabled } })}
-              />
+                draggable={canDrag}
+                title={canDrag ? t("page.dragHint") : t("page.dragWhileFiltering")}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  setDrag({ from: sk.id, over: sk.id });
+                }}
+                onDragOver={(e) => {
+                  if (!drag) return;
+                  e.preventDefault();
+                  if (drag.over !== sk.id) setDrag({ from: drag.from, over: sk.id });
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (drag) reorder.mutate(ordered.map((row) => row.id));
+                  setDrag(null);
+                }}
+                // Ending a drag without a drop abandons the reorder: nothing was
+                // saved, so dropping the preview restores the saved order.
+                onDragEnd={() => setDrag(null)}
+                style={{ cursor: canDrag ? "grab" : "default", opacity: drag?.from === sk.id ? 0.5 : 1 }}
+              >
+                <SkillCard
+                  skill={sk}
+                  active={sk.id === previewId}
+                  onClick={() => setPreviewId(sk.id)}
+                  onToggle={(enabled) => update.mutate({ id: sk.id, patch: { enabled } })}
+                />
+              </div>
             ))}
           </div>
         )}

@@ -52,8 +52,35 @@ export class AgentsRepository {
   constructor(private db: Db) {}
 
   async list(workspaceId: string): Promise<AgentRow[]> {
-    return this.db.select().from(t.agents).where(eq(t.agents.workspaceId, workspaceId));
+    return this.db
+      .select()
+      .from(t.agents)
+      .where(eq(t.agents.workspaceId, workspaceId))
+      // Unordered before: Postgres returned heap order, and an UPDATE (a
+      // toggle) rewrites the row, so cards moved when you switched one off.
+      .orderBy(asc(t.agents.position), asc(t.agents.name));
   }
+
+  /**
+   * Write a manual order for the whole workspace in one transaction.
+   *
+   * Takes the COMPLETE ordered id list rather than a moved id and a target,
+   * mirroring `POST /agents/:id/skills`: a partial reorder leaves rows sharing
+   * a position, and "what order is this list in" stops having one answer. Ids
+   * from another workspace match nothing, so a hostile list reorders nothing
+   * rather than failing halfway.
+   */
+  async reorder(workspaceId: string, ids: readonly string[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      for (const [index, id] of ids.entries()) {
+        await tx
+          .update(t.agents)
+          .set({ position: index })
+          .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)));
+      }
+    });
+  }
+
 
   async listEnabled(workspaceId: string): Promise<AgentRow[]> {
     return this.db

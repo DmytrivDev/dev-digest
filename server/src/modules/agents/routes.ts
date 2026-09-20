@@ -30,6 +30,12 @@ const VersionParams = z.object({
  *   GET    /providers/:id/models    → dynamic model list for a provider (editor)
  */
 
+/**
+ * The complete ordered id list for the workspace. Capped because it is the whole
+ * set, not a page: a list longer than this is not a drag, it is a payload.
+ */
+const ReorderBody = z.object({ ids: z.array(z.string().uuid()).max(500) });
+
 const CreateAgentBody = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -74,6 +80,13 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
   app.get('/agents', async (req) => {
     const { workspaceId } = await getContext(app.container, req);
     return service.list(workspaceId);
+  });
+
+  // The COMPLETE ordered set — see the skills route for why it is not a move.
+  app.post('/agents/reorder', { schema: { body: ReorderBody } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    await service.reorder(workspaceId, req.body.ids);
+    return { ok: true };
   });
 
   app.get('/agents/:id', { schema: { params: IdParams } }, async (req) => {

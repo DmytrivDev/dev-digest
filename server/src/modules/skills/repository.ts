@@ -49,7 +49,9 @@ export class SkillsRepository {
       .select()
       .from(t.skills)
       .where(eq(t.skills.workspaceId, workspaceId))
-      .orderBy(asc(t.skills.name));
+      // position first (ASC puts NULLs last in Postgres), so a dragged order
+      // wins and anything never dragged still has a stable place by name.
+      .orderBy(asc(t.skills.position), asc(t.skills.name));
   }
 
   /**
@@ -77,6 +79,26 @@ export class SkillsRepository {
       .where(eq(t.skills.workspaceId, workspaceId))
       .groupBy(t.agentSkills.skillId);
     return new Map(rows.map((r) => [r.skillId, r.count]));
+  }
+
+  /**
+   * Write a manual order for the whole workspace in one transaction.
+   *
+   * Takes the COMPLETE ordered id list rather than a moved id and a target,
+   * mirroring `POST /agents/:id/skills`: a partial reorder leaves rows sharing
+   * a position, and "what order is this list in" stops having one answer. Ids
+   * from another workspace match nothing, so a hostile list reorders nothing
+   * rather than failing halfway.
+   */
+  async reorder(workspaceId: string, ids: readonly string[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      for (const [index, id] of ids.entries()) {
+        await tx
+          .update(t.skills)
+          .set({ position: index })
+          .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)));
+      }
+    });
   }
 
   async getById(workspaceId: string, id: string): Promise<SkillRow | undefined> {

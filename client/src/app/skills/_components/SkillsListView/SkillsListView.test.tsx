@@ -7,6 +7,7 @@ import shellMessages from "../../../../../messages/en/shell.json";
 import common from "../../../../../messages/en/common.json";
 
 const push = vi.fn();
+const reorderSkills = vi.fn();
 const skills = vi.hoisted(() => ({ current: [] as Skill[] }));
 
 vi.mock("next/navigation", () => ({
@@ -22,6 +23,7 @@ vi.mock("../../../../lib/hooks/skills", () => ({
     refetch: vi.fn(),
   }),
   useUpdateSkill: () => ({ mutate: vi.fn() }),
+  useReorderSkills: () => ({ mutate: reorderSkills, isPending: false }),
   useDeleteSkill: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 // The app shell pulls in the sidebar, repo switcher and command palette; none

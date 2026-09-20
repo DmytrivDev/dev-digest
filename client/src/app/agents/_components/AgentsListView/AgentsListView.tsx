@@ -7,10 +7,11 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
 import { AppShell } from "../../../../components/app-shell";
-import { useAgents, useUpdateAgent } from "../../../../lib/hooks/agents";
+import { useAgents, useReorderAgents, useUpdateAgent } from "../../../../lib/hooks/agents";
 import { AgentCard } from "../AgentCard";
 import { CreateAgentModal } from "./_components/CreateAgentModal";
 import { TEMPLATES } from "./constants";
+import { reorderIds } from "../../../../lib/reorder";
 import { filterAgents } from "./helpers";
 import { s } from "./styles";
 
@@ -22,7 +23,23 @@ export function AgentsListView() {
   const [creating, setCreating] = React.useState(false);
   const [search, setSearch] = React.useState("");
 
-  const list = filterAgents(agents ?? [], search);
+  const reorder = useReorderAgents();
+  // Only the drag IN FLIGHT is state; the shown order is derived from the saved
+  // list, so an abandoned drag or a failed save cannot leave a private order.
+  const [drag, setDrag] = React.useState<{ from: string; over: string } | null>(null);
+
+  const all = React.useMemo(() => agents ?? [], [agents]);
+  // Reordering a filtered list would save positions for cards nobody can see.
+  const canDrag = search.trim() === "";
+  const ordered = React.useMemo(() => {
+    if (!drag) return all;
+    const byId = new Map(all.map((a) => [a.id, a]));
+    return reorderIds(all.map((a) => a.id), drag.from, drag.over)
+      .map((id) => byId.get(id))
+      .filter((a): a is NonNullable<typeof a> => a !== undefined);
+  }, [all, drag]);
+
+  const list = filterAgents(ordered, search);
 
   return (
     <AppShell crumb={[{ label: t("list.breadcrumbLab") }, { label: t("list.breadcrumb") }]}>
@@ -83,12 +100,33 @@ export function AgentsListView() {
         {list.length > 0 && (
           <div style={s.grid}>
             {list.map((a) => (
-              <AgentCard
+              <div
                 key={a.id}
-                ag={a}
-                onClick={() => router.push(`/agents/${a.id}?tab=config`)}
-                onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
-              />
+                draggable={canDrag}
+                title={canDrag ? t("page.dragHint") : t("page.dragWhileFiltering")}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  setDrag({ from: a.id, over: a.id });
+                }}
+                onDragOver={(e) => {
+                  if (!drag) return;
+                  e.preventDefault();
+                  if (drag.over !== a.id) setDrag({ from: drag.from, over: a.id });
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (drag) reorder.mutate(ordered.map((row) => row.id));
+                  setDrag(null);
+                }}
+                onDragEnd={() => setDrag(null)}
+                style={{ cursor: canDrag ? "grab" : "default", opacity: drag?.from === a.id ? 0.5 : 1 }}
+              >
+                <AgentCard
+                  ag={a}
+                  onClick={() => router.push(`/agents/${a.id}?tab=config`)}
+                  onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
+                />
+              </div>
             ))}
           </div>
         )}

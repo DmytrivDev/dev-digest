@@ -49,6 +49,13 @@ export function useUpdateSkill() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.setQueryData(["skill", data.id], data);
+      // Saving a changed BODY snapshots a new version server-side, so the
+      // history is stale the moment this resolves. Invalidating unconditionally
+      // is right even though a metadata-only edit writes no snapshot: the
+      // mutation cannot see which fields actually changed, and re-fetching a
+      // short list nobody is looking at costs less than showing a version list
+      // that is missing the version you just created.
+      qc.invalidateQueries({ queryKey: ["skill-versions", data.id] });
     },
   });
 }
@@ -69,6 +76,29 @@ export function useSkillStats(id: string | null | undefined) {
 }
 
 /** Body snapshots for one skill, newest version first. */
+/**
+ * Persist the order the cards were dragged into.
+ *
+ * Sends the COMPLETE ordered id list, matching the server: a partial move would
+ * leave rows sharing a position. The cache is re-ordered immediately so the
+ * grid does not snap back while the request is in flight, and invalidated after
+ * so the server's answer is the one that survives.
+ */
+export function useReorderSkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api.post<{ ok: boolean }>("/skills/reorder", { ids }),
+    onMutate: (ids) => {
+      qc.setQueryData<Skill[]>(["skills"], (prev) => {
+        if (!prev) return prev;
+        const byId = new Map(prev.map((row) => [row.id, row]));
+        return ids.map((id) => byId.get(id)).filter((row): row is Skill => row !== undefined);
+      });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
 export function useSkillVersions(id: string | null | undefined) {
   return useQuery({
     queryKey: ["skill-versions", id],

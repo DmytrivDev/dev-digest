@@ -554,6 +554,57 @@ d('skills module', () => {
     await app.close();
   });
 
+  // The list used to come back in whatever order Postgres felt like, and an
+  // UPDATE rewrites a row — so toggling a card moved it. Position is what makes
+  // the order the user's, and NULLs sort last so a never-dragged skill keeps a
+  // stable place by name instead of a random one.
+  it('keeps the order the cards were dragged into, and puts undragged ones last', async () => {
+    const app = await makeApp();
+    const names = ['zz-order-c', 'zz-order-a', 'zz-order-b'];
+    const created = [];
+    for (const name of names) {
+      created.push(
+        (await app.inject({ method: 'POST', url: '/skills', payload: { ...body(), name } })).json(),
+      );
+    }
+    const mine = (list: { id: string; name: string }[]) =>
+      list.filter((s) => names.includes(s.name)).map((s) => s.name);
+
+    // Untouched: alphabetical, because every position is still null.
+    const initial = (await app.inject({ method: 'GET', url: '/skills' })).json();
+    expect(mine(initial)).toEqual(['zz-order-a', 'zz-order-b', 'zz-order-c']);
+
+    // Drag them into the order they were created in.
+    const reordered = await app.inject({
+      method: 'POST',
+      url: '/skills/reorder',
+      payload: { ids: created.map((s) => s.id) },
+    });
+    expect(reordered.statusCode).toBe(200);
+    const after = (await app.inject({ method: 'GET', url: '/skills' })).json();
+    expect(mine(after)).toEqual(names);
+
+    // A skill created later has no position, so it sorts after every dragged
+    // one rather than landing in the middle of the arrangement.
+    const fresh = (
+      await app.inject({ method: 'POST', url: '/skills', payload: { ...body(), name: 'zz-order-d' } })
+    ).json();
+    const withFresh = (await app.inject({ method: 'GET', url: '/skills' })).json();
+    const positioned = withFresh.map((s: { id: string }) => s.id);
+    expect(positioned.indexOf(fresh.id)).toBeGreaterThan(
+      Math.max(...created.map((s) => positioned.indexOf(s.id))),
+    );
+
+    // Toggling one does not move it — the point of the whole column.
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${created[1]!.id}`,
+      payload: { enabled: false },
+    });
+    expect(mine((await app.inject({ method: 'GET', url: '/skills' })).json())).toEqual(names);
+    await app.close();
+  });
+
   it('previews an imported archive without persisting anything', async () => {
     const app = await makeApp();
     const before = (await app.inject({ method: 'GET', url: '/skills' })).json().length;

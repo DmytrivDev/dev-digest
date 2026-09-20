@@ -16,6 +16,17 @@ export const skills = pgTable('skills', {
   body: text('body').notNull(),
   enabled: boolean('enabled').notNull().default(true),
   version: integer('version').notNull().default(1),
+  /**
+   * Manual sort position within the workspace, ascending, nulls last.
+   *
+   * Without it the list order was whatever Postgres returned, and an UPDATE
+   * rewrites a row — so toggling a card made it jump. A name sort would be
+   * stable but not yours; this keeps the order the user arranged, and rows that
+   * have never been dragged (everything before this column existed, and
+   * everything created since) fall to the end in name order rather than to a
+   * random place.
+   */
+  position: integer('position'),
   evidenceFiles: jsonb('evidence_files').$type<string[]>(),
   createdAt: now(),
 });

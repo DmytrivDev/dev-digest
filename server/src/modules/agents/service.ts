@@ -61,6 +61,11 @@ export class AgentsService {
     return rows.map(toAgentDto);
   }
 
+  /** Persist the order the user dragged the cards into. */
+  async reorder(workspaceId: string, ids: readonly string[]): Promise<void> {
+    await this.repo.reorder(workspaceId, ids);
+  }
+
   async get(workspaceId: string, id: string): Promise<Agent | undefined> {
     const row = await this.repo.getById(workspaceId, id);
     return row ? toAgentDto(row) : undefined;

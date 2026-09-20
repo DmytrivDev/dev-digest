@@ -62,6 +62,12 @@ const StatsQuery = z.object({
 });
 
 /** Which snapshot to re-apply. Versions start at 1 and only ever go up. */
+/**
+ * The complete ordered id list for the workspace. Capped because it is the whole
+ * set, not a page: a list longer than this is not a drag, it is a payload.
+ */
+const ReorderBody = z.object({ ids: z.array(z.string().uuid()).max(500) });
+
 const RestoreSkillBody = z.object({ version: z.number().int().positive() });
 
 /**
@@ -81,6 +87,14 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
   app.get('/skills', async (req) => {
     const { workspaceId } = await getContext(app.container, req);
     return service.list(workspaceId);
+  });
+
+  // The COMPLETE ordered set, like POST /agents/:id/skills — a partial move
+  // would leave rows sharing a position and the list without one order.
+  app.post('/skills/reorder', { schema: { body: ReorderBody } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    await service.reorder(workspaceId, req.body.ids);
+    return { ok: true };
   });
 
   app.get('/skills/:id', { schema: { params: IdParams } }, async (req) => {
