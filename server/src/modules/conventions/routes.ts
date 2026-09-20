@@ -125,7 +125,6 @@ export default async function conventionsRoutes(appBase: FastifyInstance) {
     },
   );
 
-  // GET, and it writes nothing: the modal needs the real body to edit before the
   // Deleting is not rejecting: a rejected row survives later scans so the
   // decision holds, a deleted one is gone and the same rule can be proposed
   // again as new.
@@ -136,6 +135,7 @@ export default async function conventionsRoutes(appBase: FastifyInstance) {
     return { ok: true };
   });
 
+  // GET, and it writes nothing: the modal needs the real body to edit before the
   // user commits to saving it.
   app.get(
     '/repos/:id/conventions/skill/draft',
