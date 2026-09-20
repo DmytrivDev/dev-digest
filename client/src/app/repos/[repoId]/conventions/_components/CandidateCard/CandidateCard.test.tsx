@@ -130,7 +130,7 @@ describe("CandidateCard (delete)", () => {
   it("asks first and deletes only on confirm", () => {
     const { onDelete } = renderCard();
 
-    fireEvent.click(screen.getByLabelText("Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDelete).not.toHaveBeenCalled();
     expect(screen.getByText("Delete this candidate?")).toBeInTheDocument();
 
@@ -141,7 +141,7 @@ describe("CandidateCard (delete)", () => {
   it("cancels without deleting", () => {
     const { onDelete } = renderCard();
 
-    fireEvent.click(screen.getByLabelText("Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByText("Cancel"));
     expect(onDelete).not.toHaveBeenCalled();
     expect(screen.queryByText("Delete this candidate?")).not.toBeInTheDocument();

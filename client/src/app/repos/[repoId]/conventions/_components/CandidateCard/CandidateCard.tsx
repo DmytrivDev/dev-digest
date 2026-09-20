@@ -8,7 +8,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Button, Icon, MonoLink, ProgressBar } from "@devdigest/ui";
+import { Badge, Button, MonoLink, ProgressBar } from "@devdigest/ui";
 import type { ConventionCandidate, ConventionCategory, ConventionStatus } from "@devdigest/shared";
 import { CONFIDENCE_BAR_WIDTH, HIGH_CONFIDENCE } from "./constants";
 import { s } from "./styles";
@@ -130,12 +130,12 @@ export function CandidateCard({
             <Button
               kind="ghost"
               size="sm"
+              icon="Trash"
+              full
               disabled={busy}
-              title={t("card.delete")}
-              aria-label={t("card.delete")}
               onClick={() => setConfirmingDelete(true)}
             >
-              <Icon.Trash size={14} />
+              {t("card.delete")}
             </Button>
           </div>
         )}

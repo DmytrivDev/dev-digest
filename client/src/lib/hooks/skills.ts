@@ -75,7 +75,6 @@ export function useSkillStats(id: string | null | undefined) {
   });
 }
 
-/** Body snapshots for one skill, newest version first. */
 /**
  * Persist the order the cards were dragged into.
  *
@@ -99,6 +98,7 @@ export function useReorderSkills() {
   });
 }
 
+/** Body snapshots for one skill, newest version first. */
 export function useSkillVersions(id: string | null | undefined) {
   return useQuery({
     queryKey: ["skill-versions", id],

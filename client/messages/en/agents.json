@@ -1,8 +1,4 @@
 {
-  "page": {
-    "dragHint": "Drag a card to reorder",
-    "dragWhileFiltering": "Clear the search to reorder — dragging a filtered list would save an order you cannot see"
-  },
   "card": {
     "noDescription": "No description",
     "skillCount": "{count} skills",
@@ -12,6 +8,8 @@
     "deleteCta": "Delete agent"
   },
   "list": {
+    "dragHint": "Drag a card to reorder",
+    "dragWhileFiltering": "Clear the search to reorder — dragging a filtered list would save an order you cannot see",
     "breadcrumbLab": "Skills Lab",
     "breadcrumb": "Agents",
     "title": "Agents",

@@ -96,7 +96,7 @@ export function AgentsListView() {
               <div
                 key={a.id}
                 {...rowProps(a.id)}
-                title={canDrag ? t("page.dragHint") : t("page.dragWhileFiltering")}
+                title={canDrag ? t("list.dragHint") : t("list.dragWhileFiltering")}
                 style={s.dragRow(canDrag, isDragging(a.id))}
               >
                 <AgentCard
