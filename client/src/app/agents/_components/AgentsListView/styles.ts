@@ -27,5 +27,10 @@ export const s = {
     outline: "none",
     color: "var(--text-primary)",
   } satisfies CSSProperties,
+  /** The drag wrapper around a card: grabbable when sorting is on, dimmed while it is the one moving. */
+  dragRow: (canDrag: boolean, dragging: boolean): CSSProperties => ({
+    cursor: canDrag ? "grab" : "default",
+    opacity: dragging ? 0.5 : 1,
+  }),
   grid: { display: "grid", gridTemplateColumns: CARD_GRID_COLS, gap: 14 } satisfies CSSProperties,
 } as const;

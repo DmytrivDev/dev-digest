@@ -11,7 +11,7 @@ import { useAgents, useReorderAgents, useUpdateAgent } from "../../../../lib/hoo
 import { AgentCard } from "../AgentCard";
 import { CreateAgentModal } from "./_components/CreateAgentModal";
 import { TEMPLATES } from "./constants";
-import { reorderIds } from "../../../../lib/reorder";
+import { useDragReorder } from "../../../../lib/hooks/useDragReorder";
 import { filterAgents } from "./helpers";
 import { s } from "./styles";
 
@@ -24,20 +24,13 @@ export function AgentsListView() {
   const [search, setSearch] = React.useState("");
 
   const reorder = useReorderAgents();
-  // Only the drag IN FLIGHT is state; the shown order is derived from the saved
-  // list, so an abandoned drag or a failed save cannot leave a private order.
-  const [drag, setDrag] = React.useState<{ from: string; over: string } | null>(null);
-
   const all = React.useMemo(() => agents ?? [], [agents]);
   // Reordering a filtered list would save positions for cards nobody can see.
   const canDrag = search.trim() === "";
-  const ordered = React.useMemo(() => {
-    if (!drag) return all;
-    const byId = new Map(all.map((a) => [a.id, a]));
-    return reorderIds(all.map((a) => a.id), drag.from, drag.over)
-      .map((id) => byId.get(id))
-      .filter((a): a is NonNullable<typeof a> => a !== undefined);
-  }, [all, drag]);
+  const { ordered, rowProps, isDragging } = useDragReorder(all, {
+    enabled: canDrag,
+    onCommit: (ids) => reorder.mutate(ids),
+  });
 
   const list = filterAgents(ordered, search);
 
@@ -102,24 +95,9 @@ export function AgentsListView() {
             {list.map((a) => (
               <div
                 key={a.id}
-                draggable={canDrag}
+                {...rowProps(a.id)}
                 title={canDrag ? t("page.dragHint") : t("page.dragWhileFiltering")}
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = "move";
-                  setDrag({ from: a.id, over: a.id });
-                }}
-                onDragOver={(e) => {
-                  if (!drag) return;
-                  e.preventDefault();
-                  if (drag.over !== a.id) setDrag({ from: drag.from, over: a.id });
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (drag) reorder.mutate(ordered.map((row) => row.id));
-                  setDrag(null);
-                }}
-                onDragEnd={() => setDrag(null)}
-                style={{ cursor: canDrag ? "grab" : "default", opacity: drag?.from === a.id ? 0.5 : 1 }}
+                style={s.dragRow(canDrag, isDragging(a.id))}
               >
                 <AgentCard
                   ag={a}
