@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ConventionCandidate } from "@devdigest/shared";
 import messages from "../../../../../../../messages/en/conventions.json";
+import common from "../../../../../../../messages/en/common.json";
 import { CandidateCard } from "./CandidateCard";
 
 afterEach(cleanup);
@@ -22,20 +23,22 @@ const CANDIDATE: ConventionCandidate = {
 
 function renderCard(
   candidate: Partial<ConventionCandidate> = {},
-  handlers: { onTriage?: () => void; onSaveEdit?: () => void } = {},
+  handlers: { onTriage?: () => void; onSaveEdit?: () => void; onDelete?: () => void } = {},
 ) {
   const onTriage = handlers.onTriage ?? vi.fn();
   const onSaveEdit = handlers.onSaveEdit ?? vi.fn();
+  const onDelete = handlers.onDelete ?? vi.fn();
   render(
-    <NextIntlClientProvider locale="en" messages={{ conventions: messages }}>
+    <NextIntlClientProvider locale="en" messages={{ conventions: messages, common }}>
       <CandidateCard
         candidate={{ ...CANDIDATE, ...candidate }}
         onTriage={onTriage}
         onSaveEdit={onSaveEdit}
+        onDelete={onDelete}
       />
     </NextIntlClientProvider>,
   );
-  return { onTriage, onSaveEdit };
+  return { onTriage, onSaveEdit, onDelete };
 }
 
 describe("CandidateCard", () => {
@@ -117,5 +120,30 @@ describe("CandidateCard", () => {
       .find((el) => el.tagName === "TEXTAREA") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "   " } });
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+});
+
+// Deleting is not rejecting, and the card must ask before it happens: a
+// rejected candidate is remembered and suppressed at the next scan, a deleted
+// one is gone and the same rule can be proposed again as new.
+describe("CandidateCard (delete)", () => {
+  it("asks first and deletes only on confirm", () => {
+    const { onDelete } = renderCard();
+
+    fireEvent.click(screen.getByLabelText("Delete"));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByText("Delete this candidate?")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Delete candidate"));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels without deleting", () => {
+    const { onDelete } = renderCard();
+
+    fireEvent.click(screen.getByLabelText("Delete"));
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.queryByText("Delete this candidate?")).not.toBeInTheDocument();
   });
 });

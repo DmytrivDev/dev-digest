@@ -8,10 +8,11 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Button, MonoLink, ProgressBar } from "@devdigest/ui";
+import { Badge, Button, Icon, MonoLink, ProgressBar } from "@devdigest/ui";
 import type { ConventionCandidate, ConventionCategory, ConventionStatus } from "@devdigest/shared";
 import { CONFIDENCE_BAR_WIDTH, HIGH_CONFIDENCE } from "./constants";
 import { s } from "./styles";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CandidateEditForm } from "./_components/CandidateEditForm";
 
 export function CandidateCard({
@@ -19,15 +20,19 @@ export function CandidateCard({
   busy,
   onTriage,
   onSaveEdit,
+  onDelete,
 }: {
   candidate: ConventionCandidate;
   /** A mutation for THIS candidate is in flight. */
   busy?: boolean;
   onTriage: (status: ConventionStatus) => void;
   onSaveEdit: (patch: { rule: string; category: ConventionCategory }) => void;
+  /** Remove the row outright. Distinct from rejecting it — see the dialog copy. */
+  onDelete: () => void;
 }) {
   const t = useTranslations("conventions");
   const [editing, setEditing] = React.useState(false);
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
 
   const accepted = candidate.status === "accepted";
   const rejected = candidate.status === "rejected";
@@ -122,9 +127,30 @@ export function CandidateCard({
             <Button kind="ghost" size="sm" icon="Edit" full onClick={() => setEditing(true)}>
               {t("card.edit")}
             </Button>
+            <Button
+              kind="ghost"
+              size="sm"
+              disabled={busy}
+              title={t("card.delete")}
+              aria-label={t("card.delete")}
+              onClick={() => setConfirmingDelete(true)}
+            >
+              <Icon.Trash size={14} />
+            </Button>
           </div>
         )}
       </div>
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={t("card.deleteTitle")}
+          body={t("card.deleteBody")}
+          confirmLabel={t("card.deleteCta")}
+          busy={!!busy}
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={onDelete}
+        />
+      )}
     </div>
   );
 }

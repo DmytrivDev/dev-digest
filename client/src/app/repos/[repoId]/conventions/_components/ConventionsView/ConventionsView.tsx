@@ -21,6 +21,7 @@ import { notify } from "@/lib/toast";
 import {
   useConventions,
   useExtractConventions,
+  useDeleteConvention,
   useUpdateConvention,
 } from "@/lib/hooks/conventions";
 import { CandidateCard } from "../CandidateCard";
@@ -43,6 +44,7 @@ export function ConventionsView() {
   const { data, isLoading, isError, refetch } = useConventions(repoId);
   const extract = useExtractConventions(repoId);
   const update = useUpdateConvention(repoId);
+  const remove = useDeleteConvention(repoId);
 
   const [creating, setCreating] = React.useState(false);
   const [savedSkill, setSavedSkill] = React.useState<Skill | null>(null);
@@ -204,6 +206,7 @@ export function ConventionsView() {
               busy={busyId === candidate.id}
               onTriage={(status) => triage(candidate.id, status)}
               onSaveEdit={(patch) => update.mutate({ id: candidate.id, patch })}
+              onDelete={() => remove.mutate(candidate.id)}
             />
           ))
         )}

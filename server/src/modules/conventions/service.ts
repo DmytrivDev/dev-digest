@@ -116,6 +116,18 @@ export class ConventionsService {
   }
 
   /**
+   * Delete one candidate for good.
+   *
+   * Distinct from rejecting it: a rejected row survives every later scan so the
+   * decision sticks, while a deleted row leaves no trace — so a scan that
+   * proposes the same rule again will offer it as a new `pending` candidate.
+   * That is the honest consequence of deleting the thing that remembers.
+   */
+  async remove(workspaceId: string, id: string): Promise<boolean> {
+    return this.deps.repo.deleteById(workspaceId, id);
+  }
+
+  /**
    * Scan a repository for convention candidates.
    *
    * Synchronous on purpose: one cheap-model call, and the caller wants the

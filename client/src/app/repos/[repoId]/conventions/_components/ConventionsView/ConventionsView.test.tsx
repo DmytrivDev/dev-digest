@@ -9,6 +9,7 @@ import messages from "../../../../../../../messages/en/conventions.json";
 const replace = vi.fn();
 const mutateExtract = vi.fn();
 const mutateUpdate = vi.fn();
+const mutateDelete = vi.fn();
 const createSkill = vi.fn();
 
 const state = vi.hoisted(() => ({
@@ -51,6 +52,7 @@ vi.mock("@/lib/hooks/conventions", () => ({
   }),
   useExtractConventions: () => ({ ...state.extract, mutate: mutateExtract }),
   useUpdateConvention: () => ({ mutate: mutateUpdate, isPending: false, variables: undefined }),
+  useDeleteConvention: () => ({ mutate: mutateDelete, isPending: false }),
   useConventionSkillDraft: () => ({ data: state.draft, isLoading: false, isError: false }),
   useCreateConventionSkill: () => ({ mutateAsync: createSkill, isPending: false }),
 }));

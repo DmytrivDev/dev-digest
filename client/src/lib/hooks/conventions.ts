@@ -81,6 +81,28 @@ export function useUpdateConvention(repoId: string | null | undefined) {
 }
 
 /**
+ * Delete a candidate for good.
+ *
+ * Not the same button as Reject, and the copy has to say so: a rejected row is
+ * remembered and suppressed at every later scan, while a deleted one is simply
+ * gone, so the same rule can come back as a fresh proposal. Dropping it from
+ * the cached list keeps the grid still instead of refetching the page.
+ */
+export function useDeleteConvention(repoId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/conventions/${id}`),
+    onSuccess: (_res, id) => {
+      qc.setQueryData<ConventionList>(conventionsKey(repoId), (prev) =>
+        prev ? { candidates: prev.candidates.filter((c) => c.id !== id) } : prev,
+      );
+      // The accepted set may have shrunk, so the assembled body is stale.
+      qc.invalidateQueries({ queryKey: ["convention-skill-draft", repoId] });
+    },
+  });
+}
+
+/**
  * What a save WOULD store, assembled server-side and writing nothing.
  *
  * `staleTime: 0` on purpose: accepting one more rule changes the body, and a

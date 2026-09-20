@@ -118,6 +118,23 @@ export class ConventionsRepository {
   }
 
   /**
+   * Delete ONE candidate outright, whatever its triage state.
+   *
+   * Rejecting and deleting are different intents and both are needed: a
+   * rejected row is a decision the next scan must respect, while a deleted one
+   * is a row you never want to see again — and because identity is the rule's
+   * fingerprint, a later scan proposing the same rule brings it back as a fresh
+   * `pending` candidate. Say that in the UI; it is not a bug.
+   */
+  async deleteById(workspaceId: string, id: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(t.conventions)
+      .where(and(eq(t.conventions.workspaceId, workspaceId), eq(t.conventions.id, id)))
+      .returning({ id: t.conventions.id });
+    return rows.length > 0;
+  }
+
+  /**
    * Drop the untriaged rows a fresh scan did not re-propose.
    *
    * Scoped to `status = 'pending'` in SQL, not in the caller: this is the single

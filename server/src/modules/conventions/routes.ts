@@ -3,6 +3,7 @@
  *   POST /repos/:id/conventions/extract  → scan the repo; persists the survivors
  *   GET  /repos/:id/conventions          → stored candidates (optionally by status)
  *   PUT  /conventions/:id                → triage and/or hand-edit one
+ *   DELETE /conventions/:id              → remove one for good (not the same as reject)
  *   GET  /repos/:id/conventions/skill/draft → the skill as it WOULD be saved
  *   POST /repos/:id/conventions/skill    → assemble the accepted ones into a skill
  *
@@ -125,6 +126,16 @@ export default async function conventionsRoutes(appBase: FastifyInstance) {
   );
 
   // GET, and it writes nothing: the modal needs the real body to edit before the
+  // Deleting is not rejecting: a rejected row survives later scans so the
+  // decision holds, a deleted one is gone and the same rule can be proposed
+  // again as new.
+  app.delete('/conventions/:id', { schema: { params: IdParams } }, async (req) => {
+    const { workspaceId } = await getContext(container, req);
+    const ok = await makeService(workspaceId).remove(workspaceId, req.params.id);
+    if (!ok) throw new NotFoundError('Convention candidate not found');
+    return { ok: true };
+  });
+
   // user commits to saving it.
   app.get(
     '/repos/:id/conventions/skill/draft',
