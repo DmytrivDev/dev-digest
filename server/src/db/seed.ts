@@ -8,8 +8,16 @@ import {
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
   TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
-import { API_CONTRACT_GUARD, SEED_SKILLS, TEST_QUALITY_RUBRIC } from './seed-skills.js';
+import {
+  BREAKING_CHANGE,
+  DEPRECATION_POLICY,
+  RESPONSE_SCHEMA,
+  SEED_SKILLS,
+  SEMVER_DISCIPLINE,
+  TEST_QUALITY_RUBRIC,
+} from './seed-skills.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -217,6 +225,20 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     },
     {
       workspaceId,
+      // Its prompt carries no contract rules on purpose — they are the four
+      // linked skills below, which is what makes "without skills vs with" a
+      // real comparison rather than two runs of the same agent.
+      name: 'API Contract Reviewer',
+      description: 'Reviews changes to the HTTP API for contract compatibility.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
+    {
+      workspaceId,
       name: 'Test Quality Reviewer',
       description: 'Judges the tests a PR ships: uncovered branches, missing corner cases, over-mocking, flakes.',
       provider: DEFAULT_PROVIDER,
@@ -272,7 +294,19 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
   // appear in the assembled prompt, so it is set explicitly rather than left to
   // the column default.
   const links: Array<{ agent: string; skills: string[] }> = [
-    { agent: 'Test Quality Reviewer', skills: [TEST_QUALITY_RUBRIC.name, API_CONTRACT_GUARD.name] },
+    { agent: 'Test Quality Reviewer', skills: [TEST_QUALITY_RUBRIC.name] },
+    // Order is prompt order: what a caller can no longer send, then what it can
+    // no longer parse, then how the change should have been versioned and
+    // announced. The array index becomes `agent_skills.order`.
+    {
+      agent: 'API Contract Reviewer',
+      skills: [
+        BREAKING_CHANGE.name,
+        RESPONSE_SCHEMA.name,
+        SEMVER_DISCIPLINE.name,
+        DEPRECATION_POLICY.name,
+      ],
+    },
   ];
   for (const link of links) {
     const [agentRow] = await db

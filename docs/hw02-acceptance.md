@@ -48,7 +48,7 @@
 | 40 | Формат кандидата від моделі | ✅ | `prompt.ts:144` — Zod-схема `ExtractedConventions` для `completeStructured`: category/rule/evidence/confidence, докази перевіряються по реальних файлах (`helpers.ts:120`) |
 | 41 | Модалка створення — редагування тіла | ✅ | `SkillDraftModal` — draft із сервера в редагованих Name/Description/Body; незмінене поле не йде в POST |
 | 42 | Approved → скіл `repo-conventions` (прилінкований) | ✅ | прилінкований до агента (`agent_count: 1`) — `helpers.ts:239` `buildSkillDraft` + `POST /repos/:id/conventions/skill` через `SkillsService` — незмінений набір не палить версію |
-| 43 | 4 скіли API Contract Reviewer | ✅ | `docs/skills/api-contract/` — breaking-change, response-schema, semver-discipline, deprecation-policy; у кожного директивний опис (172–190 симв.) і пари «добре/погано» |
+| 43 | 4 скіли API Contract Reviewer | ✅ | `docs/skills/api-contract/` + **у сиді** (`seed-skills.ts`): breaking-change, response-schema, semver-discipline, deprecation-policy, у кожного директивний опис (172–190 симв.) і пари «добре/погано». Старий загальний `api-contract-guard` прибрано — він дублював усі чотири |
 | 44 | Conventions у SKILLS LAB | ✅ | `client/src/vendor/ui/nav.ts` — четвертий пункт із токеном `:repoId`; перевірено на живій сторінці |
 | 45 | Кнопки Run Scan / ReScan | ✅ | обидві в шапці сторінки: `Run Scan` (primary), поки кандидатів немає, `ReScan` (secondary), коли вони є; порожній стан повторює `Run Scan` як CTA |
 | 46 | Картки кандидатів після скану | ✅ | `CandidateCard` — правило, категорія, доказ-permalink, confidence |
@@ -68,6 +68,15 @@
   експерименти).
 - ❌ **2** — перехід на AGENTS.md (1–2), свідомо відкинутий як необов'язковий:
   за формулюванням критерію він не застосовується, поки `AGENTS.md` у репо немає.
+
+### Після відгуку (2026-09-20)
+Чотири скіли й агент **API Contract Reviewer тепер у сиді**, з лінками в порядку
+промпта. До цього вони жили лише як файли в `docs/skills/api-contract/` і як
+рядки в локальній базі — тобто на чистому чекауті агента не існувало, а вся
+логіка контрактів лишалась одним скілом `api-contract-guard`, прив'язаним до
+Test Quality Reviewer. Перевірка — `skills.it.test.ts`, тест «seeds each reviewer
+with the skills it is supposed to carry»: він звіряє склад і ПОРЯДОК лінків і
+окремо стежить, щоб промпт агента не містив самих правил.
 
 ### Кроки 4–5 (зроблено 2026-09-19)
 Чотири скіли API Contract Reviewer, агент на `deepseek-v4-flash`, і два A/B

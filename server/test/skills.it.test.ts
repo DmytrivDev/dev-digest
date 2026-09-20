@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { zipSync, strToU8 } from 'fflate';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { buildApp } from '../src/app.js';
@@ -649,23 +649,49 @@ d('skills module', () => {
     await app.close();
   });
 
-  it('seeds the Test Quality Reviewer with its rubric already linked', async () => {
+  // A skill only exists for the product when it is a ROW. The markdown under
+  // docs/skills/ is what a human reviews; this asserts a fresh checkout comes up
+  // carrying the same set, linked to the agent that is supposed to have it.
+  it('seeds each reviewer with the skills it is supposed to carry', async () => {
     const { db } = pg.handle;
     const [ws] = await db
       .select({ id: t.workspaces.id })
       .from(t.workspaces)
       .where(eq(t.workspaces.name, 'default'));
-    const [agent] = await db
-      .select()
-      .from(t.agents)
-      .where(and(eq(t.agents.workspaceId, ws!.id), eq(t.agents.name, 'Test Quality Reviewer')));
-    expect(agent).toBeDefined();
 
-    const links = await db
-      .select({ name: t.skills.name, order: t.agentSkills.order })
-      .from(t.agentSkills)
-      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
-      .where(eq(t.agentSkills.agentId, agent!.id));
-    expect(links.map((l) => l.name).sort()).toEqual(['api-contract-guard', 'test-quality-rubric']);
+    const linkedTo = async (agentName: string) => {
+      const [agent] = await db
+        .select()
+        .from(t.agents)
+        .where(and(eq(t.agents.workspaceId, ws!.id), eq(t.agents.name, agentName)));
+      expect(agent, `${agentName} should be seeded`).toBeDefined();
+      const links = await db
+        .select({ name: t.skills.name, order: t.agentSkills.order })
+        .from(t.agentSkills)
+        .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+        .where(eq(t.agentSkills.agentId, agent!.id))
+        .orderBy(asc(t.agentSkills.order));
+      return { agent: agent!, names: links.map((l) => l.name) };
+    };
+
+    expect((await linkedTo('Test Quality Reviewer')).names).toEqual(['test-quality-rubric']);
+
+    // Order is prompt order, and it is asserted rather than sorted: the bodies
+    // are appended to the prompt in exactly this sequence.
+    const contract = await linkedTo('API Contract Reviewer');
+    expect(contract.names).toEqual([
+      'breaking-change',
+      'response-schema',
+      'semver-discipline',
+      'deprecation-policy',
+    ]);
+
+    // The experiment only means something if the agent's own prompt is free of
+    // the rules the skills carry — otherwise the control run is a second
+    // treatment run.
+    const prompt = contract.agent.systemPrompt.toLowerCase();
+    for (const word of ['semver', 'deprecat', 'breaking change', 'major bump']) {
+      expect(prompt, `the prompt should not state the rules itself: ${word}`).not.toContain(word);
+    }
   });
 });

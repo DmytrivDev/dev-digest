@@ -13,11 +13,19 @@ verbatim to the agent's prompt under `## Skills / rules`.
 - [`deprecation-policy.md`](./deprecation-policy.md) — what a removal must show
   to be legitimate instead of silent.
 
+All four are **seeded**: `server/src/db/seed-skills.ts` carries these bodies and
+`seed.ts` links them to the API Contract Reviewer in the order above, which is
+the order their blocks appear in the prompt. A fresh checkout therefore comes up
+with the agent already carrying them — a skill that exists only as a file here,
+or only in one developer's database, does not exist for the product.
+
 > The DB is the source of truth at run time: a skill lives in the `skills`
 > table (`body` versioned into `skill_versions`). These files are the
 > human-readable originals — the same relationship `docs/agent-prompts/` has to
-> `agents.system_prompt`. When you change a rule, edit the file here **and** push
-> it to the skill (the editor or `PUT /skills/:id`, which versions the body).
+> `agents.system_prompt`. When you change a rule, edit the file here, mirror it
+> into `seed-skills.ts` (so a fresh checkout agrees), **and** push it to the
+> already-seeded skill — the seed never overwrites a row that exists, by design,
+> so editing the literal does not heal a database that already ran it.
 
 ## Getting one into the app
 
