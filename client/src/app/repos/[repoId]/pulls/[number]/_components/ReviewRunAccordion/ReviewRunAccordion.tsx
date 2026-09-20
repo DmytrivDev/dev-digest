@@ -6,11 +6,13 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Badge } from "@devdigest/ui";
 import type { ReviewRecord, Verdict } from "@devdigest/shared";
 import { FindingsPanel } from "../FindingsPanel";
 import { VerdictBanner } from "../VerdictBanner";
 import { useDeleteReview } from "../../../../../../../lib/hooks/reviews";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { formatWhen } from "@/lib/datetime";
 
 const VERDICT_COLOR: Record<string, string> = {
@@ -47,7 +49,9 @@ export function ReviewRunAccordion({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetRunId, targetNonce, review.run_id]);
+  const t = useTranslations("prReview");
   const del = useDeleteReview(prId);
+  const [confirming, setConfirming] = React.useState(false);
   const findings = review.findings;
   const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
   const verdictColor = review.verdict ? VERDICT_COLOR[review.verdict] ?? "var(--text-muted)" : "var(--text-muted)";
@@ -104,10 +108,9 @@ export function ReviewRunAccordion({
         </span>
         <button
           onClick={(e) => {
+            // The header toggles the accordion, so the trash must not reach it.
             e.stopPropagation();
-            if (window.confirm(`Delete this "${review.agent_name ?? "agent"}" review run and its findings?`)) {
-              del.mutate(review.id);
-            }
+            setConfirming(true);
           }}
           disabled={del.isPending}
           title="Delete this review run"
@@ -150,6 +153,17 @@ export function ReviewRunAccordion({
             headSha={headSha}
           />
         </div>
+      )}
+
+      {confirming && (
+        <ConfirmDialog
+          title={t("timeline.deleteReviewTitle", { agent: review.agent_name ?? "agent" })}
+          body={t("timeline.deleteReviewBody")}
+          confirmLabel={t("timeline.deleteReviewCta")}
+          busy={del.isPending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => del.mutate(review.id)}
+        />
       )}
     </div>
   );

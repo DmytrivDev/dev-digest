@@ -115,6 +115,12 @@
   "timeline": {
     "goToReview": "Jump to this run’s findings below",
     "openTrace": "Open run trace & logs",
-    "deleteRun": "Delete run"
+    "deleteRun": "Delete run",
+    "deleteRunTitle": "Delete this run from history?",
+    "deleteRunBody": "The run, its live log and its trace are removed. Findings it produced go with the review they belong to. This cannot be undone.",
+    "deleteRunCta": "Delete run",
+    "deleteReviewTitle": "Delete this {agent} review run?",
+    "deleteReviewBody": "The review and every finding it produced are removed, including any you have already accepted or dismissed. This cannot be undone.",
+    "deleteReviewCta": "Delete review run"
   }
 }

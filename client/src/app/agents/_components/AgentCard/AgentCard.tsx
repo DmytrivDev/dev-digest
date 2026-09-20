@@ -66,18 +66,16 @@ export function AgentCard({
       </div>
 
       {confirming && (
-        // The dialog is a DOM descendant of the clickable card, so a click on
-        // Cancel would bubble into the card and open the agent.
-        <div onClick={(e) => e.stopPropagation()}>
-          <ConfirmDialog
-            title={t("card.deleteTitle", { name: ag.name })}
-            body={t("card.deleteBody")}
-            confirmLabel={t("card.deleteCta")}
-            busy={del.isPending}
-            onCancel={() => setConfirming(false)}
-            onConfirm={() => del.mutate(ag.id)}
-          />
-        </div>
+        // Portalled to <body>, so it is neither dimmed by a disabled card nor
+        // able to bubble a click back into it.
+        <ConfirmDialog
+          title={t("card.deleteTitle", { name: ag.name })}
+          body={t("card.deleteBody")}
+          confirmLabel={t("card.deleteCta")}
+          busy={del.isPending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => del.mutate(ag.id)}
+        />
       )}
     </div>
   );
