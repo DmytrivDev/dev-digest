@@ -10,6 +10,38 @@
   "overlap": "{count} overlap",
   "unavailable": "Brief not available yet.",
   "unavailableHint": "Run a review or open the PR to compute it.",
+  "intent": {
+    "inScope": "IN SCOPE",
+    "outOfScope": "OUT OF SCOPE",
+    "empty": "No intent derived yet.",
+    "emptyHint": "Derive it from the PR description, linked issue and referenced spec.",
+    "derive": "Derive intent",
+    "deriving": "Deriving…",
+    "error": "Could not derive intent.",
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
+    "confidenceHint": {
+      "high": "Derived from a linked issue or a referenced spec.",
+      "medium": "A reference exists but could not be read, or only the PR description was available.",
+      "low": "No description and no reference — inferred from the title, branch, commits and changed files."
+    },
+    "source": {
+      "linked_issue": "Issue {ref}",
+      "mentioned_issue": "Mentioned {ref}",
+      "ticket_key": "Ticket {ref}",
+      "spec_doc": "Spec {ref}",
+      "pr_body": "PR description",
+      "pr_title": "PR title",
+      "branch": "Branch",
+      "commits": "Commit messages",
+      "paths": "Changed files"
+    },
+    "unresolved": "Referenced, but could not be read",
+    "derivedAt": "Derived {when} · {model}"
+  },
   "why": {
     "title": "git-why",
     "blame": "blame",

@@ -68,6 +68,15 @@ export const prIntent = pgTable('pr_intent', {
   intent: text('intent').notNull(),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  // ---- intent-layer additions (see docs/plans/intent-layer.plan.md §3) ----
+  confidence: text('confidence', { enum: ['high', 'medium', 'low'] }).notNull().default('low'),
+  sources: jsonb('sources').$type<unknown[]>().notNull().default(sql`'[]'::jsonb`),
+  model: text('model'),
+  sourceKey: text('source_key').notNull().default(''),
+  derivedAt: timestamp('derived_at', { withTimezone: true }).notNull().defaultNow(),
+  tokensIn: integer('tokens_in'),
+  tokensOut: integer('tokens_out'),
+  costUsd: doublePrecision('cost_usd'),
 });
 
 export const prBrief = pgTable('pr_brief', {

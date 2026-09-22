@@ -8,6 +8,7 @@ import { api, API_BASE } from "../api";
 import { notify } from "../toast";
 import type {
   FindingActionKind,
+  PrIntentRecord,
   PrReviewComment,
   ReviewRecord,
   ReviewRunResponse,
@@ -83,6 +84,29 @@ export function useDeleteReview(prId: string | null | undefined) {
   return useMutation({
     mutationFn: (reviewId: string) => api.del<{ ok: boolean }>(`/reviews/${reviewId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["reviews", prId] }),
+  });
+}
+
+// ---- Intent layer: derived PR intent + scope (Overview tab) ----
+/** The stored intent derivation for a PR, or `null` when none exists yet —
+   a normal state (rendered as an empty state), not an error. */
+export function usePrIntent(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["pr-intent", prId],
+    queryFn: () => api.get<{ intent: PrIntentRecord | null }>(`/pulls/${prId}/intent`),
+    enabled: !!prId,
+  });
+}
+
+/** Derive (or re-derive with `force: true`) a PR's intent. Synchronous — one
+   cheap-model call, not a background job — so no `refetchInterval` on the
+   query above either. */
+export function useDerivePrIntent(prId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (force?: boolean) =>
+      api.post<{ intent: PrIntentRecord }>(`/pulls/${prId}/intent`, force ? { force } : undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pr-intent", prId] }),
   });
 }
 

@@ -49,6 +49,9 @@ export const PromptAssembly = z.object({
   repo_map: z.string().nullish(),
   /** PR author's description/body (truncated); null when absent. */
   pr_description: z.string().nullish(),
+  /** Server-derived PR intent + scope (untrusted — derived from
+      author-controlled text), delimiter-wrapped; null when omitted. */
+  intent: z.string().nullish(),
   user: z.string(),
   /**
    * Tokens contributed by each prompt slot, keyed by the field names above
