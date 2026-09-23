@@ -64,6 +64,15 @@ export const s = {
     color: "var(--text-primary)",
     paddingRight: 12,
   } satisfies CSSProperties,
+  /** Small dot next to a file's path (e.g. "has findings"). */
+  markDot: {
+    display: "inline-block",
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    background: "var(--accent)",
+    flexShrink: 0,
+  } satisfies CSSProperties,
 } as const;
 
 /** Chevron rotates 90deg when the file card is open. */
@@ -87,6 +96,19 @@ export function lineSignFor(kind: Line["kind"]): CSSProperties {
     width: 14,
     textAlign: "center",
     color: kind === "add" ? "var(--code-add-text)" : kind === "del" ? "var(--code-del-text)" : "var(--text-muted)",
+    flexShrink: 0,
+  };
+}
+
+/** The right-aligned icon+label a CodeLine shows for its primary annotation. */
+export function annotationLabelFor(color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 12,
+    color,
+    paddingRight: 12,
     flexShrink: 0,
   };
 }

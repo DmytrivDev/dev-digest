@@ -8,15 +8,23 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import type { PrFile } from "@/lib/types";
 import { type DiffCommentApi } from "../comments";
+import { type DiffAnnotationApi } from "../annotations";
 import { s } from "../styles";
 import { FileCard } from "../FileCard";
 
 export function DiffViewer({
   files,
   commenting,
+  annotations,
+  marks,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
+  /** Generic line annotations (e.g. review findings). DiffViewer never learns
+      what an annotation MEANS or sorts them — the caller does both. */
+  annotations?: DiffAnnotationApi;
+  /** Files to mark with a small dot next to the path. */
+  marks?: { paths: ReadonlySet<string>; label: string };
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -25,7 +33,7 @@ export function DiffViewer({
   return (
     <div style={s.list}>
       {files.map((f, i) => (
-        <FileCard key={i} file={f} commenting={commenting} />
+        <FileCard key={i} file={f} commenting={commenting} annotations={annotations} marks={marks} />
       ))}
     </div>
   );

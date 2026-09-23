@@ -13,6 +13,7 @@ import type {
   ReviewRunResponse,
   RunEvent,
   RunSummary,
+  SmartDiff,
 } from "@devdigest/shared";
 
 // ---- Active (in-flight) runs — server-side source of truth ----
@@ -52,6 +53,22 @@ export function usePrReviews(prId: string | null | undefined) {
   return useQuery({
     queryKey: ["reviews", prId],
     queryFn: () => api.get<ReviewRecord[]>(`/pulls/${prId}/reviews`),
+    enabled: !!prId,
+  });
+}
+
+/**
+ * Smart Diff grouping + finding lines for the "Files changed" tab.
+ *
+ * Query key sits UNDER `["reviews", prId]` on purpose: TanStack's
+ * `invalidateQueries({ queryKey: ["reviews", prId] })` prefix-matches, so
+ * every existing reviews invalidation (run/accept/dismiss/delete) refreshes
+ * this too, with no new call sites. Pinned by `reviews.test.ts`.
+ */
+export function useSmartDiff(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["reviews", prId, "smart-diff"],
+    queryFn: () => api.get<SmartDiff>(`/pulls/${prId}/smart-diff`),
     enabled: !!prId,
   });
 }

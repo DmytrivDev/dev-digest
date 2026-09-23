@@ -3,22 +3,27 @@
 "use client";
 
 import React from "react";
+import { Icon } from "@devdigest/ui";
 import { commentTargetFor, type CommentThread, type DiffCommentApi, cs } from "../comments";
 import { type Line } from "../helpers";
-import { s, lineRowFor, lineSignFor } from "../styles";
+import { s, lineRowFor, lineSignFor, annotationLabelFor } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
 import { InlineComposer } from "../InlineComposer";
+import type { DiffAnnotation } from "../annotations";
 
 export function CodeLine({
   ln,
   path,
   threads,
   commenting,
+  annotations = [],
 }: {
   ln: Line;
   path: string;
   threads: CommentThread[];
   commenting?: DiffCommentApi;
+  /** Caller-built annotations anchored to this line, highest-priority first. */
+  annotations?: DiffAnnotation[];
 }) {
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
@@ -34,6 +39,11 @@ export function CodeLine({
   const sign = ln.kind === "add" ? "+" : ln.kind === "del" ? "−" : "";
   const target = commenting?.canComment ? commentTargetFor(ln) : null;
   const showAdd = hover && !!target && !composing;
+  // The caller orders `annotations` by its own priority rules, so the row's
+  // stripe/label always reflect the top one without CodeLine knowing what
+  // an annotation means (it stays finding-agnostic).
+  const primary = annotations[0];
+  const PrimaryIcon = primary ? Icon[primary.icon] : null;
 
   return (
     <div
@@ -41,7 +51,12 @@ export function CodeLine({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={lineRowFor(ln.kind)}>
+      <div
+        style={{
+          ...lineRowFor(ln.kind),
+          ...(primary ? { boxShadow: `inset 3px 0 0 ${primary.color}` } : {}),
+        }}
+      >
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button
@@ -62,6 +77,12 @@ export function CodeLine({
         <span className="mono" style={s.lineText}>
           {ln.text || " "}
         </span>
+        {primary && PrimaryIcon && (
+          <span style={annotationLabelFor(primary.color)}>
+            <PrimaryIcon size={12} />
+            {primary.label}
+          </span>
+        )}
       </div>
 
       {commenting &&
@@ -78,6 +99,14 @@ export function CodeLine({
           side={target.side}
           onClose={() => setComposing(false)}
         />
+      )}
+
+      {annotations.length > 0 && (
+        <div style={cs.thread}>
+          {annotations.map((a) => (
+            <React.Fragment key={a.id}>{a.content}</React.Fragment>
+          ))}
+        </div>
       )}
     </div>
   );

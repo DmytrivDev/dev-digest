@@ -18,6 +18,7 @@ import {
   SEMVER_DISCIPLINE,
   TEST_QUALITY_RUBRIC,
 } from './seed-skills.js';
+import { SEED_PR_482_FILES } from './seed-pulls.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -128,13 +129,12 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       })
       .returning();
 
-    // pr_files (subset)
-    await db.insert(t.prFiles).values([
-      { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
-    ]);
+    // pr_files — nine files covering all five Smart Diff roles
+    // (server/src/db/seed-pulls.ts); two carry a real patch so the seeded
+    // findings below anchor on a rendered line.
+    await db.insert(t.prFiles).values(
+      SEED_PR_482_FILES.map((f) => ({ prId: pr!.id, ...f })),
+    );
 
     // pr_commits
     await db.insert(t.prCommits).values({
