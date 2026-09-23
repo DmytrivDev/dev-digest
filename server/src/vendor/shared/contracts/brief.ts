@@ -13,6 +13,47 @@ export const Intent = z.object({
 });
 export type Intent = z.infer<typeof Intent>;
 
+/** Confidence tier for a derived Intent — computed by us from which sources
+ * resolved, never asked of the model (verbalised LLM confidence is
+ * empirically miscalibrated). See docs/plans/intent-layer.plan.md §2.7. */
+export const IntentConfidence = z.enum(['high', 'medium', 'low']);
+export type IntentConfidence = z.infer<typeof IntentConfidence>;
+
+/** What kind of signal a derived Intent's provenance entry came from. */
+export const IntentSourceKind = z.enum([
+  'linked_issue',
+  'mentioned_issue',
+  'ticket_key',
+  'spec_doc',
+  'pr_body',
+  'pr_title',
+  'branch',
+  'commits',
+  'paths',
+]);
+export type IntentSourceKind = z.infer<typeof IntentSourceKind>;
+
+/** One provenance entry — a source the classifier was given, and whether it
+ * actually resolved (fetched/read successfully). */
+export const IntentSource = z.object({
+  kind: IntentSourceKind,
+  ref: z.string().nullish(),
+  resolved: z.boolean(),
+  detail: z.string().nullish(),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
+/** A persisted/derived Intent, widened with confidence, provenance, the
+ * model that produced it, and when. */
+export const DerivedIntent = Intent.extend({
+  confidence: IntentConfidence,
+  sources: z.array(IntentSource),
+  model: z.string().nullish(),
+  derived_at: z.string(),
+  cost_usd: z.number().nullish(),
+});
+export type DerivedIntent = z.infer<typeof DerivedIntent>;
+
 // ---- Blast radius ----
 export const ChangedSymbol = z.object({
   name: z.string(),
