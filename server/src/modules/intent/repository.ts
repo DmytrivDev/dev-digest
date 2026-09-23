@@ -5,8 +5,6 @@ import * as t from '../../db/schema.js';
 import type { PrIntentRow, PullRow } from '../../db/rows.js';
 import { toIntentDto, type PrIntentRowLike } from './helpers.js';
 
-export type { PrIntentRow, PullRow };
-
 /** Just enough of the repo row to build a RepoRef and read its clone. */
 export interface IntentRepoRef {
   id: string;
@@ -88,12 +86,15 @@ export class IntentRepository {
     return rows.map((r) => r.message);
   }
 
-  /** Changed file paths, capped by the caller (`MAX_PATHS`). */
+  /** Changed file paths, capped by the caller (`MAX_PATHS`). Ordered by path:
+      a LIMIT without ORDER BY returns whatever the heap holds, so the sample
+      (and the sourceKey built from it) could change on an unchanged PR. */
   async getChangedPaths(prId: string, limit: number): Promise<string[]> {
     const rows = await this.db
       .select({ path: t.prFiles.path })
       .from(t.prFiles)
       .where(eq(t.prFiles.prId, prId))
+      .orderBy(t.prFiles.path)
       .limit(limit);
     return rows.map((r) => r.path);
   }
