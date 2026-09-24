@@ -29,17 +29,28 @@ import {
   MAX_BODY_CHARS,
   MAX_COMMITS,
   MAX_DOC_CHARS,
+  MAX_DOC_REFS,
+  MAX_DOCS,
+  MAX_ISSUE_REFS,
   MAX_PATHS,
+  MAX_TICKET_KEYS,
 } from './constants.js';
 import {
   capDocRefs,
+  capReferences,
   confidenceTier,
+  estimatePromptTokens,
+  githubErrorDetail,
   intentSourceKey,
   isProviderConfigError,
+  isSafeDocPath,
   isSubstantiveBody,
+  overflowSource,
   parseReferences,
+  prioritizeIssueRefs,
   providerConfigMessage,
   providerErrorStatus,
+  readErrorDetail,
 } from './helpers.js';
 import { buildIntentMessages, IntentProposal, type IntentPromptInput } from './prompt.js';
 import type { IntentRepository } from './repository.js';
@@ -59,11 +70,47 @@ export interface IntentDeps {
   resolveModel: () => Promise<FeatureModelChoice>;
   /** Override the hard deadline — injected only by the test that proves it fires. */
   deadlineMs?: number;
+  /**
+   * The tokenizer's count function — injected, not `container.tokenizer`
+   * directly, so this service never imports a concrete adapter (ban 2). Same
+   * injection shape as `countPromptTokens(assembly, count)` in
+   * `reviews/helpers.ts`.
+   */
+  countTokens: (text: string) => number;
 }
 
 export interface DeriveOptions {
   /** Re-derive even when the stored `source_key` still matches (§2.3). */
   force?: boolean;
+  /**
+   * Fired once, right before the model call, with the plan the call is about
+   * to run — lets the caller (`run-executor`) log the model, the prompt-token
+   * estimate and each source BEFORE the call, so a failed/timeout call still
+   * shows what was attempted. Wrapped in its own try/catch by `derive()`: an
+   * observer must never fail a derivation.
+   */
+  onBeforeModelCall?: (plan: DerivePlan) => void;
+}
+
+/** What `derive()` is about to send to the model, handed to `onBeforeModelCall`. */
+export interface DerivePlan {
+  provider: Provider;
+  model: string;
+  promptTokensEstimate: number;
+  sources: readonly IntentSource[];
+}
+
+/** Actual usage from the model call that produced this derivation — `null` on
+ *  a cache hit, since no call was made (A3: `tokens_in`/`tokens_out` are on
+ *  the table, not on `PrIntentRecord`, and widening the DTO for a log line is
+ *  out of scope). */
+export interface DeriveUsage {
+  provider: Provider;
+  model: string;
+  promptTokensEstimate: number;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number | null;
 }
 
 export interface DeriveResult {
@@ -73,6 +120,8 @@ export interface DeriveResult {
   /** False when derivation succeeded but the write failed — the caller
    *  (`run-executor`) still gets the in-memory record for the prompt. */
   persisted: boolean;
+  /** `null` on a cache hit — see `DeriveUsage`. */
+  usage: DeriveUsage | null;
 }
 
 export class IntentService {
@@ -87,7 +136,8 @@ export class IntentService {
    * safety gate all degrade to `resolved: false` on that one source rather
    * than aborting the whole derivation. Only the model call itself and the
    * final persistence step can throw out of this method — everything else is
-   * absorbed into the `sources` array.
+   * absorbed into the `sources` array, and the token estimate and the
+   * `onBeforeModelCall` observer are swallowed on failure (log-only).
    */
   async derive(
     workspaceId: string,
@@ -111,7 +161,7 @@ export class IntentService {
       const existingKey = await this.deps.repo.getSourceKey(prId);
       if (existingKey !== undefined && existingKey === key) {
         const stored = await this.deps.repo.get(prId);
-        if (stored) return { record: stored, cached: true, persisted: true };
+        if (stored) return { record: stored, cached: true, persisted: true, usage: null };
       }
     }
 
@@ -135,7 +185,8 @@ export class IntentService {
     const refs = parseReferences(bodyText);
 
     let linkedIssueAttached = false;
-    for (const ref of refs.issues) {
+    const issueRefs = capReferences(prioritizeIssueRefs(refs.issues), MAX_ISSUE_REFS);
+    for (const ref of issueRefs.kept) {
       const crossRepo =
         (!!ref.owner && ref.owner !== repo.owner) || (!!ref.repo && ref.repo !== repo.name);
       const kind: IntentSourceKind = ref.linked ? 'linked_issue' : 'mentioned_issue';
@@ -160,20 +211,32 @@ export class IntentService {
           linkedIssueAttached = true;
         }
       } catch (err) {
-        sources.push({ kind, ref: label, resolved: false, detail: (err as Error).message });
+        sources.push({ kind, ref: label, resolved: false, detail: githubErrorDetail(err) });
       }
     }
+    if (issueRefs.overflow > 0) {
+      sources.push(overflowSource('mentioned_issue', issueRefs.overflow, MAX_ISSUE_REFS));
+    }
 
-    for (const tk of refs.ticketKeys) {
+    const ticketKeys = capReferences(refs.ticketKeys, MAX_TICKET_KEYS);
+    for (const tk of ticketKeys.kept) {
       // Never fetched — there is no Jira adapter (§1.4) — always unresolved.
       sources.push({ kind: 'ticket_key', ref: tk, resolved: false, detail: null });
     }
+    if (ticketKeys.overflow > 0) {
+      sources.push(overflowSource('ticket_key', ticketKeys.overflow, MAX_TICKET_KEYS));
+    }
 
-    const safeDocPaths = new Set(capDocRefs(refs.specDocs));
+    const docRefs = capReferences(refs.specDocs, MAX_DOC_REFS);
+    const safeDocPaths = new Set(capDocRefs(docRefs.kept));
     const specDocs: { path: string; content: string }[] = [];
-    for (const path of refs.specDocs) {
+    for (const path of docRefs.kept) {
       if (!safeDocPaths.has(path)) {
-        sources.push({ kind: 'spec_doc', ref: path, resolved: false, detail: 'rejected by path safety gate' });
+        // Two different reasons, and the log must not call a safe path hostile.
+        const detail = isSafeDocPath(path)
+          ? `over the cap of ${MAX_DOCS} docs read — not read`
+          : 'rejected by path safety gate';
+        sources.push({ kind: 'spec_doc', ref: path, resolved: false, detail });
         continue;
       }
       if (!repo.clonePath) {
@@ -185,8 +248,11 @@ export class IntentService {
         sources.push({ kind: 'spec_doc', ref: path, resolved: true, detail: null });
         specDocs.push({ path, content: content.slice(0, MAX_DOC_CHARS) });
       } catch (err) {
-        sources.push({ kind: 'spec_doc', ref: path, resolved: false, detail: (err as Error).message });
+        sources.push({ kind: 'spec_doc', ref: path, resolved: false, detail: readErrorDetail(err) });
       }
+    }
+    if (docRefs.overflow > 0) {
+      sources.push(overflowSource('spec_doc', docRefs.overflow, MAX_DOC_REFS));
     }
     if (specDocs.length > 0) promptInput.specDocs = specDocs;
 
@@ -203,11 +269,40 @@ export class IntentService {
 
     // ---- The one model call ------------------------------------------------
     const messages = buildIntentMessages(promptInput);
+    // The estimate only feeds the log, so a counter failure degrades to 0
+    // rather than failing a derivation the user is about to pay for.
+    let promptTokensEstimate = 0;
+    try {
+      promptTokensEstimate = estimatePromptTokens(messages, this.deps.countTokens);
+    } catch {
+      // keep 0
+    }
+    if (opts.onBeforeModelCall) {
+      try {
+        opts.onBeforeModelCall({
+          provider: choice.provider,
+          model: choice.model,
+          promptTokensEstimate,
+          sources,
+        });
+      } catch {
+        // An observer must never fail a derivation — this callback is a log
+        // hook, not part of the derivation itself.
+      }
+    }
     const llm = await this.deps.llm(choice.provider);
     const result = await this.completeWithinDeadline(llm, choice.model, messages);
 
     const tier = confidenceTier(sources);
     const model = `${choice.provider}/${choice.model}`;
+    const usage: DeriveUsage = {
+      provider: choice.provider,
+      model: choice.model,
+      promptTokensEstimate,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      costUsd: result.costUsd,
+    };
 
     try {
       const record = await this.deps.repo.upsert(prId, {
@@ -222,7 +317,7 @@ export class IntentService {
         tokensOut: result.tokensOut,
         costUsd: result.costUsd,
       });
-      return { record, cached: false, persisted: true };
+      return { record, cached: false, persisted: true, usage };
     } catch {
       // Best-effort means the review is not punished for a write failure —
       // the caller still gets the derived block for the prompt (§2.4).
@@ -237,7 +332,7 @@ export class IntentService {
         derived_at: new Date().toISOString(),
         cost_usd: result.costUsd,
       };
-      return { record, cached: false, persisted: false };
+      return { record, cached: false, persisted: false, usage };
     }
   }
 

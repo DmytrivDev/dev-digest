@@ -7,7 +7,13 @@
  */
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
-import type { IntentConfidence, IntentSource, IntentSourceKind, PrIntentRecord } from '@devdigest/shared';
+import type {
+  ChatMessage,
+  IntentConfidence,
+  IntentSource,
+  IntentSourceKind,
+  PrIntentRecord,
+} from '@devdigest/shared';
 import { MAX_DOCS, SUBSTANTIVE_BODY_CHARS } from './constants.js';
 
 // ---------------------------------------------------------------- reference parsing
@@ -175,6 +181,52 @@ export function capDocRefs(paths: string[]): string[] {
   return paths.filter(isSafeDocPath).slice(0, MAX_DOCS);
 }
 
+// ---------------------------------------------------------------- reference caps
+
+/** The first `max` items and how many were dropped. */
+export function capReferences<T>(items: readonly T[], max: number): { kept: T[]; overflow: number } {
+  return { kept: items.slice(0, max), overflow: Math.max(0, items.length - max) };
+}
+
+/** Linked (closing-keyword) issues first, otherwise in body order — so a cap
+ *  never drops the one reference that can make the tier `high`. */
+export function prioritizeIssueRefs(refs: readonly ParsedIssueRef[]): ParsedIssueRef[] {
+  return [...refs.filter((r) => r.linked), ...refs.filter((r) => !r.linked)];
+}
+
+/** The single source entry that stands in for every reference past a cap. */
+export function overflowSource(kind: IntentSourceKind, overflow: number, max: number): IntentSource {
+  return { kind, ref: `+${overflow} more`, resolved: false, detail: `over the cap of ${max} — not read` };
+}
+
+// ---------------------------------------------------------------- source error details
+
+/**
+ * A fixed phrase for a failed doc read, never the raw `err.message`: Node's
+ * ENOENT text carries the absolute clone path (OS user name, home dir), and
+ * `detail` is stored, returned by the DTO and written to every Live Log.
+ */
+export function readErrorDetail(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === 'ENOENT' || code === 'ENOTDIR') return 'not found on the default branch';
+  if (code === 'EOUTSIDECLONE') return 'resolves outside the repository — not read';
+  return 'unreadable';
+}
+
+/**
+ * A fixed phrase for a failed issue fetch. Classified structurally (status /
+ * error code), like `isProviderConfigError`, so a vendor's wording never
+ * reaches the log. Our own config error ("GITHUB_TOKEN is not configured") is
+ * safe and actionable, so it is kept verbatim.
+ */
+export function githubErrorDetail(err: unknown): string {
+  if ((err as { code?: unknown } | null)?.code === 'config_error') return (err as Error).message;
+  const status = providerErrorStatus(err);
+  if (status === 404) return 'issue not found (HTTP 404)';
+  if (status !== undefined) return `GitHub request failed (HTTP ${status})`;
+  return 'GitHub request failed';
+}
+
 // ---------------------------------------------------------------- confidence tier (§2.7, R5)
 
 const REFERENCE_KINDS = new Set<IntentSourceKind>([
@@ -243,6 +295,22 @@ export interface IntentSourceKeyParts {
 export function intentSourceKey(parts: IntentSourceKeyParts): string {
   const input = [parts.headSha, parts.body ?? '', `${parts.provider}/${parts.model}`].join('\n');
   return createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
+// ---------------------------------------------------------------- prompt token estimate (W1)
+
+/**
+ * A pre-call estimate of the prompt's token cost — summed over every message
+ * with the injected counter, never the tokenizer adapter itself (ring 1 stays
+ * pure; the caller injects `container.tokenizer.count`, same shape as
+ * `countPromptTokens` in `reviews/helpers.ts`). An estimate, not the actual
+ * usage: for a non-OpenAI model the tokenizer is an approximation.
+ */
+export function estimatePromptTokens(
+  messages: readonly ChatMessage[],
+  count: (text: string) => number,
+): number {
+  return messages.reduce((sum, m) => sum + count(m.content), 0);
 }
 
 // ---------------------------------------------------------------- rendered prompt block (§5.2)
@@ -369,7 +437,10 @@ const PROVIDER_DETAIL_MAX = 240;
  */
 export function providerConfigMessage(model: string, err: unknown): string {
   const status = providerErrorStatus(err);
-  const raw = (err as Error | undefined)?.message ?? '';
+  // A 401/403 is about the KEY, and some providers echo a partly masked key
+  // in that message — say "rejected" and stop. The quote is kept for 400/404,
+  // where it names the replacement model slug.
+  const raw = status === 401 || status === 403 ? '' : ((err as Error | undefined)?.message ?? '');
   const detail = raw.length > PROVIDER_DETAIL_MAX ? `${raw.slice(0, PROVIDER_DETAIL_MAX)}…` : raw;
   return (
     `The model configured for PR intent (${model}) was rejected by the provider` +

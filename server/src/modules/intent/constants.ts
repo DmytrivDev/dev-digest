@@ -13,6 +13,18 @@ export const MAX_DOC_CHARS = 8000;
 export const MAX_DOCS = 2;
 
 /**
+ * Caps on how many references of each kind become a `sources` entry. The PR
+ * body is attacker-controlled (anyone who can open a PR writes it), so without
+ * a cap `#1 #2 … #11000` means thousands of sequential GitHub calls — the
+ * token's hourly limit gone and every queued review stalled behind the intent
+ * step — plus one Live Log line per reference in every agent's log. Anything
+ * past a cap collapses into a single "+N more" source.
+ */
+export const MAX_ISSUE_REFS = 5;
+export const MAX_TICKET_KEYS = 5;
+export const MAX_DOC_REFS = 5;
+
+/**
  * A PR body at or above this many characters (AFTER stripping HTML comments,
  * markdown checklist items and heading lines — see `stripBodyBoilerplate`) is
  * "substantive prose" for the §2.7 confidence rule. Below it, a body is

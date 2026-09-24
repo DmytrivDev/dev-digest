@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import type { IntentSource } from '@devdigest/shared';
 import {
   assembleSkills,
   countPromptTokens,
+  intentEstimateLine,
+  intentModelLine,
+  intentSourceLine,
+  intentUsageLine,
   isUntrustedSkill,
   renderSkillBlock,
   taskLine,
@@ -230,5 +235,87 @@ describe('isUntrustedSkill', () => {
     // one (like `extracted`) than a foreign one. If that ever stops holding,
     // invert this to an allow-list of trusted sources.
     expect(isUntrustedSkill('something-new')).toBe(false);
+  });
+});
+
+describe('intentModelLine', () => {
+  it('names the model, not cached', () => {
+    expect(intentModelLine('openrouter/openai/gpt-4.1-nano', false)).toBe(
+      'intent: model openrouter/openai/gpt-4.1-nano',
+    );
+  });
+
+  it('appends " (cached)" when reused', () => {
+    expect(intentModelLine('openrouter/openai/gpt-4.1-nano', true)).toBe(
+      'intent: model openrouter/openai/gpt-4.1-nano (cached)',
+    );
+  });
+
+  it('falls back to "unknown" for a null/undefined model', () => {
+    expect(intentModelLine(null, false)).toBe('intent: model unknown');
+    expect(intentModelLine(undefined, false)).toBe('intent: model unknown');
+  });
+});
+
+describe('intentEstimateLine', () => {
+  it('states the estimate is pre-call', () => {
+    expect(intentEstimateLine(842)).toBe('intent: prompt ≈ 842 tokens (estimate, before the call)');
+  });
+});
+
+describe('intentSourceLine', () => {
+  const source = (over: Partial<IntentSource>): IntentSource => ({
+    kind: 'linked_issue',
+    ref: null,
+    resolved: true,
+    detail: null,
+    ...over,
+  });
+
+  it('resolved, with a ref', () => {
+    expect(intentSourceLine(source({ ref: '#42', resolved: true }), false)).toBe(
+      'intent: source linked_issue #42 — resolved',
+    );
+  });
+
+  it('resolved, without a ref', () => {
+    expect(intentSourceLine(source({ kind: 'pr_body', ref: null, resolved: true }), false)).toBe(
+      'intent: source pr_body — resolved',
+    );
+  });
+
+  it('unresolved, with a detail', () => {
+    expect(
+      intentSourceLine(
+        source({ kind: 'spec_doc', ref: 'docs/x.md', resolved: false, detail: 'repository not cloned' }),
+        false,
+      ),
+    ).toBe('intent: source spec_doc docs/x.md — not resolved: repository not cloned');
+  });
+
+  it('unresolved, without a detail', () => {
+    expect(intentSourceLine(source({ kind: 'ticket_key', ref: 'PROJ-14', resolved: false, detail: null }), false)).toBe(
+      'intent: source ticket_key PROJ-14 — not resolved',
+    );
+  });
+
+  it('appends " (cached)" when reused', () => {
+    expect(intentSourceLine(source({ ref: '#42', resolved: true }), true)).toBe(
+      'intent: source linked_issue #42 — resolved (cached)',
+    );
+  });
+});
+
+describe('intentUsageLine', () => {
+  it('reports tokens in/out and cost', () => {
+    expect(intentUsageLine({ tokensIn: 100, tokensOut: 50, costUsd: 0.0013 })).toBe(
+      'intent: usage — 100 tokens in / 50 out · $0.0013',
+    );
+  });
+
+  it('reports "cost unknown" when costUsd is null', () => {
+    expect(intentUsageLine({ tokensIn: 100, tokensOut: 50, costUsd: null })).toBe(
+      'intent: usage — 100 tokens in / 50 out · cost unknown',
+    );
   });
 });

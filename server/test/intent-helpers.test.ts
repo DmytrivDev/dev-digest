@@ -7,7 +7,13 @@ import { describe, it, expect } from 'vitest';
 import type { IntentSource } from '@devdigest/shared';
 import {
   capDocRefs,
+  capReferences,
+  githubErrorDetail,
+  overflowSource,
+  prioritizeIssueRefs,
+  readErrorDetail,
   confidenceTier,
+  estimatePromptTokens,
   intentSourceKey,
   isProviderConfigError,
   isSafeDocPath,
@@ -331,6 +337,32 @@ describe('toIntentDto — row -> wire DTO', () => {
   });
 });
 
+describe('estimatePromptTokens', () => {
+  it('sums the injected counter over every message', () => {
+    const calls: string[] = [];
+    const count = (text: string) => {
+      calls.push(text);
+      return text.length;
+    };
+    const total = estimatePromptTokens(
+      [
+        { role: 'system', content: 'abc' },
+        { role: 'user', content: 'defgh' },
+      ],
+      count,
+    );
+    expect(total).toBe(8);
+    expect(calls).toEqual(['abc', 'defgh']);
+  });
+
+  it('is 0 for no messages, and never calls the counter', () => {
+    const count = () => {
+      throw new Error('must not be called');
+    };
+    expect(estimatePromptTokens([], count)).toBe(0);
+  });
+});
+
 describe("provider error classification", () => {
   /** What the OpenAI SDK actually throws: a message already prefixed by the status. */
   const apiError = (status: number, message: string) =>
@@ -386,5 +418,53 @@ describe("provider error classification", () => {
     const msg = providerConfigMessage("m", apiError(400, "x".repeat(900)));
     expect(msg).toContain("…");
     expect(msg.length).toBeLessThan(500);
+  });
+});
+
+describe("reference caps — an attacker-written body cannot fan out", () => {
+  it("keeps the first N and counts the rest", () => {
+    expect(capReferences([1, 2, 3, 4], 2)).toEqual({ kept: [1, 2], overflow: 2 });
+    expect(capReferences([1], 5)).toEqual({ kept: [1], overflow: 0 });
+  });
+
+  it("puts linked issues first so a cap never drops the high-confidence one", () => {
+    const refs = parseIssueRefs("See #1 #2 #3. Fixes #9.");
+    expect(prioritizeIssueRefs(refs).map((r) => r.number)).toEqual([9, 1, 2, 3]);
+  });
+
+  it("collapses the overflow into one unresolved +N source", () => {
+    expect(overflowSource("mentioned_issue", 7, 5)).toEqual({
+      kind: "mentioned_issue",
+      ref: "+7 more",
+      resolved: false,
+      detail: "over the cap of 5 — not read",
+    });
+  });
+});
+
+describe("source error details — fixed phrases, never raw error text", () => {
+  const apiError = (status: number, message: string) => Object.assign(new Error(message), { status });
+
+  it("maps a missing doc to a phrase without the absolute clone path", () => {
+    const err = Object.assign(new Error("ENOENT: no such file, open '/home/me/.devdigest/repos/acme/x/docs/x.md'"), { code: "ENOENT" });
+    expect(readErrorDetail(err)).toBe("not found on the default branch");
+    expect(readErrorDetail(Object.assign(new Error("x"), { code: "EOUTSIDECLONE" }))).toBe(
+      "resolves outside the repository — not read",
+    );
+    expect(readErrorDetail(new Error("EACCES /home/me/secret"))).toBe("unreadable");
+  });
+
+  it("reports GitHub failures by status, and keeps our own config error", () => {
+    expect(githubErrorDetail(apiError(404, "Not Found - https://docs.github.com/x"))).toBe("issue not found (HTTP 404)");
+    expect(githubErrorDetail(apiError(401, "Bad credentials"))).toBe("GitHub request failed (HTTP 401)");
+    expect(githubErrorDetail(new Error("socket hang up"))).toBe("GitHub request failed");
+    const config = Object.assign(new Error("GITHUB_TOKEN is not configured"), { code: "config_error" });
+    expect(githubErrorDetail(config)).toBe("GITHUB_TOKEN is not configured");
+  });
+
+  it("does not quote a 401/403 provider message — it can echo a masked key", () => {
+    const msg = providerConfigMessage("m", apiError(401, "Incorrect API key provided: sk-abc***wxyz"));
+    expect(msg).toContain("HTTP 401");
+    expect(msg).not.toContain("sk-abc");
   });
 });

@@ -108,7 +108,8 @@ touch what they cover:
 
 `security` is there for writing practice — do not log a secret, do not interpolate user
 input into a prompt or a query — **not** so you can perform a security review. That review
-is a separate agent's job, and yours would be the author reviewing himself.
+is a separate agent's job (`security-reviewer`, `architecture-reviewer`, then
+`/pr-self-review`), and yours would be the author reviewing himself.
 
 **Never invoke** `pr-self-review` or `engineering-insights` (see Hard constraints), or
 `mermaid-diagram` — it is an authoring aid for diagrams, not a rule about code.

@@ -2,7 +2,7 @@
  * Pure helpers for the review service (side-effect free; operate purely on
  * their arguments — no DB / network / `this`).
  */
-import type { Finding, SkillSource, SkillType, SkillUsed } from '@devdigest/shared';
+import type { Finding, IntentSource, SkillSource, SkillType, SkillUsed } from '@devdigest/shared';
 import type { FindingRow, PullRow, ReviewRow } from './repository.js';
 
 // reduceReviews + sliceDiff live in @devdigest/reviewer-core (pure engine logic
@@ -247,4 +247,36 @@ export function countPromptTokens(
     if (typeof value === 'string' && value.length > 0) out[slot] = count(value);
   }
   return out;
+}
+
+// ---------------------------------------------------------------- intent runLog lines (W2)
+//
+// Pure line builders so the exact wording is unit-testable without Postgres
+// (onion-architecture §1, the test-speed ring) — `run-executor.ts` calls
+// these and passes the result straight to `runLog.info`.
+
+/** `intent: model <model> [(cached)]` — the "unknown" fallback covers a
+ *  cached record whose `model` column predates this field. */
+export function intentModelLine(model: string | null | undefined, cached: boolean): string {
+  return `intent: model ${model ?? 'unknown'}${cached ? ' (cached)' : ''}`;
+}
+
+/** `intent: prompt ≈ <n> tokens (estimate, before the call)` — logged BEFORE
+ *  the model call, so a failed/timeout call still shows the estimate. */
+export function intentEstimateLine(n: number): string {
+  return `intent: prompt ≈ ${n} tokens (estimate, before the call)`;
+}
+
+/** One line per intent source: `intent: source <kind>[ <ref>] — resolved` or
+ *  `— not resolved[: <detail>]`, with a `(cached)` suffix on a cache hit. */
+export function intentSourceLine(s: IntentSource, cached: boolean): string {
+  const label = s.ref ? `${s.kind} ${s.ref}` : s.kind;
+  const status = s.resolved ? 'resolved' : `not resolved${s.detail ? `: ${s.detail}` : ''}`;
+  return `intent: source ${label} — ${status}${cached ? ' (cached)' : ''}`;
+}
+
+/** `intent: usage — <in> tokens in / <out> out · $<cost> | cost unknown`. */
+export function intentUsageLine(u: { tokensIn: number; tokensOut: number; costUsd: number | null }): string {
+  const cost = u.costUsd === null ? 'cost unknown' : `$${u.costUsd.toFixed(4)}`;
+  return `intent: usage — ${u.tokensIn} tokens in / ${u.tokensOut} out · ${cost}`;
 }

@@ -12,9 +12,10 @@ import messages from "../../../../../../../../messages/en/brief.json";
 
 const usePrIntent = vi.fn();
 const deriveMutate = vi.fn();
+let derivePending = false;
 vi.mock("@/lib/hooks/reviews", () => ({
   usePrIntent: (prId: string) => usePrIntent(prId),
-  useDerivePrIntent: () => ({ mutate: deriveMutate, isPending: false }),
+  useDerivePrIntent: () => ({ mutate: deriveMutate, isPending: derivePending }),
 }));
 
 import { IntentCard } from "./IntentCard";
@@ -23,6 +24,7 @@ afterEach(() => {
   cleanup();
   usePrIntent.mockReset();
   deriveMutate.mockReset();
+  derivePending = false;
 });
 
 function intent(o: Partial<PrIntentRecord> = {}): PrIntentRecord {
@@ -120,4 +122,25 @@ describe("IntentCard", () => {
       expect(screen.getByText(expected)).toBeInTheDocument();
     },
   );
+
+  it("shows a labelled Recalculate button, not the empty-state Derive intent button, and forces re-derivation", () => {
+    usePrIntent.mockReturnValue({ data: { intent: intent() }, isLoading: false, isError: false });
+    renderCard();
+
+    const recalculate = screen.getByRole("button", { name: "Recalculate" });
+    expect(recalculate).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Derive intent" })).not.toBeInTheDocument();
+
+    fireEvent.click(recalculate);
+    expect(deriveMutate).toHaveBeenCalledWith(true);
+  });
+
+  it("disables the button and shows Recalculating… while a recalculation is in flight", () => {
+    derivePending = true;
+    usePrIntent.mockReturnValue({ data: { intent: intent() }, isLoading: false, isError: false });
+    renderCard();
+
+    const recalculating = screen.getByRole("button", { name: /Recalculating/ });
+    expect(recalculating).toBeDisabled();
+  });
 });

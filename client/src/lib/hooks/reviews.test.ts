@@ -1,5 +1,17 @@
-import { describe, it, expect } from "vitest";
-import { QueryClient } from "@tanstack/react-query";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { renderHook, waitFor } from "@testing-library/react";
+
+const { post } = vi.hoisted(() => ({ post: vi.fn() }));
+vi.mock("@/lib/api", () => ({
+  api: {
+    get: vi.fn(),
+    post: (...args: unknown[]) => post(...args),
+  },
+}));
+
+import { useDerivePrIntent } from "./reviews";
 
 /**
  * Pins the decision the whole smart-diff invalidation story rests on:
@@ -21,5 +33,51 @@ describe("smart-diff query key sits under the reviews prefix", () => {
     await qc.invalidateQueries({ queryKey: ["reviews", "p1"] });
 
     expect(qc.getQueryState(["reviews", "p1", "smart-diff"])?.isInvalidated).toBe(true);
+  });
+});
+
+describe("useDerivePrIntent", () => {
+  afterEach(() => {
+    post.mockReset();
+  });
+
+  function wrapper(qc: QueryClient) {
+    return function Wrapper({ children }: { children: React.ReactNode }) {
+      return React.createElement(QueryClientProvider, { client: qc }, children);
+    };
+  }
+
+  it("mutate(true) posts { force: true }", async () => {
+    post.mockResolvedValue({ intent: { pr_id: "pr-1" } });
+    const qc = new QueryClient();
+    const { result } = renderHook(() => useDerivePrIntent("pr-1"), { wrapper: wrapper(qc) });
+
+    result.current.mutate(true);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(post).toHaveBeenCalledWith("/pulls/pr-1/intent", { force: true });
+  });
+
+  it("mutate(undefined) posts with no body", async () => {
+    post.mockResolvedValue({ intent: { pr_id: "pr-1" } });
+    const qc = new QueryClient();
+    const { result } = renderHook(() => useDerivePrIntent("pr-1"), { wrapper: wrapper(qc) });
+
+    result.current.mutate(undefined);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(post).toHaveBeenCalledWith("/pulls/pr-1/intent", undefined);
+  });
+
+  it("invalidates [\"pr-intent\", prId] on success", async () => {
+    post.mockResolvedValue({ intent: { pr_id: "pr-1" } });
+    const qc = new QueryClient();
+    qc.setQueryData(["pr-intent", "pr-1"], { intent: null });
+    const { result } = renderHook(() => useDerivePrIntent("pr-1"), { wrapper: wrapper(qc) });
+
+    result.current.mutate(true);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(qc.getQueryState(["pr-intent", "pr-1"])?.isInvalidated).toBe(true);
   });
 });

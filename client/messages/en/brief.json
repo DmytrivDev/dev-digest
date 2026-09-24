@@ -17,6 +17,8 @@
     "emptyHint": "Derive it from the PR description, linked issue and referenced spec.",
     "derive": "Derive intent",
     "deriving": "Deriving…",
+    "recalculate": "Recalculate",
+    "recalculating": "Recalculating…",
     "error": "Could not derive intent.",
     "confidence": {
       "high": "High confidence",

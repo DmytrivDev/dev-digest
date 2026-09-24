@@ -7,7 +7,16 @@ import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
-import { assembleSkills, countPromptTokens, taskLine, type SkillAssembly } from './helpers.js';
+import {
+  assembleSkills,
+  countPromptTokens,
+  intentEstimateLine,
+  intentModelLine,
+  intentSourceLine,
+  intentUsageLine,
+  taskLine,
+  type SkillAssembly,
+} from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { resolveFeatureModel } from '../settings/feature-models.js';
 import { IntentRepository } from '../intent/repository.js';
@@ -414,28 +423,29 @@ export class ReviewRunExecutor {
         github: () => this.container.github(),
         llm: (provider) => this.container.llm(provider),
         resolveModel: () => resolveFeatureModel(this.container, workspaceId, 'review_intent'),
+        countTokens: (text) => this.container.tokenizer.count(text),
       });
 
       const result = await runLog.step(
         'Deriving PR intent',
-        () => service.derive(workspaceId, pull.id),
+        () =>
+          service.derive(workspaceId, pull.id, {
+            onBeforeModelCall: (plan) => {
+              runLog.info(intentModelLine(`${plan.provider}/${plan.model}`, false));
+              runLog.info(intentEstimateLine(plan.promptTokensEstimate));
+              for (const s of plan.sources) runLog.info(intentSourceLine(s, false));
+            },
+          }),
         { kind: 'tool' },
       );
       if (!result) return undefined; // PR not found in this workspace — nothing to derive.
 
       if (result.cached) {
         runLog.info('intent: reused stored derivation (source key unchanged)');
+        runLog.info(intentModelLine(result.record.model, true));
+        for (const s of result.record.sources) runLog.info(intentSourceLine(s, true));
       } else {
-        const resolved = result.record.sources.filter((s) => s.resolved);
-        const kinds = [...new Set(resolved.map((s) => s.kind))].join(', ') || 'none';
-        runLog.info(
-          `intent: ${resolved.length} source(s) resolved — ${kinds} · confidence ${result.record.confidence}`,
-        );
-        for (const s of result.record.sources) {
-          if (!s.resolved && s.detail) {
-            runLog.info(`intent: ${s.kind}${s.ref ? ` ${s.ref}` : ''} not resolved — ${s.detail}`);
-          }
-        }
+        if (result.usage) runLog.info(intentUsageLine(result.usage));
         if (!result.persisted) {
           runLog.info('intent: derived but could not be persisted');
         }
