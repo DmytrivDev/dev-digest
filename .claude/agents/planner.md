@@ -21,6 +21,8 @@ else implements it, in a fresh context that cannot see this conversation. Everyt
 implementer needs must be in the file — a plan that only makes sense to its author is not
 a plan.
 
+Upstream, `brainstorm` may hand you an options brief — treat its recommendation as the request, not as a plan; Step 0 still applies.
+
 ## Hard constraints
 
 - **The only path you may write is `docs/plans/<slug>.plan.md`.** One file per plan, named

@@ -1,6 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { join } from 'node:path';
-import { mkdir, readFile, access, rm } from 'node:fs/promises';
+import { isAbsolute, join, relative, sep } from 'node:path';
+import { mkdir, readFile, realpath, access, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
   GitClient,
@@ -126,8 +126,22 @@ export class SimpleGitClient implements GitClient {
     }));
   }
 
+  /**
+   * Reads a file INSIDE the clone. The path is checked where it really lands,
+   * not just as text: a symlink committed to the repo (`docs/spec.md ->
+   * ~/.devdigest/secrets.json`) passes any text-only gate, and `readFile`
+   * follows it. Resolving both ends with `realpath` closes that.
+   */
   async readFile(repo: RepoRef, path: string): Promise<string> {
-    return readFile(join(this.clonePathFor(repo), path), 'utf8');
+    const root = await realpath(this.clonePathFor(repo));
+    const target = await realpath(join(root, path));
+    const rel = relative(root, target);
+    if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+      throw Object.assign(new Error('path resolves outside the repository clone'), {
+        code: 'EOUTSIDECLONE',
+      });
+    }
+    return readFile(target, 'utf8');
   }
 }
 

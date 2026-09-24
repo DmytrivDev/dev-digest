@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Card, Chip, EmptyState, ErrorState, IconBtn, SectionLabel, Skeleton } from "@devdigest/ui";
+import { Badge, Button, Card, Chip, EmptyState, ErrorState, SectionLabel, Skeleton } from "@devdigest/ui";
 import type { IntentSource } from "@devdigest/shared";
 import { usePrIntent, useDerivePrIntent } from "@/lib/hooks/reviews";
 import { formatWhen } from "@/lib/datetime";
@@ -76,11 +76,15 @@ export function IntentCard({ prId }: IntentCardProps) {
                 {t(`intent.confidence.${intent.confidence}`)}
               </Badge>
             </span>
-            <IconBtn
+            <Button
+              size="sm"
+              kind="ghost"
               icon="RefreshCw"
-              label={derive.isPending ? t("intent.deriving") : t("intent.derive")}
+              loading={derive.isPending}
               onClick={() => derive.mutate(true)}
-            />
+            >
+              {derive.isPending ? t("intent.recalculating") : t("intent.recalculate")}
+            </Button>
           </div>
         }
       >

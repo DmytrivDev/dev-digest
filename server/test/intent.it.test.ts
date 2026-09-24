@@ -19,6 +19,9 @@ import * as t from '../src/db/schema.js';
 import { MockGitClient, MockGitHubClient, MockLLMProvider, MockSecretsProvider } from '../src/adapters/mocks.js';
 import { ReviewRepository } from '../src/modules/reviews/repository.js';
 import { ReviewRunExecutor } from '../src/modules/reviews/run-executor.js';
+import { IntentRepository } from '../src/modules/intent/repository.js';
+import { IntentService } from '../src/modules/intent/service.js';
+import { MAX_ISSUE_REFS } from '../src/modules/intent/constants.js';
 import type { GitHubClient, IssueMeta, PrIntentRecord, StructuredResult } from '@devdigest/shared';
 
 const hasDocker = await dockerAvailable();
@@ -391,6 +394,8 @@ d('intent layer', () => {
     expect(row).toBeUndefined();
 
     await app.close();
+    // Later tests assert the DEFAULT intent model — don't leak this one.
+    await pg.handle.db.delete(t.settings).where(eq(t.settings.key, 'feature_models'));
   });
 
   it('a transient provider failure is a 502, not a 422', async () => {
@@ -468,6 +473,151 @@ d('intent layer', () => {
     await app.close();
   });
 
+  it('a throwing token counter or log observer never fails a derivation (log-only hooks)', async () => {
+    const repo = await makeRepo();
+    const pr = await makePr(repo.id, { number: 31 });
+    const llm = new MockLLMProvider('openrouter', { structuredBySchema: { PrIntent: INTENT_FIXTURE } });
+    const service = new IntentService({
+      repo: new IntentRepository(pg.handle.db),
+      git: new MockGitClient({ head: 'headsha1' }),
+      github: async () => new MockGitHubClient(),
+      llm: async () => llm,
+      resolveModel: async () => ({ provider: 'openrouter', model: 'openai/gpt-4.1-nano' }),
+      countTokens: () => {
+        throw new Error('tokenizer exploded');
+      },
+    });
+
+    const result = await service.derive(workspaceId, pr.id, {
+      onBeforeModelCall: () => {
+        throw new Error('observer exploded');
+      },
+    });
+
+    expect(result?.cached).toBe(false);
+    expect(result?.persisted).toBe(true);
+    expect(result?.record.intent).toBe(INTENT_FIXTURE.intent);
+    expect(result?.usage?.promptTokensEstimate).toBe(0);
+  });
+
+  it('a body with hundreds of #N refs makes at most MAX_ISSUE_REFS GitHub calls, linked first, the rest as one +N source', async () => {
+    const repo = await makeRepo();
+    const refs = Array.from({ length: 300 }, (_, i) => `#${i + 1}`).join(' ');
+    const pr = await makePr(repo.id, { number: 32, body: `Touches ${refs}. Fixes #999.` });
+    const fetched: number[] = [];
+    class CountingGitHub extends MockGitHubClient {
+      override async getIssue(r: Parameters<MockGitHubClient['getIssue']>[0], n: number) {
+        fetched.push(n);
+        return super.getIssue(r, n);
+      }
+    }
+    const service = new IntentService({
+      repo: new IntentRepository(pg.handle.db),
+      git: new MockGitClient({ head: 'headsha1' }),
+      github: async () => new CountingGitHub(),
+      llm: async () => new MockLLMProvider('openrouter', { structuredBySchema: { PrIntent: INTENT_FIXTURE } }),
+      resolveModel: async () => ({ provider: 'openrouter', model: 'openai/gpt-4.1-nano' }),
+      countTokens: (text) => text.length,
+    });
+
+    const result = await service.derive(workspaceId, pr.id);
+
+    expect(fetched).toHaveLength(MAX_ISSUE_REFS);
+    expect(fetched[0]).toBe(999); // the linked issue survives the cap
+    expect(result?.record.confidence).toBe('high');
+    const issueSources = result!.record.sources.filter(
+      (s) => s.kind === 'linked_issue' || s.kind === 'mentioned_issue',
+    );
+    expect(issueSources).toHaveLength(MAX_ISSUE_REFS + 1);
+    expect(issueSources.at(-1)).toMatchObject({ ref: `+${301 - MAX_ISSUE_REFS} more`, resolved: false });
+  });
+
+  it('a fresh derivation logs model, estimate, each source and usage as separate entries; a cached one flags them cached', async () => {
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+    const app = await buildApp({
+      config,
+      db: pg.handle.db,
+      overrides: {
+        github: new MockGitHubClient(),
+        git: new MockGitClient({ head: 'headsha1' }),
+        // The agent runs on 'openai'; the review_intent default feature model
+        // resolves to 'openrouter'. Each provider answers ONLY its own schema,
+        // so an intent call routed to the agent's provider fails loudly
+        // instead of being answered by a shared mock.
+        llm: {
+          openai: new MockLLMProvider('openai', { structuredBySchema: { Review: REVIEW_FIXTURE } }),
+          openrouter: new MockLLMProvider('openrouter', { structuredBySchema: { PrIntent: INTENT_FIXTURE } }),
+        },
+      },
+    });
+
+    const repo = await makeRepo();
+    const pr = await makePr(repo.id, { number: 30 });
+    const [agent] = await pg.handle.db
+      .insert(t.agents)
+      .values({
+        workspaceId,
+        name: 'Test Agent',
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        systemPrompt: 'Review the diff.',
+      })
+      .returning();
+
+    const reviewRepo = new ReviewRepository(pg.handle.db);
+
+    // Run 1 — fresh derivation.
+    const runId1 = await reviewRepo.createAgentRun({
+      workspaceId,
+      agentId: agent!.id,
+      prId: pr.id,
+      provider: agent!.provider,
+      model: agent!.model,
+    });
+    const executor = new ReviewRunExecutor(app.container, reviewRepo, app.container.agentsRepo);
+    await executor.executeRuns(workspaceId, pr, repo, [{ agent: agent!, runId: runId1 }]);
+
+    const trace1 = await reviewRepo.getRunTrace(workspaceId, runId1);
+    expect(trace1).toBeDefined();
+    const log1 = trace1!.log;
+
+    const modelIdx = log1.findIndex((l) => l.msg === 'intent: model openrouter/openai/gpt-4.1-nano');
+    const estimateIdx = log1.findIndex((l) => l.msg.startsWith('intent: prompt ≈'));
+    const firstSourceIdx = log1.findIndex((l) => l.msg.startsWith('intent: source '));
+    const usageIdx = log1.findIndex((l) => l.msg.startsWith('intent: usage — 100 tokens in / 50 out'));
+    expect(modelIdx).toBeGreaterThanOrEqual(0);
+    expect(estimateIdx).toBeGreaterThan(modelIdx);
+    expect(firstSourceIdx).toBeGreaterThan(estimateIdx);
+    expect(usageIdx).toBeGreaterThan(firstSourceIdx);
+    expect(log1.some((l) => l.msg.match(/source\(s\) resolved/))).toBe(false);
+
+    const [introw] = await pg.handle.db.select().from(t.prIntent).where(eq(t.prIntent.prId, pr.id));
+    const sourceLines = log1.filter((l) => l.msg.startsWith('intent: source '));
+    expect(sourceLines.length).toBe((introw!.sources as unknown[]).length);
+
+    // Run 2 — same PR, same source key: a cache hit.
+    const runId2 = await reviewRepo.createAgentRun({
+      workspaceId,
+      agentId: agent!.id,
+      prId: pr.id,
+      provider: agent!.provider,
+      model: agent!.model,
+    });
+    await executor.executeRuns(workspaceId, pr, repo, [{ agent: agent!, runId: runId2 }]);
+    const trace2 = await reviewRepo.getRunTrace(workspaceId, runId2);
+    const log2 = trace2!.log;
+
+    expect(log2.some((l) => l.msg.includes('reused stored derivation'))).toBe(true);
+    expect(log2.some((l) => l.msg === 'intent: model openrouter/openai/gpt-4.1-nano (cached)')).toBe(true);
+    const cachedSourceLines = log2.filter((l) => l.msg.startsWith('intent: source '));
+    expect(cachedSourceLines.length).toBeGreaterThan(0);
+    expect(cachedSourceLines.every((l) => l.msg.endsWith('(cached)'))).toBe(true);
+    expect(log2.some((l) => l.msg.startsWith('intent: prompt ≈'))).toBe(false);
+    expect(log2.some((l) => l.msg.startsWith('intent: usage'))).toBe(false);
+
+    await app.close();
+  });
+
   it('a dead model id during a review is LOUD in the log, and the review still finishes', async () => {
     // The other half of R2. Best-effort must absorb the FAILURE without
     // absorbing the DIAGNOSIS: with the old catch-all this arrived as one
@@ -523,6 +673,13 @@ d('intent layer', () => {
     expect(skipped[0]!.kind).toBe('error');
     expect(skipped[0]!.msg).toContain('Settings');
     expect(skipped[0]!.msg).toContain('The review continues');
+
+    // The model line, logged before the call, is still on the log even though
+    // the call failed — the diagnosis names WHICH model was rejected.
+    const modelIdx = trace!.log.findIndex((l) => l.msg.startsWith('intent: model '));
+    const skippedIdx = trace!.log.findIndex((l) => l.msg.includes('intent: SKIPPED'));
+    expect(modelIdx).toBeGreaterThanOrEqual(0);
+    expect(modelIdx).toBeLessThan(skippedIdx);
 
     await app.close();
   });

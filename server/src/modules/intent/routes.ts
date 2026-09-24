@@ -45,6 +45,7 @@ export default async function intentRoutes(appBase: FastifyInstance) {
       github: () => container.github(),
       llm: (provider) => container.llm(provider),
       resolveModel: () => resolveFeatureModel(container, workspaceId, 'review_intent'),
+      countTokens: (text) => container.tokenizer.count(text),
     });
 
   app.get('/pulls/:id/intent', { schema: { params: IdParams } }, async (req) => {
