@@ -1,13 +1,27 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import type { Provider, Review, RunTrace, ToolCall, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
+import { AppError } from '../../platform/errors.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
 import { assembleSkills, countPromptTokens, taskLine, type SkillAssembly } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { resolveFeatureModel } from '../settings/feature-models.js';
+import { IntentRepository } from '../intent/repository.js';
+import { IntentService } from '../intent/service.js';
+import { renderIntentBlock } from '../intent/helpers.js';
+
+/** What the shared intent pre-work hands to every per-agent run: the rendered
+ *  block for the prompt slot, and the tool-call entry each agent's trace
+ *  reports it under (§7.2) — one derivation, shared cost, recorded once per
+ *  run rather than invented per agent. */
+interface IntentBuildResult {
+  block: string;
+  toolCall: ToolCall;
+}
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -105,6 +119,13 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Shared pre-work (diff + intent), same fan-out logger — so a derivation
+    // failure is visible on every target agent's Live Log, and its events land
+    // in every run's persisted trace. Best-effort: NEVER goes through failAll,
+    // because a missing second API key must degrade one section, not kill
+    // every queued review.
+    const intent = await this.buildIntentBlock(workspaceId, pull, repo, runLog);
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -112,7 +133,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intent);
         logger?.info(
           {
             runId,
@@ -144,6 +165,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    intent?: IntentBuildResult,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -209,6 +231,9 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // Intent layer — server-derived intent + scope, untrusted; omitted
+        // when derivation failed or was skipped (best-effort pre-work).
+        ...(intent ? { intent: intent.block } : {}),
         // L02 — linked, enabled skills. No skills ⇒ the slot is absent and the
         // prompt is byte-identical to the pre-L02 shape.
         ...(skillBlocks.length > 0 ? { skills: skillBlocks } : {}),
@@ -287,12 +312,18 @@ export class ReviewRunExecutor {
             this.container.tokenizer.count(text),
           ),
         },
-        tool_calls: outcome.chunks.map((c) => ({
-          tool: 'review_file',
-          args: c.label,
-          meta: outcome.mode,
-          ms: Math.round(durationMs / Math.max(outcome.chunks.length, 1)),
-        })),
+        tool_calls: [
+          // Shared pre-work — one derivation, recorded on every agent's trace
+          // so the trace drawer shows the intent call as a step, not as
+          // invisible spend (§7.2).
+          ...(intent ? [intent.toolCall] : []),
+          ...outcome.chunks.map((c) => ({
+            tool: 'review_file',
+            args: c.label,
+            meta: outcome.mode,
+            ms: Math.round(durationMs / Math.max(outcome.chunks.length, 1)),
+          })),
+        ],
         raw_output: outcome.raw,
         memory_pulled: [],
         specs_read: [],
@@ -352,6 +383,94 @@ export class ReviewRunExecutor {
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
+    }
+  }
+
+  /**
+   * The intent layer — derive (or reuse) the PR's intent + scope once, shared
+   * over every queued run (§2.1). Constructs `IntentService` from
+   * `this.container`, which is legal here: `arch:check`'s
+   * `service-not-to-composition-root` is scoped to `modules/*\/service.ts`,
+   * which `run-executor.ts` is not — `IntentService` itself still takes ports,
+   * never `Container`.
+   *
+   * Best-effort like the other builders, but the try/catch sits OUTSIDE
+   * `runLog.step` on purpose: `step` re-emits an `error` event and RETHROWS
+   * on failure (`platform/run-logger.ts`), so catching only inside would miss
+   * that rethrow. Must NEVER reach `failAll` — a missing second API key
+   * degrades one prompt section, not every queued review.
+   */
+  private async buildIntentBlock(
+    workspaceId: string,
+    pull: PullRow,
+    repo: typeof schema.repos.$inferSelect,
+    runLog: RunLogger,
+  ): Promise<IntentBuildResult | undefined> {
+    const start = Date.now();
+    try {
+      const service = new IntentService({
+        repo: new IntentRepository(this.container.db),
+        git: this.container.git,
+        github: () => this.container.github(),
+        llm: (provider) => this.container.llm(provider),
+        resolveModel: () => resolveFeatureModel(this.container, workspaceId, 'review_intent'),
+      });
+
+      const result = await runLog.step(
+        'Deriving PR intent',
+        () => service.derive(workspaceId, pull.id),
+        { kind: 'tool' },
+      );
+      if (!result) return undefined; // PR not found in this workspace — nothing to derive.
+
+      if (result.cached) {
+        runLog.info('intent: reused stored derivation (source key unchanged)');
+      } else {
+        const resolved = result.record.sources.filter((s) => s.resolved);
+        const kinds = [...new Set(resolved.map((s) => s.kind))].join(', ') || 'none';
+        runLog.info(
+          `intent: ${resolved.length} source(s) resolved — ${kinds} · confidence ${result.record.confidence}`,
+        );
+        for (const s of result.record.sources) {
+          if (!s.resolved && s.detail) {
+            runLog.info(`intent: ${s.kind}${s.ref ? ` ${s.ref}` : ''} not resolved — ${s.detail}`);
+          }
+        }
+        if (!result.persisted) {
+          runLog.info('intent: derived but could not be persisted');
+        }
+      }
+      runLog.result(`Intent ready — ${result.record.confidence} confidence`);
+
+      return {
+        block: renderIntentBlock(result.record),
+        toolCall: {
+          tool: 'derive_intent',
+          args: result.record.model ?? repo.fullName,
+          meta: result.record.confidence,
+          ms: Date.now() - start,
+        },
+      };
+    } catch (err) {
+      // Best-effort still means best-effort: the run continues either way (R2).
+      // But WHO is at fault decides how loudly we say so. A 4xx from the intent
+      // service is its verdict that the caller can fix this — a dead model id in
+      // Settings, a refused key — and no retry ever will. Reporting that as one
+      // `info` line buried in the Live Log is how a user ends up getting every
+      // review without an intent block and never learning why. A 5xx / timeout /
+      // network failure is the transient case this catch exists to absorb, and
+      // stays quiet.
+      const message = (err as Error).message;
+      const actionable = err instanceof AppError && err.statusCode < 500;
+      if (actionable) {
+        runLog.event(
+          'error',
+          `intent: SKIPPED — ${message} The review continues without an intent block.`,
+        );
+      } else {
+        runLog.info(`intent: not derived — ${message}`);
+      }
+      return undefined;
     }
   }
 

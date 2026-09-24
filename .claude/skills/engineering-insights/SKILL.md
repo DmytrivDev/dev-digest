@@ -106,6 +106,31 @@ The script enforces the guarantees, so they can't be forgotten:
 Read its output: `APPENDED` means written, `SKIPPED` means the insight was already there
 (not a failure), `ERROR` means nothing was written and the file is unchanged.
 
+## Rebuilding the index (run after every append)
+
+```bash
+node .claude/skills/engineering-insights/scripts/build-index.mjs
+```
+
+This regenerates `<package>/INSIGHTS.index.md` — one line per entry carrying its section,
+date, a short hook and, the part that matters, its **source line number**. It is a derived
+file: it never opens `INSIGHTS.md` for writing, so append-only is untouched, and if the two
+ever disagree the source wins (delete the index and rebuild). `--check` exits non-zero when
+an index is stale; `--package <name>` limits it to one.
+
+Why it exists: these files have outgrown free reading. `server/INSIGHTS.md` is ~50KB, about
+13k tokens, and grows every session — and every agent that touches the server pays that
+before doing any useful work. In one feature it was paid three times over for the same text
+(dispatcher, planner, implementer). The index is ~11KB and lets a reader decide what is
+relevant, then pull just those entries with `sed -n '<line>p' server/INSIGHTS.md`.
+
+It is a **finding aid, not a substitute**. The session protocol in the root `CLAUDE.md` says
+to read the package's `INSIGHTS.md`, and it still means the source file — an entry's value is
+in its detail, and the hook is deliberately too short to act on. Where the index genuinely
+replaces a full read is one step out: a dispatcher briefing a subagent can scan the index,
+read the three relevant entries, and quote them into the prompt, instead of making the
+subagent load 50KB to discover that two entries applied.
+
 ## Common mistakes
 
 1. Not running the wrap-up consistently — the primary failure mode; the loop only

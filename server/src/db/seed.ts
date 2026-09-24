@@ -18,6 +18,7 @@ import {
   SEMVER_DISCIPLINE,
   TEST_QUALITY_RUBRIC,
 } from './seed-skills.js';
+import { SEED_PR_482_FILES } from './seed-pulls.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -128,13 +129,12 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       })
       .returning();
 
-    // pr_files (subset)
-    await db.insert(t.prFiles).values([
-      { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
-    ]);
+    // pr_files — nine files covering all five Smart Diff roles
+    // (server/src/db/seed-pulls.ts); two carry a real patch so the seeded
+    // findings below anchor on a rendered line.
+    await db.insert(t.prFiles).values(
+      SEED_PR_482_FILES.map((f) => ({ prId: pr!.id, ...f })),
+    );
 
     // pr_commits
     await db.insert(t.prCommits).values({
@@ -185,6 +185,23 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         confidence: 0.86,
       },
     ]);
+
+    // A fixture pr_intent row so the Overview tab's Intent block is visible
+    // on a clean checkout, without any provider key. `source_key: ''` never
+    // equals a computed sha256, so the first real derivation on this PR
+    // always re-derives rather than serving the fixture
+    // (docs/plans/intent-layer.plan.md §2.3, §"Contract changes").
+    await db.insert(t.prIntent).values({
+      prId: pr!.id,
+      intent:
+        'Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.',
+      inScope: ['Add a token-bucket limiter middleware', 'Apply it to the public API endpoints'],
+      outOfScope: ['Changing the authentication model'],
+      confidence: 'medium',
+      sources: [{ kind: 'pr_body', resolved: true }],
+      model: null,
+      sourceKey: '',
+    });
   }
 
   // ---- built-in agents (the three starter presets) ----
