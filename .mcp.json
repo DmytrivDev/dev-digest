@@ -10,6 +10,13 @@
         "DEVDIGEST_MCP_RUN_DEADLINE_MS": "120000"
       },
       "timeout": 180000
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_MCP_PAT}"
+      }
     }
   }
 }
