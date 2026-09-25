@@ -16,9 +16,9 @@ whole design exists to prevent.
 
 | Skill | Prio | Routes on |
 |---|---|---|
-| `onion-architecture` | 10 | `server/src/**/*.ts`, `reviewer-core/src/**/*.ts` — minus tests, migrations, prompts, vendor |
+| `onion-architecture` | 10 | `server/src/**/*.ts`, `reviewer-core/src/**/*.ts`, `mcp/src/**/*.ts` — minus tests, migrations, prompts, vendor |
 | `frontend-ui-architecture` | 10 | `client/src/{app,components,vendor/ui,lib/hooks}/**`, `lib/api.ts`, `client/messages/**` — minus tests |
-| `security` | 9 | routes, adapters, `platform/config.ts`, prompts, `llm/**`, `lib/api.ts`, workflows, `.env*`, `package.json`, hooks, skill scripts · **or** content: `process.env`, key/secret/token, `dangerouslySetInnerHTML`, `child_process`, `eval(` |
+| `security` | 9 | routes, adapters, `platform/config.ts`, prompts, `llm/**`, `lib/api.ts`, workflows, `.env*`, `package.json`, hooks, skill scripts, `mcp/src/**/*.ts` · **or** content: `process.env`, key/secret/token, `dangerouslySetInnerHTML`, `child_process`, `eval(` |
 | `fastify-best-practices` | 8 | `modules/**/routes.ts`, `app.ts`, `server.ts`, `platform/{sse,jobs,errors}.ts`, `modules/_shared/**` |
 | `drizzle-orm-patterns` | 8 | `db/{client,rows,schema}.ts`, `db/schema/**`, `modules/**/repository*` · **or** content: `from 'drizzle-orm` |
 | `next-best-practices` | 8 | App Router file conventions (`page`/`layout`/`route`/…), `next.config.*` · **or** content: `'use client'` / `'use server'` |

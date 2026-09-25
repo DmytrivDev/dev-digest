@@ -1,6 +1,6 @@
 ---
 name: onion-architecture
-description: "Enforces Onion Architecture in the backend (@devdigest/api, @devdigest/reviewer-core): which ring a file belongs to, the inward-only dependency rule, when a port/interface is justified, where business rules live vs. routes vs. repositories, and how Fastify, Drizzle, Zod and the DI container map onto the rings. Use when adding or moving any server file, creating a module, writing a route/service/repository, introducing an adapter for an external system, placing a business rule, or reviewing a backend PR. Applies to one-file changes — that is how layering erodes."
+description: "Enforces Onion Architecture in the backend (@devdigest/api, @devdigest/reviewer-core) and in mcp/ (@devdigest/mcp): which ring a file belongs to, the inward-only dependency rule, when a port/interface is justified, where business rules live vs. routes vs. repositories, and how Fastify, Drizzle, Zod, the DI container (server) and the MCP SDK (mcp/) map onto the rings. Use when adding or moving any server or mcp/ file, creating a module, writing a route/service/repository or an MCP tool, introducing an adapter for an external system, placing a business rule, or reviewing a backend or mcp/ PR. Applies to one-file changes — that is how layering erodes."
 metadata:
   version: 1.0.0
 ---
@@ -262,4 +262,5 @@ Full discussion in [README.md](README.md).
 - [persistence.md](persistence.md) — repositories, DTO mapping, transaction boundaries, the transitive-tenancy invariant
 - [transport.md](transport.md) — routes as driving adapters, Zod at the boundary, errors, jobs and SSE
 - [enforcement.md](enforcement.md) — `.dependency-cruiser.cjs`, `pnpm arch:check`, adding rules
+- [mcp.md](mcp.md) — the ring map and `arch:check` rules for `mcp/`, which predates this skill's server-only scope and needed its own port-location deviation
 - [README.md](README.md) — every source, and where they contradict each other

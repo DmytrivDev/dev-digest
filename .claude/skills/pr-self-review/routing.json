@@ -9,15 +9,19 @@
       "path": ".claude/skills/onion-architecture/SKILL.md",
       "routed": true,
       "priority": 10,
-      "globs": ["server/src/**/*.ts", "reviewer-core/src/**/*.ts"],
+      "globs": ["server/src/**/*.ts", "reviewer-core/src/**/*.ts", "mcp/src/**/*.ts"],
       "exclude": [
         "server/src/**/*.test.ts",
         "server/src/db/migrations/**",
         "server/src/prompts/**",
-        "server/src/vendor/**"
+        "server/src/vendor/**",
+        "mcp/**/*.test.ts"
       ],
       "content": null,
-      "also_read": [".claude/skills/onion-architecture/enforcement.md"],
+      "also_read": [
+        ".claude/skills/onion-architecture/enforcement.md",
+        ".claude/skills/onion-architecture/mcp.md"
+      ],
       "suppress": "SKILL.md section 5 'Known debt (do not copy these)' lists four pre-existing violation classes: routes.ts querying Drizzle in pulls/polling/settings/workspace; service.ts taking the whole Container in repos/reviews/agents/repo-intel; repo-intel/service.ts importing concrete adapters. Never report one of those as a NEW finding. The rule is 'new code does not do this; existing code migrates when you are already touching it' - so only flag it if THIS diff adds to the pattern."
     },
     {
@@ -56,9 +60,10 @@
         "**/.env*",
         "**/package.json",
         ".claude/hooks/**",
-        ".claude/skills/**/scripts/*.mjs"
+        ".claude/skills/**/scripts/*.mjs",
+        "mcp/src/**/*.ts"
       ],
-      "exclude": [],
+      "exclude": ["mcp/**/*.test.ts"],
       "content": "process\\.env|api[_-]?key|secret|\\btoken\\b|dangerouslySetInnerHTML|child_process|execSync|execFileSync|eval\\(|new Function",
       "also_read": [".claude/skills/security/checklists.md"],
       "suppress": null

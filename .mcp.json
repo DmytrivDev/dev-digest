@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "devdigest": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp/dist/index.js"],
+      "env": {
+        "DEVDIGEST_API_URL": "http://localhost:3001",
+        "DEVDIGEST_WEB_URL": "http://localhost:3000",
+        "DEVDIGEST_MCP_RUN_DEADLINE_MS": "120000"
+      },
+      "timeout": 180000
+    }
+  }
+}

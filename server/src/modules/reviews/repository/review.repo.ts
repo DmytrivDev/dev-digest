@@ -78,6 +78,40 @@ export async function getReview(db: Db, reviewId: string): Promise<ReviewRow | u
   return row;
 }
 
+/**
+ * The newest `kind='review'` row for a run, scoped by workspace, plus its
+ * findings. Used by `GET /runs/:id/result`. `kind='review'` excludes the
+ * summary row a run may also carry (`server/INSIGHTS.md:36`); `orderBy` +
+ * `limit(1)` picks the newest in case more than one ever exists for the same
+ * run_id. Findings are read only by this review's own `review_id`, never by
+ * `pr_id` (`server/INSIGHTS.md:35`) — that is the transitive tenancy scoping
+ * the findings table requires, since `findings` carries no `workspace_id`.
+ */
+export async function reviewForRun(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<{ review: ReviewRow; findings: FindingRow[] } | undefined> {
+  const [review] = await db
+    .select()
+    .from(t.reviews)
+    .where(
+      and(
+        eq(t.reviews.workspaceId, workspaceId),
+        eq(t.reviews.runId, runId),
+        eq(t.reviews.kind, 'review'),
+      ),
+    )
+    .orderBy(desc(t.reviews.createdAt))
+    .limit(1);
+  if (!review) return undefined;
+  const findings = await db
+    .select()
+    .from(t.findings)
+    .where(eq(t.findings.reviewId, review.id));
+  return { review, findings };
+}
+
 /** Delete a whole review (one agent's run) + its findings (cascade), scoped
  *  to the workspace. Returns false if not found in the workspace. */
 export async function deleteReview(
