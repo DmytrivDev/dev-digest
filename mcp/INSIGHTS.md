@@ -10,6 +10,8 @@ so the next agent/session doesn't relearn it. Append-only — see the
 
 ## What Doesn't Work
 
+- **2026-09-25** — A dependency-cruiser rule with `dependencyTypesNot: ['type-only']` exempts EVERY type-only import, not just the one it was written for. core-is-pure used it so ring 1 could `import type` from @devdigest/shared, and that same exemption let core/mappers.ts type-import RunResultReviewFinding from ports/devdigest-api.ts (ring 2) with arch:check green — only the pr-self-review onion reviewer caught it. Fix was a companion rule core-no-outer-rings in mcp/.dependency-cruiser.cjs with NO dependencyTypes filter (core/** must not name ports|app|adapters|tools|server|index at all), and moving the type into core/results.ts. Any future carve-out: scope it with an explicit `to.path`, never a bare dependency-type exemption.
+
 ## Codebase Patterns
 
 - **2026-09-25** — The MCP SDK does NOT validate outputSchema when a tool result carries isError:true (sdk mcp.js:193) — an error result can skip structuredContent entirely without tripping the SDK's own schema check, which is why every tools/*.ts error path only needs to satisfy the isError text contract, not outputSchema.
