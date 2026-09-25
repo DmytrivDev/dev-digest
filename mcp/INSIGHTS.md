@@ -24,6 +24,8 @@ so the next agent/session doesn't relearn it. Append-only — see the
 
 ## Recurring Errors & Fixes
 
+- **2026-09-25** — `void extra.sendNotification(...)` in a tool handler (mcp/src/tools/run-agent-on-pr.ts onProgress) is an unhandled rejection the moment the transport is closed mid-poll (client cancelled) — under Node's default --unhandled-rejections=throw that kills the whole stdio server. Every fire-and-forget SDK promise needs a .catch that logs via the injected ErrorLogger (stderr); regression test in test/tools.run-agent-on-pr.test.ts drives the handler through a fake McpServer with a rejecting sendNotification. Caught by DevDigest's own General Reviewer on PR #8, not by pr-self-review.
+
 ## Session Notes
 
 ## Open Questions

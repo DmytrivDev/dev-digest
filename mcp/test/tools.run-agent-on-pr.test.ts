@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Agent, PrDetail, PrMeta, Repo } from '@devdigest/shared';
 import type { RunResult } from '../src/ports/devdigest-api.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { runReview } from '../src/app/run-review.js';
+import type { ToolExtra, ToolHandler } from '../src/tools/register.js';
+import { registerRunAgentOnPr } from '../src/tools/run-agent-on-pr.js';
 import { connectedClient } from './harness.js';
 import { emptyState, FakeApiState, FakeDevDigestApi } from './fake-api.js';
 import { FakeClock } from './fake-clock.js';
@@ -212,6 +215,40 @@ describe('run_agent_on_pr (MCP tool) — progress + annotations only (D8)', () =
     );
     expect(progressCount).toBeGreaterThanOrEqual(1);
     await close();
+  });
+
+  it('a rejecting sendNotification is caught and logged, never an unhandled rejection', async () => {
+    const state = baseState();
+    state.runResults[RUN_ID] = runResultFor(RUN_ID, 'running');
+    const api = new FakeDevDigestApi(state);
+    const clock = new FakeClock();
+    const log = { error: vi.fn() };
+
+    let handler: ToolHandler<{ repo: string; pr: number; agent: string }> | undefined;
+    const fakeServer = { registerTool: (_n: string, _c: unknown, h: typeof handler) => { handler = h; } };
+    registerRunAgentOnPr(fakeServer as unknown as McpServer, { api, clock, webUrl: WEB_URL, runDeadlineMs: 5_000, log });
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const extra = {
+        _meta: { progressToken: 'tok-1' },
+        signal: new AbortController().signal,
+        sendNotification: vi.fn().mockRejectedValue(new Error('transport closed')),
+      } as unknown as ToolExtra;
+
+      const result = await handler!({ repo: 'acme/widgets', pr: 7, agent: 'a1' }, extra);
+      // Let the rejected notification promises settle before asserting.
+      await new Promise((r) => setImmediate(r));
+
+      expect(result.isError).toBeUndefined();
+      expect(extra.sendNotification).toHaveBeenCalled();
+      expect(log.error).toHaveBeenCalledWith('progress notification failed', 'transport closed');
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 
   it('annotations match D3/D6 exactly', async () => {

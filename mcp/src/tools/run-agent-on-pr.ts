@@ -42,10 +42,17 @@ export function registerRunAgentOnPr(
         const onProgress =
           progressToken !== undefined
             ? (elapsedS: number, totalS: number) => {
-                void extra.sendNotification({
-                  method: 'notifications/progress',
-                  params: { progressToken, progress: elapsedS, total: totalS, message: `review running (${elapsedS}s)` },
-                } as never);
+                // Fire-and-forget, but never unhandled: the transport can already be
+                // closed (client cancelled mid-poll), and an unhandled rejection would
+                // take the whole stdio server down.
+                extra
+                  .sendNotification({
+                    method: 'notifications/progress',
+                    params: { progressToken, progress: elapsedS, total: totalS, message: `review running (${elapsedS}s)` },
+                  } as never)
+                  .catch((err: unknown) => {
+                    deps.log.error('progress notification failed', err instanceof Error ? err.message : String(err));
+                  });
               }
             : undefined;
 
