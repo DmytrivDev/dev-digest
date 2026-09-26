@@ -28,7 +28,7 @@ if the API is down, tools return an error naming `./scripts/dev.sh`.
 | `run_agent_on_pr` | Runs one agent on a PR and returns the verdict + top findings, waiting up to 2 minutes | `repo`, `pr`, `agent` |
 | `get_findings` | Gets the verdict/findings (or running status) of a run by id | `run_id` |
 | `get_conventions` | Gets the accepted coding conventions of an imported repo, plus triage counts | `repo` |
-| `get_blast_radius` | Stub — not implemented yet (planned for the L04 homework); always returns an error | `repo`, `pr` |
+| `get_blast_radius` | Shows what a PR can affect: symbols in the changed files, their callers (file:line), and the endpoints/crons behind them — read from the code index, no LLM call | `repo`, `pr` |
 
 Full description text and parameter docs: `mcp/src/tools/descriptions.ts` (D9 of
 `docs/plans/devdigest-mcp.plan.md`).

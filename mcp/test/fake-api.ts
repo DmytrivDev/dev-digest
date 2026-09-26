@@ -2,7 +2,7 @@
  * In-memory `DevDigestApi` (onion §2's "tests substitute it"). Every test file
  * that needs the port builds one of these instead of hitting the network.
  */
-import type { Agent, ConventionCandidate, PrDetail, PrMeta, Repo } from '@devdigest/shared';
+import type { Agent, BlastRadius, ConventionCandidate, PrDetail, PrMeta, Repo } from '@devdigest/shared';
 import type { ActiveRun, DevDigestApi, RunResult, StartedRun } from '../src/ports/devdigest-api.js';
 import { apiUnreachableText, ToolError } from '../src/core/errors.js';
 
@@ -14,6 +14,7 @@ export interface FakeApiState {
   active: Record<string, ActiveRun[]>; // keyed by prId
   runResults: Record<string, RunResult>; // keyed by runId
   conventions: Record<string, ConventionCandidate[]>; // keyed by repoId
+  blast: Record<string, BlastRadius>; // keyed by prId
 }
 
 export class FakeDevDigestApi implements DevDigestApi {
@@ -64,10 +65,25 @@ export class FakeDevDigestApi implements DevDigestApi {
   async listConventions(repoId: string): Promise<ConventionCandidate[]> {
     return this.state.conventions[repoId] ?? [];
   }
+
+  async blastRadius(prId: string): Promise<BlastRadius> {
+    const blast = this.state.blast[prId];
+    if (!blast) throw new ToolError('not_found', `GET /pulls/:id/blast not found (404): ${prId}`);
+    return blast;
+  }
 }
 
 export function emptyState(): FakeApiState {
-  return { repos: [], pulls: {}, pullDetails: {}, agents: [], active: {}, runResults: {}, conventions: {} };
+  return {
+    repos: [],
+    pulls: {},
+    pullDetails: {},
+    agents: [],
+    active: {},
+    runResults: {},
+    conventions: {},
+    blast: {},
+  };
 }
 
 /** A `DevDigestApi` whose every method rejects as if the API were unreachable. */
@@ -82,5 +98,6 @@ export function unreachableApi(url: string): DevDigestApi {
     startReview: fail,
     runResult: fail,
     listConventions: fail,
+    blastRadius: fail,
   };
 }

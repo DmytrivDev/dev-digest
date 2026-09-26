@@ -103,3 +103,43 @@ export const ConventionsResult = z.object({
   url: z.string(),
 });
 export type ConventionsResult = z.infer<typeof ConventionsResult>;
+
+// ---- get_blast_radius ---------------------------------------------------------
+
+/** Flat display counts — mirrors the shared `BlastCounts` shape, in mcp's own `z`. */
+export const BlastRadiusCounts = z.object({
+  symbols: z.number().int(),
+  callers: z.number().int(),
+  endpoints: z.number().int(),
+  crons: z.number().int(),
+});
+export type BlastRadiusCounts = z.infer<typeof BlastRadiusCounts>;
+
+/**
+ * One changed symbol's downstream impact. Callers are STRINGS ("file:line
+ * name"), not objects — D6's flat-and-small rule (`mcp/INSIGHTS.md:21` — the
+ * budget test is the arbiter).
+ */
+export const BlastSymbolItem = z.object({
+  symbol: z.string(),
+  callers: z.array(z.string()),
+  more_callers: z.number().int(),
+  endpoints: z.array(z.string()),
+  crons: z.array(z.string()),
+});
+export type BlastSymbolItem = z.infer<typeof BlastSymbolItem>;
+
+export const BlastRadiusResult = z.object({
+  pr: z.string(),
+  summary: z.string(),
+  counts: BlastRadiusCounts,
+  degraded: z.boolean(),
+  reason: z.string().optional(),
+  index_status: z.string().optional(),
+  symbols: z.array(BlastSymbolItem),
+  truncated: z.boolean(),
+  trust: z.literal('untrusted'),
+  hint: z.string().optional(),
+  url: z.string(),
+});
+export type BlastRadiusResult = z.infer<typeof BlastRadiusResult>;

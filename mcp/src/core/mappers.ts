@@ -3,9 +3,11 @@
  * result shapes. May `import type` from `@devdigest/shared` (D8's ring-1
  * deviation: type-only, erased by esbuild, so ring 1 carries no runtime dep).
  */
-import type { Agent, ConventionCandidate } from '@devdigest/shared';
+import type { Agent, ConventionCandidate, BlastRadius } from '@devdigest/shared';
 import {
   MAX_AGENTS,
+  MAX_BLAST_CALLERS_PER_SYMBOL,
+  MAX_BLAST_SYMBOLS,
   MAX_CONVENTIONS,
   MAX_FINDINGS,
   MESSAGE_CLIP,
@@ -17,6 +19,8 @@ import {
 } from './limits.js';
 import type {
   AgentListOutput,
+  BlastRadiusResult,
+  BlastSymbolItem,
   ConventionsResult,
   FindingItem,
   FindingsResult,
@@ -207,5 +211,86 @@ export function conventionsToText(result: ConventionsResult): string {
   }
   if (result.hint) lines.push(result.hint);
   lines.push(result.url);
+  return lines.join('\n');
+}
+
+// ---- get_blast_radius ---------------------------------------------------------
+
+/**
+ * When degraded, the hint names the reason and points at the resync action.
+ * `files_unavailable` is different: there is no index problem to resync —
+ * the PR simply has not been opened in DevDigest yet.
+ */
+function blastHint(blast: BlastRadius, url: string): string | undefined {
+  if (!blast.degraded) return undefined;
+  if (blast.reason === 'files_unavailable') {
+    return `Could not read this PR's changed files — open it in DevDigest first, then retry: ${url}`;
+  }
+  return `Index is degraded (${blast.reason ?? 'unknown reason'}) — resync it in DevDigest: ${url}`;
+}
+
+/**
+ * `BlastRadius` (the shared HTTP contract) → the flat `BlastRadiusResult`.
+ * Callers become `"file:line name"` strings (D6's flat-and-small rule);
+ * `more_callers` and `truncated` are FROM this cap, not the server's own
+ * per-symbol cap (which is already applied upstream).
+ */
+export function toBlastResult(blast: BlastRadius, prLabel: string, url: string): BlastRadiusResult {
+  const counts = blast.counts ?? {
+    symbols: blast.changed_symbols.length,
+    callers: 0,
+    endpoints: 0,
+    crons: 0,
+  };
+
+  const groups = blast.downstream.slice(0, MAX_BLAST_SYMBOLS);
+  const symbolsTruncated = blast.downstream.length > MAX_BLAST_SYMBOLS;
+
+  const symbols: BlastSymbolItem[] = groups.map((d) => {
+    const capped = d.callers.slice(0, MAX_BLAST_CALLERS_PER_SYMBOL);
+    const moreCallers = Math.max(0, d.callers.length - MAX_BLAST_CALLERS_PER_SYMBOL);
+    return {
+      symbol: d.symbol,
+      callers: capped.map((c) => `${c.file}:${c.line} ${c.name}`),
+      more_callers: moreCallers,
+      endpoints: d.endpoints_affected,
+      crons: d.crons_affected,
+    };
+  });
+
+  const truncated = symbolsTruncated || symbols.some((s) => s.more_callers > 0);
+
+  const result: BlastRadiusResult = {
+    pr: prLabel,
+    summary: blast.summary,
+    counts,
+    degraded: !!blast.degraded,
+    symbols,
+    truncated,
+    trust: 'untrusted',
+    url,
+  };
+  if (blast.reason !== undefined) result.reason = blast.reason;
+  if (blast.index_status !== undefined) result.index_status = blast.index_status;
+  const hint = blastHint(blast, url);
+  if (hint !== undefined) result.hint = hint;
+  return result;
+}
+
+export function blastResultToText(result: BlastRadiusResult): string {
+  const lines: string[] = [];
+  if (result.symbols.length > 0) lines.push(UNTRUSTED_PREFIX);
+  lines.push(result.pr);
+  lines.push(result.summary);
+  for (const s of result.symbols) {
+    const total = s.callers.length + s.more_callers;
+    lines.push(`${s.symbol}() — ${total} caller(s)`);
+    for (const c of s.callers) lines.push(`  ↳ ${c}`);
+    if (s.more_callers > 0) lines.push(`  ↳ +${s.more_callers} more`);
+    if (s.endpoints.length > 0) lines.push(`  endpoints: ${s.endpoints.join(', ')}`);
+    if (s.crons.length > 0) lines.push(`  crons: ${s.crons.join(', ')}`);
+  }
+  if (result.hint) lines.push(result.hint);
+  lines.push(`Open in DevDigest: ${result.url}`);
   return lines.join('\n');
 }

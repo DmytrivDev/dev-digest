@@ -161,7 +161,7 @@ Deadline math. The clock starts when the handler starts:
 | `run_agent_on_pr` | resolve + reuse-or-start + wait + fetch in ONE call (D3) | `repo:string "owner/name"`, `pr:int`, `agent:string` | shared `FindingsResult` (below) | not imported / PR not synced / agent unknown → names the next call or UI step; deadline → `running`+`run_id`+"call get_findings" |
 | `get_findings` | status + verdict + findings in one call | `run_id:uuid` | `FindingsResult` | unknown run → "run_agent_on_pr returns a run_id" |
 | `get_conventions` | accepted conventions + triage counts in one call | `repo:string` | `{repo,conventions:[{category,rule(≤240ch),evidence:"path:line"}],counts:{accepted,pending,rejected},truncated,hint?,url}`, cap 30 | none accepted → hint names the Conventions page URL / "N await triage" |
-| `get_blast_radius` | stub | `repo:string`, `pr:int` (FINAL) | — | `isError:true`: "get_blast_radius is not implemented yet — coming in L04 homework. Use run_agent_on_pr / get_findings meanwhile." |
+| `get_blast_radius` | one call → symbols, callers, endpoints and crons | `repo:string`, `pr:int` (unchanged) | `BlastRadiusResult` (below) | unknown repo/PR → names the next call or UI step (resolveRepoAndPr); the underlying `GET /pulls/:id/blast` never 5xxs, so a degraded/empty index surfaces as `degraded:true` + `hint`, not an error |
 
 `FindingsResult` is flat except for one fixed-shape counts object:
 
@@ -179,6 +179,26 @@ Deadline math. The clock starts when the handler starts:
 - `url` is `${WEB_URL}/repos/<repoId>/pulls/<number>`
   (`client/src/app/repos/[repoId]/pulls/[number]/page.tsx`); for conventions it is
   `/repos/<repoId>/conventions`.
+
+`BlastRadiusResult` (added by `docs/plans/blast-radius.plan.md` W6) is flat, callers become
+strings (no root `anyOf`):
+
+```
+{ pr, summary, counts:{symbols,callers,endpoints,crons}, degraded:boolean,
+  reason?:string, index_status?:string,
+  symbols:[{symbol, callers:string[] /* "file:line name" */, more_callers:int,
+            endpoints:string[], crons:string[]}],
+  truncated:boolean, trust:"untrusted", hint?:string, url }
+```
+
+- Built by `core/mappers.ts`'s `toBlastResult` from the server's `BlastRadius` — one HTTP call
+  to `GET /pulls/:id/blast` (`app/queries.ts`'s `getBlastRadius`, via `resolveRepoAndPr`).
+- Symbols are capped at `MAX_BLAST_SYMBOLS = 10`, callers per symbol at
+  `MAX_BLAST_CALLERS_PER_SYMBOL = 5` — the tool's OWN, smaller display caps; the server already
+  caps callers per symbol independently (repo-intel's `MAX_CALLERS_PER_SYMBOL`).
+- `degraded`/`reason`/`index_status` pass through from the server's `BlastRadius`; when
+  `degraded`, `hint` names the reason and points at the resync action, except for
+  `files_unavailable`, whose hint says to open the PR in DevDigest first.
 
 **No `response_format` / `limit` parameter — decided.**
 - Every parameter is paid for in every new chat's tool list.
@@ -318,7 +338,7 @@ it.
 | `run_agent_on_pr` | `Review a pull request with one DevDigest agent (a paid LLM run) and return the verdict and top findings, waiting up to 2 minutes. If it is not finished by then, returns status "running" and a run_id for get_findings.` |
 | `get_findings` | `Get the verdict and top findings of a review run by run_id, or its status while it is still running. Use it after run_agent_on_pr returns status "running".` |
 | `get_conventions` | `Get the accepted coding conventions of a repository imported into DevDigest (category, rule, evidence file:line) and how many candidates still await triage.` |
-| `get_blast_radius` | `Not implemented yet (planned for the L04 homework): will show what code a pull request can affect. Always returns an error for now.` |
+| `get_blast_radius` | `Show what a pull request can affect, read from the DevDigest code index: symbols declared in the changed files, their callers (file:line), and the HTTP endpoints and crons behind them. No LLM call.` |
 
 | Param | Schema | `.describe()` |
 |---|---|---|

@@ -1,12 +1,13 @@
 /**
- * Ring 3 — the three read use cases (`list_agents`, `get_findings`,
- * `get_conventions`). Rings 1–2 only, no SDK import (onion §D8 app-no-outward).
+ * Ring 3 — the four read use cases (`list_agents`, `get_findings`,
+ * `get_conventions`, `get_blast_radius`). Rings 1–2 only, no SDK import
+ * (onion §D8 app-no-outward).
  */
-import { toAgentList, toConventions, toFindingsResult, toRunStatus, type ToFindingsResultInput } from '../core/mappers.js';
-import type { AgentListOutput, ConventionsResult, FindingsResult, VerdictOutput } from '../core/results.js';
+import { toAgentList, toBlastResult, toConventions, toFindingsResult, toRunStatus, type ToFindingsResultInput } from '../core/mappers.js';
+import type { AgentListOutput, BlastRadiusResult, ConventionsResult, FindingsResult, VerdictOutput } from '../core/results.js';
 import { ToolError } from '../core/errors.js';
 import type { DevDigestApi, RunResult } from '../ports/devdigest-api.js';
-import { resolveRepo } from './resolve.js';
+import { resolveRepo, resolveRepoAndPr } from './resolve.js';
 
 export async function listAgents(api: DevDigestApi): Promise<AgentListOutput> {
   const agents = await api.listAgents();
@@ -71,4 +72,37 @@ export async function getConventions(api: DevDigestApi, webUrl: string, repoFull
   }
 
   return toConventions(candidates, repo.full_name, url, hint);
+}
+
+/** `get_blast_radius(repo, pr)`: resolve, one blast call, map (D5). */
+export async function getBlastRadius(
+  api: DevDigestApi,
+  webUrl: string,
+  repoFullName: string,
+  number: number,
+): Promise<BlastRadiusResult> {
+  const { repo, pr } = await resolveRepoAndPr(api, webUrl, repoFullName, number);
+  const url = `${webUrl}/repos/${repo.id}/pulls/${number}`;
+  const prId = pr.id;
+  if (!prId) {
+    throw new ToolError(
+      'bad_response',
+      `PR #${number} in ${repoFullName} has no id — mcp and server are out of sync; rebuild mcp (pnpm build)`,
+    );
+  }
+
+  let blast;
+  try {
+    blast = await api.blastRadius(prId);
+  } catch (err) {
+    if (err instanceof ToolError && err.kind === 'not_found') {
+      throw new ToolError(
+        'not_found',
+        `PR #${number} not found in ${repoFullName} — open the repo's PR list in DevDigest to sync pull requests, then retry.`,
+      );
+    }
+    throw err;
+  }
+
+  return toBlastResult(blast, `${repoFullName}#${number}`, url);
 }

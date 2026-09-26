@@ -8,7 +8,7 @@
  * (D8): only `mcp` consumes it, and adding it to shared would mean editing
  * both hand-vendored copies for a port the server and client never call.
  */
-import type { Agent, ConventionCandidate, PrDetail, PrMeta, Repo, RunSummary } from '@devdigest/shared';
+import type { Agent, BlastRadius, ConventionCandidate, PrDetail, PrMeta, Repo, RunSummary } from '@devdigest/shared';
 
 /** `GET /pulls/:id/runs/active` — one row per agent with a run in flight. */
 export interface ActiveRun {
@@ -60,4 +60,6 @@ export interface DevDigestApi {
   startReview(prId: string, agentId: string): Promise<StartedRun[]>;
   runResult(runId: string): Promise<RunResult>;
   listConventions(repoId: string): Promise<ConventionCandidate[]>;
+  /** `GET /pulls/:id/blast` — symbols, callers, endpoints/crons; no LLM. */
+  blastRadius(prId: string): Promise<BlastRadius>;
 }

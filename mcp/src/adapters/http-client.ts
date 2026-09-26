@@ -6,7 +6,7 @@
  * (D2) get a small local schema, built from the same shared pieces.
  */
 import { z } from 'zod';
-import { Agent, ConventionCandidate, Finding, PrDetail, PrMeta, Repo, RunSummary, Verdict } from '@devdigest/shared';
+import { Agent, BlastRadius, ConventionCandidate, Finding, PrDetail, PrMeta, Repo, RunSummary, Verdict } from '@devdigest/shared';
 import type { Config } from './config.js';
 import { apiErrorText, apiUnreachableText, badResponseText, rateLimitedText, ToolError } from '../core/errors.js';
 import { API_ERROR_MESSAGE_CLIP } from '../core/limits.js';
@@ -176,6 +176,15 @@ export class HttpDevDigestApi implements DevDigestApi {
       endpointLabel: 'GET /repos/:id/conventions',
     });
     return result.candidates;
+  }
+
+  blastRadius(prId: string): Promise<BlastRadius> {
+    // The route may make one GitHub call when pr_files is empty — use the
+    // longer sync timeout, same reasoning as GET /pulls/:id.
+    return this.request(`/pulls/${prId}/blast`, BlastRadius, {
+      timeoutMs: this.config.syncFetchTimeoutMs,
+      endpointLabel: 'GET /pulls/:id/blast',
+    });
   }
 }
 

@@ -6,6 +6,11 @@
 export const MAX_FINDINGS = 20;
 export const MAX_AGENTS = 50;
 export const MAX_CONVENTIONS = 30;
+/** get_blast_radius display caps (L04) — the server already caps callers per
+ *  symbol (repo-intel's MAX_CALLERS_PER_SYMBOL); these are the MCP tool's own,
+ *  smaller display caps to keep the flat text/JSON small. */
+export const MAX_BLAST_SYMBOLS = 10;
+export const MAX_BLAST_CALLERS_PER_SYMBOL = 5;
 
 // ---- D5 text clips ---------------------------------------------------------
 export const PURPOSE_CLIP = 140;

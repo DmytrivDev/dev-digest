@@ -16,7 +16,7 @@ export const TOOL_DESCRIPTIONS = {
   get_conventions:
     'Get the accepted coding conventions of a repository imported into DevDigest (category, rule, evidence file:line) and how many candidates still await triage.',
   get_blast_radius:
-    'Not implemented yet (planned for the L04 homework): will show what code a pull request can affect. Always returns an error for now.',
+    'Show what a pull request can affect, read from the DevDigest code index: symbols declared in the changed files, their callers (file:line), and the HTTP endpoints and crons behind them. No LLM call.',
 } as const;
 
 export const PARAM_DESCRIPTIONS = {

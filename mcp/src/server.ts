@@ -31,7 +31,7 @@ export function createServer(deps: ServerDeps): McpServer {
   registerListAgents(server, { api: deps.api, log });
   registerGetFindings(server, { api: deps.api, webUrl: deps.config.webUrl, log });
   registerGetConventions(server, { api: deps.api, webUrl: deps.config.webUrl, log });
-  registerGetBlastRadius(server);
+  registerGetBlastRadius(server, { api: deps.api, webUrl: deps.config.webUrl, log });
   registerRunAgentOnPr(server, {
     api: deps.api,
     clock: deps.clock,
