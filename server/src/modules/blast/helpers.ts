@@ -49,6 +49,30 @@ export function blastSummary(counts: BlastCounts): string {
   );
 }
 
+const TEST_DIR_RE = /(^|\/)(test|tests|__tests__|e2e)\//;
+const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/** A test/spec file — its request URLs are fixtures, not routes it serves. */
+export function isTestPath(file: string): boolean {
+  return TEST_DIR_RE.test(file) || TEST_FILE_RE.test(file);
+}
+
+/**
+ * The endpoints/crons a caller file really DECLARES. The indexer's endpoint
+ * extractor also matches outgoing request URLs, so two kinds of fact are
+ * dropped: everything from a test file, and any endpoint whose path carries a
+ * `${…}` interpolation (a client-side URL being built, never a route pattern).
+ * Test callers themselves stay in the map — they are real references.
+ */
+export function declaredFacts(
+  file: string,
+  facts: BlastResult['factsByFile'],
+): { endpoints: string[]; crons: string[] } | undefined {
+  const f = facts?.[file];
+  if (!f || isTestPath(file)) return undefined;
+  return { endpoints: f.endpoints.filter((e) => !e.includes('${')), crons: f.crons };
+}
+
 function buildCounts(symbolCount: number, downstream: DownstreamImpact[]): BlastCounts {
   const callers = downstream.reduce((n, d) => n + d.callers.length, 0);
   const endpoints = new Set(downstream.flatMap((d) => d.endpoints_affected)).size;
@@ -61,8 +85,9 @@ function buildCounts(symbolCount: number, downstream: DownstreamImpact[]): Blast
  *   - group callers by `viaSymbol`; a symbol with zero callers gets no group
  *     but still counts in `changed_symbols`;
  *   - a group's `endpoints_affected`/`crons_affected` is the de-duplicated,
- *     sorted union of `factsByFile[caller.file]` over that group's callers;
- *   - each caller carries its OWN endpoints/crons from `factsByFile`;
+ *     sorted union of the callers' `declaredFacts` (test files and
+ *     interpolated request URLs filtered out);
+ *   - each caller carries its OWN declared endpoints/crons;
  *   - groups sort by max caller rank desc, then caller count desc, then
  *     symbol name asc; callers inside a group sort by rank desc, file asc,
  *     line asc.
@@ -99,7 +124,7 @@ export function toBlastRadius(result: BlastResult): BlastRadius {
       (a, b) => b.rank - a.rank || a.file.localeCompare(b.file) || a.line - b.line,
     );
     const callers: BlastCaller[] = sorted.map((r) => {
-      const f = facts[r.file];
+      const f = declaredFacts(r.file, facts);
       return {
         name: r.symbol,
         file: r.file,
@@ -111,7 +136,7 @@ export function toBlastRadius(result: BlastResult): BlastRadius {
     const endpointsSet = new Set<string>();
     const cronsSet = new Set<string>();
     for (const r of sorted) {
-      const f = facts[r.file];
+      const f = declaredFacts(r.file, facts);
       if (!f) continue;
       for (const e of f.endpoints) endpointsSet.add(e);
       for (const c of f.crons) cronsSet.add(c);

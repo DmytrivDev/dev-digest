@@ -3,6 +3,7 @@ import {
   blastSummary,
   buildPrHistory,
   emptyBlastRadius,
+  isTestPath,
   pickHistoryPaths,
   toBlastRadius,
 } from '../src/modules/blast/helpers.js';
@@ -272,5 +273,42 @@ describe('buildPrHistory', () => {
       5,
     );
     expect(items[0]!.notes).toBe('overlaps 1 changed file.');
+  });
+});
+
+describe('toBlastRadius — only DECLARED endpoints/crons are attributed', () => {
+  const callers = [
+    { file: 'src/routes.ts', symbol: 'routes', viaSymbol: 'A', line: 3, rank: 2, declFile: 'src/a.ts' },
+    { file: 'test/a.it.test.ts', symbol: 'setup', viaSymbol: 'A', line: 9, rank: 1, declFile: 'src/a.ts' },
+  ];
+  const factsByFile = {
+    'src/routes.ts': { endpoints: ['GET /runs/:id', 'GET /runs/${id}/trace'], crons: ['nightly'] },
+    'test/a.it.test.ts': { endpoints: ['POST /pulls/:id/review'], crons: ['test-cron'] },
+  };
+
+  it('drops interpolated request URLs and every fact from a test file, but keeps the test caller', () => {
+    const blast = toBlastRadius(
+      result({ changedSymbols: [{ file: 'src/a.ts', name: 'A', kind: 'function' }], callers, factsByFile }),
+    );
+    const group = blast.downstream[0]!;
+    expect(group.callers.map((c) => c.file)).toEqual(['src/routes.ts', 'test/a.it.test.ts']);
+    expect(group.endpoints_affected).toEqual(['GET /runs/:id']);
+    expect(group.crons_affected).toEqual(['nightly']);
+    expect(group.callers[1]!.endpoints).toBeUndefined();
+    expect(blast.counts).toMatchObject({ endpoints: 1, crons: 1 });
+  });
+});
+
+describe('isTestPath', () => {
+  it.each([
+    ['server/test/blast.it.test.ts', true],
+    ['client/src/components/X/X.test.tsx', true],
+    ['src/__tests__/a.ts', true],
+    ['e2e/flows/login.ts', true],
+    ['src/lib/a.spec.js', true],
+    ['server/src/modules/blast/routes.ts', false],
+    ['src/latest.ts', false],
+  ])('%s → %s', (file, expected) => {
+    expect(isTestPath(file)).toBe(expected);
   });
 });
