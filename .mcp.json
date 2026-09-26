@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "devdigest": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp/dist/index.js"],
+      "env": {
+        "DEVDIGEST_API_URL": "http://localhost:3001",
+        "DEVDIGEST_WEB_URL": "http://localhost:3000",
+        "DEVDIGEST_MCP_RUN_DEADLINE_MS": "120000"
+      },
+      "timeout": 180000
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_MCP_PAT}"
+      }
+    }
+  }
+}

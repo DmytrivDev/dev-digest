@@ -25,7 +25,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 
-const PACKAGES = ["client", "server", "reviewer-core", "e2e"];
+const PACKAGES = ["client", "server", "reviewer-core", "e2e", "mcp"];
 /** Characters of each entry kept as the hook. Long enough to decide "is this mine?". */
 const HOOK_CHARS = 150;
 

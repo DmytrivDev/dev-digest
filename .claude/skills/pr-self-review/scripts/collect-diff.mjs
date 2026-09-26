@@ -39,9 +39,9 @@ const BINARY_EXT =
   /\.(html?|png|jpe?g|gif|svg|ico|pdf|woff2?|ttf|eot|zip|gz|tgz|mp4|webm|webp|xlsx?|docx?)$/i;
 const IGNORED_DIR = /(^|\/)(node_modules|dist|build|out|coverage|\.next|\.turbo)\//;
 const LOCKFILE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json)$/;
-const PACKAGES = ['server', 'client', 'reviewer-core', 'e2e'];
+const PACKAGES = ['server', 'client', 'reviewer-core', 'e2e', 'mcp'];
 /** Package -> manager, from each package's own lockfile. NOT a monorepo workspace. */
-const MANAGER = { server: 'pnpm', client: 'pnpm', 'reviewer-core': 'npm', e2e: 'npm' };
+const MANAGER = { server: 'pnpm', client: 'pnpm', 'reviewer-core': 'npm', e2e: 'npm', mcp: 'pnpm' };
 
 function fail(error, hint) {
   process.stdout.write(JSON.stringify({ schema: SCHEMA, error, hint: hint ?? null }, null, 2));

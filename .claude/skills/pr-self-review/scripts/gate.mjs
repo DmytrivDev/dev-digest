@@ -240,7 +240,7 @@ for (const l of mech.lockfiles ?? []) {
       'CRITICAL',
       'bug',
       'Lockfile from the wrong package manager',
-      `\`${l.path}\` does not match the manager for \`${l.package}\`. server/ and client/ use pnpm; reviewer-core/ and e2e/ use npm. Mixing them produces a lockfile nobody else can install from.`,
+      `\`${l.path}\` does not match the manager for \`${l.package}\`. server/, client/ and mcp/ use pnpm; reviewer-core/ and e2e/ use npm. Mixing them produces a lockfile nobody else can install from.`,
       l.path,
     );
   } else if (l.package_json_changed === false) {
