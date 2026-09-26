@@ -1,5 +1,16 @@
 import type { BlastRadius, DownstreamImpact } from "@devdigest/shared";
+import dagre from "@dagrejs/dagre";
 import { githubBlobUrl } from "@/lib/github-urls";
+import {
+  GRAPH_CHAR_WIDTH,
+  GRAPH_MARGIN,
+  GRAPH_NODE_HEIGHT,
+  GRAPH_NODE_MIN_WIDTH,
+  GRAPH_NODE_PAD_X,
+  GRAPH_NODE_SEP,
+  GRAPH_RANK_SEP,
+  GRAPH_TALL_NODE_HEIGHT,
+} from "./constants";
 
 /**
  * Pure helpers for the Blast Radius card. `callerHref` builds the exact
@@ -30,111 +41,120 @@ export function canResync(data: BlastRadius | undefined): boolean {
 
 // ---- Graph layout (W7) ------------------------------------------------------
 
-export type GraphNodeKind = "symbol" | "caller" | "more" | "endpoint" | "cron";
+export type GraphNodeKind = "symbol" | "caller" | "endpoint" | "cron";
 
 export interface GraphNode {
   id: string;
-  label: string;
   kind: GraphNodeKind;
+  /** Main line, never clipped — the node is sized to fit it. */
+  label: string;
+  /** Second, muted line (a caller's `file:line`). */
+  detail?: string;
+  /** Top-left corner, in canvas pixels. */
   x: number;
   y: number;
-  /** Only set for a `kind: "more"` node — the count the collapsed callers represent. */
-  moreCount?: number;
+  width: number;
+  height: number;
 }
 
 export interface GraphEdge {
+  id: string;
   from: string;
   to: string;
+  /** Kind of the edge's target — the renderer tints edges into endpoints/crons. */
+  toKind: GraphNodeKind;
 }
 
 export interface GraphLayout {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  /** Canvas size that holds every node plus `GRAPH_MARGIN` — the scroll area. */
+  width: number;
+  height: number;
 }
 
-/** Clips a node label to `max` characters (the mock's own rule: `>16` chars → "…"). */
-export function clipLabel(label: string, max = 16): string {
-  return label.length > max ? `${label.slice(0, max - 1)}…` : label;
+/** Endpoints and crons share the right-hand column. */
+function columnOf(kind: GraphNodeKind): GraphNodeKind {
+  return kind === "cron" ? "endpoint" : kind;
+}
+
+/** Width that fits the longest line of a node in the mono font. */
+function nodeWidth(lines: string[]): number {
+  const longest = Math.max(...lines.map((l) => l.length));
+  return Math.max(GRAPH_NODE_MIN_WIDTH, Math.ceil(longest * GRAPH_CHAR_WIDTH) + GRAPH_NODE_PAD_X * 2);
 }
 
 /**
- * Pure three-column layout for ONE symbol's downstream impact: the changed
- * symbol on the left, its callers in the middle (capped at `maxCallers`, the
- * rest collapsed into one "+N more" node), and the endpoints/crons on the
- * right. An edge from a caller to an endpoint/cron is drawn ONLY when that
- * caller's own `endpoints`/`crons` (not the group's) name it — so the graph
- * never draws a relationship the data does not support.
+ * Left-to-right layered layout (dagre) for ONE symbol's downstream impact:
+ * the changed symbol, then every caller, then the endpoints/crons. Nodes are
+ * sized to their FULL label, so nothing is clipped — the canvas grows instead
+ * and the renderer scrolls it. An edge from a caller to an endpoint/cron is
+ * drawn ONLY when that caller's own `endpoints`/`crons` (not the group's)
+ * name it — so the graph never draws a relationship the data does not support.
+ * Deterministic: the same impact always yields the same coordinates.
  */
-export function buildGraphLayout(
-  impact: DownstreamImpact,
-  opts: { width: number; height: number; maxCallers: number },
-): GraphLayout {
-  const { width, height, maxCallers } = opts;
-  const colX = { symbol: width * 0.12, caller: width * 0.5, target: width * 0.88 };
+export function buildGraphLayout(impact: DownstreamImpact): GraphLayout {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: "LR", nodesep: GRAPH_NODE_SEP, ranksep: GRAPH_RANK_SEP, marginx: GRAPH_MARGIN, marginy: GRAPH_MARGIN });
+  g.setDefaultEdgeLabel(() => ({}));
 
-  const nodes: GraphNode[] = [];
+  const meta = new Map<string, Omit<GraphNode, "x" | "y">>();
   const edges: GraphEdge[] = [];
+  const addNode = (node: Omit<GraphNode, "x" | "y">) => {
+    if (meta.has(node.id)) return;
+    meta.set(node.id, node);
+    g.setNode(node.id, { width: node.width, height: node.height });
+  };
+  const addEdge = (from: string, to: string, toKind: GraphNodeKind) => {
+    const id = `${from}->${to}`;
+    if (edges.some((e) => e.id === id)) return;
+    edges.push({ id, from, to, toKind });
+    g.setEdge(from, to);
+  };
 
   const symbolId = `symbol:${impact.symbol}`;
-  nodes.push({
-    id: symbolId,
-    label: clipLabel(`${impact.symbol}()`),
-    kind: "symbol",
-    x: colX.symbol,
-    y: height / 2,
-  });
+  const symbolLabel = `${impact.symbol}()`;
+  addNode({ id: symbolId, kind: "symbol", label: symbolLabel, width: nodeWidth([symbolLabel]), height: GRAPH_NODE_HEIGHT });
 
-  const shownCallers = impact.callers.slice(0, maxCallers);
-  const overflow = impact.callers.length - shownCallers.length;
-  const callerSlots = shownCallers.length + (overflow > 0 ? 1 : 0);
-  const callerStep = callerSlots > 0 ? height / (callerSlots + 1) : 0;
-
-  const targetNodes: GraphNode[] = [];
-
-  shownCallers.forEach((caller, i) => {
+  for (const caller of impact.callers) {
     const callerId = `caller:${caller.file}:${caller.line}`;
-    nodes.push({
+    const detail = `${caller.file}:${caller.line}`;
+    addNode({
       id: callerId,
-      label: clipLabel(caller.name),
       kind: "caller",
-      x: colX.caller,
-      y: callerStep * (i + 1),
+      label: caller.name,
+      detail,
+      width: nodeWidth([caller.name, detail]),
+      height: GRAPH_TALL_NODE_HEIGHT,
     });
-    edges.push({ from: symbolId, to: callerId });
+    addEdge(symbolId, callerId, "caller");
 
     for (const endpoint of caller.endpoints ?? []) {
-      const endpointId = `endpoint:${endpoint}`;
-      if (!targetNodes.some((n) => n.id === endpointId)) {
-        targetNodes.push({ id: endpointId, label: clipLabel(endpoint), kind: "endpoint", x: colX.target, y: 0 });
-      }
-      edges.push({ from: callerId, to: endpointId });
+      const id = `endpoint:${endpoint}`;
+      addNode({ id, kind: "endpoint", label: endpoint, width: nodeWidth([endpoint]), height: GRAPH_NODE_HEIGHT });
+      addEdge(callerId, id, "endpoint");
     }
     for (const cron of caller.crons ?? []) {
-      const cronId = `cron:${cron}`;
-      if (!targetNodes.some((n) => n.id === cronId)) {
-        targetNodes.push({ id: cronId, label: clipLabel(cron), kind: "cron", x: colX.target, y: 0 });
-      }
-      edges.push({ from: callerId, to: cronId });
+      const id = `cron:${cron}`;
+      addNode({ id, kind: "cron", label: cron, width: nodeWidth([cron]), height: GRAPH_NODE_HEIGHT });
+      addEdge(callerId, id, "cron");
     }
-  });
-
-  if (overflow > 0) {
-    const moreId = "caller:__more__";
-    nodes.push({
-      id: moreId,
-      label: "",
-      kind: "more",
-      x: colX.caller,
-      y: callerStep * callerSlots,
-      moreCount: overflow,
-    });
-    edges.push({ from: symbolId, to: moreId });
   }
 
-  const targetStep = targetNodes.length > 0 ? height / (targetNodes.length + 1) : 0;
-  targetNodes.forEach((n, i) => {
-    n.y = targetStep * (i + 1);
-  });
+  dagre.layout(g);
 
-  return { nodes: [...nodes, ...targetNodes], edges };
+  // dagre reports node CENTRES; the renderer positions by top-left corner.
+  const placed: GraphNode[] = [...meta.values()].map((n) => {
+    const { x, y } = g.node(n.id);
+    return { ...n, x: Math.round(x - n.width / 2), y: Math.round(y - n.height / 2) };
+  });
+  // dagre centres each column; left-aligning it reads as a list, like the tree.
+  const columnLeft = new Map<GraphNodeKind, number>();
+  for (const n of placed) {
+    const column = columnOf(n.kind);
+    columnLeft.set(column, Math.min(columnLeft.get(column) ?? Infinity, n.x));
+  }
+  const nodes = placed.map((n) => ({ ...n, x: columnLeft.get(columnOf(n.kind)) ?? n.x }));
+  const width = Math.max(...nodes.map((n) => n.x + n.width)) + GRAPH_MARGIN;
+  return { nodes, edges, width, height: Math.ceil(g.graph().height ?? 0) };
 }

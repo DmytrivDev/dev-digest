@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { callerHref, canResync, buildGraphLayout, clipLabel } from "./helpers";
+import { callerHref, canResync, buildGraphLayout } from "./helpers";
 import type { DownstreamImpact } from "@devdigest/shared";
 
 describe("callerHref", () => {
@@ -60,16 +60,6 @@ describe("canResync", () => {
   });
 });
 
-describe("clipLabel", () => {
-  it("leaves a short label untouched", () => {
-    expect(clipLabel("short")).toBe("short");
-  });
-
-  it("clips a >16-char label with an ellipsis", () => {
-    expect(clipLabel("aVeryLongSymbolNameIndeed")).toBe("aVeryLongSymbol…");
-  });
-});
-
 function impact(overrides: Partial<DownstreamImpact> = {}): DownstreamImpact {
   return {
     symbol: "rateLimit",
@@ -81,52 +71,62 @@ function impact(overrides: Partial<DownstreamImpact> = {}): DownstreamImpact {
 }
 
 describe("buildGraphLayout", () => {
-  it("node count with no overflow: 1 symbol + N callers, no extra node", () => {
-    const { nodes } = buildGraphLayout(impact({ callers: [{ name: "a", file: "a.ts", line: 1 }, { name: "b", file: "b.ts", line: 2 }] }), {
-      width: 600,
-      height: 300,
-      maxCallers: 8,
-    });
-    expect(nodes).toHaveLength(3); // symbol + 2 callers
+  it("lays out 1 symbol + every caller, with no collapsed node", () => {
+    const callers = Array.from({ length: 12 }, (_, i) => ({ name: `c${i}`, file: `f${i}.ts`, line: i + 1 }));
+    const { nodes } = buildGraphLayout(impact({ callers }));
+    expect(nodes.filter((n) => n.kind === "symbol")).toHaveLength(1);
+    expect(nodes.filter((n) => n.kind === "caller")).toHaveLength(12);
   });
 
-  it("collapses callers beyond maxCallers into one 'more' node", () => {
-    const callers = Array.from({ length: 10 }, (_, i) => ({ name: `c${i}`, file: `f${i}.ts`, line: i + 1 }));
-    const { nodes } = buildGraphLayout(impact({ callers }), { width: 600, height: 300, maxCallers: 8 });
-    const more = nodes.find((n) => n.kind === "more");
-    expect(more?.moreCount).toBe(2);
-    expect(nodes.filter((n) => n.kind === "caller")).toHaveLength(8);
+  it("sizes a node to its full label and caller detail — nothing is clipped", () => {
+    const long = "server/src/modules/reviews/repository/review.repo.ts";
+    const { nodes } = buildGraphLayout(
+      impact({ callers: [{ name: "aVeryLongSymbolNameIndeed", file: long, line: 42, endpoints: ["GET /api/public/webhooks/:id"] }] }),
+    );
+    const caller = nodes.find((n) => n.kind === "caller")!;
+    expect(caller.label).toBe("aVeryLongSymbolNameIndeed");
+    expect(caller.detail).toBe(`${long}:42`);
+    expect(caller.width).toBeGreaterThan(`${long}:42`.length * 7);
+    const endpoint = nodes.find((n) => n.kind === "endpoint")!;
+    expect(endpoint.label).toBe("GET /api/public/webhooks/:id");
+  });
+
+  it("places columns left to right and the canvas holds every node", () => {
+    const layout = buildGraphLayout(
+      impact({ callers: [{ name: "a", file: "a.ts", line: 1, endpoints: ["GET /x"], crons: ["nightly"] }] }),
+    );
+    const x = (kind: string) => layout.nodes.find((n) => n.kind === kind)!.x;
+    expect(x("symbol")).toBeLessThan(x("caller"));
+    expect(x("caller")).toBeLessThan(x("endpoint"));
+    for (const n of layout.nodes) {
+      expect(n.x + n.width).toBeLessThanOrEqual(layout.width);
+      expect(n.y + n.height).toBeLessThanOrEqual(layout.height);
+    }
   });
 
   it("draws no caller→endpoint edge when the caller has no endpoints", () => {
-    const { edges } = buildGraphLayout(
-      impact({ callers: [{ name: "a", file: "a.ts", line: 1 }] }),
-      { width: 600, height: 300, maxCallers: 8 },
-    );
+    const { edges } = buildGraphLayout(impact({ callers: [{ name: "a", file: "a.ts", line: 1 }] }));
     expect(edges.every((e) => !e.to.startsWith("endpoint:"))).toBe(true);
   });
 
-  it("draws a caller→endpoint edge only for that caller's own endpoints", () => {
+  it("draws a caller→endpoint edge only for that caller's own endpoints, once per shared endpoint node", () => {
     const { edges, nodes } = buildGraphLayout(
       impact({
         callers: [
           { name: "a", file: "a.ts", line: 1, endpoints: ["GET /x"] },
           { name: "b", file: "b.ts", line: 2 },
+          { name: "c", file: "c.ts", line: 3, endpoints: ["GET /x"] },
         ],
       }),
-      { width: 600, height: 300, maxCallers: 8 },
     );
-    const callerA = nodes.find((n) => n.id === "caller:a.ts:1")!;
-    const endpointNode = nodes.find((n) => n.kind === "endpoint")!;
-    expect(edges.some((e) => e.from === callerA.id && e.to === endpointNode.id)).toBe(true);
-    const callerB = nodes.find((n) => n.id === "caller:b.ts:2")!;
-    expect(edges.some((e) => e.to === callerB.id)).toBe(true); // symbol → callerB still drawn
-    expect(edges.some((e) => e.from === callerB.id && e.to === endpointNode.id)).toBe(false);
+    expect(nodes.filter((n) => n.kind === "endpoint")).toHaveLength(1);
+    const endpointId = "endpoint:GET /x";
+    expect(edges.filter((e) => e.to === endpointId).map((e) => e.from).sort()).toEqual(["caller:a.ts:1", "caller:c.ts:3"]);
+    expect(edges.find((e) => e.to === endpointId)?.toKind).toBe("endpoint");
+    expect(edges.some((e) => e.to === "caller:b.ts:2")).toBe(true); // symbol → b still drawn
   });
 
   it("produces deterministic coordinates for the same input", () => {
-    const a = buildGraphLayout(impact(), { width: 600, height: 300, maxCallers: 8 });
-    const b = buildGraphLayout(impact(), { width: 600, height: 300, maxCallers: 8 });
-    expect(a).toEqual(b);
+    expect(buildGraphLayout(impact())).toEqual(buildGraphLayout(impact()));
   });
 });

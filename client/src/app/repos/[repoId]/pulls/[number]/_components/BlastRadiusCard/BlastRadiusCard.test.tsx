@@ -166,7 +166,7 @@ describe("BlastRadiusCard", () => {
     usePrBlast.mockReturnValue({ data: blast(), isLoading: false, isError: false });
     renderCard();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("graph"));
+    fireEvent.click(screen.getByText("Graph"));
     expect(screen.getByRole("img")).toBeInTheDocument();
   });
 

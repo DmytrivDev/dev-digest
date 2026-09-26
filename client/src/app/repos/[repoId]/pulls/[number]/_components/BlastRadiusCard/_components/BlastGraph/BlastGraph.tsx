@@ -2,33 +2,46 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import {
+  Handle,
+  Position,
+  ReactFlow,
+  type Edge,
+  type Node,
+  type NodeProps,
+  type NodeTypes,
+} from "@xyflow/react";
+import "@xyflow/react/dist/base.css";
 import type { DownstreamImpact } from "@devdigest/shared";
 import { Dropdown, Icon } from "@devdigest/ui";
-import { buildGraphLayout, type GraphNode } from "../../helpers";
-import { GRAPH_HEIGHT, GRAPH_MAX_CALLERS, GRAPH_WIDTH } from "../../constants";
-import { s } from "../../styles";
+import { buildGraphLayout, type GraphLayout, type GraphNode } from "../../helpers";
+import { GRAPH_LEGEND_COLOR, s } from "../../styles";
 
 interface BlastGraphProps {
   downstream: DownstreamImpact[];
 }
 
-/** SVG three-column graph for ONE symbol: symbol → callers → endpoints/crons.
- *  A `Dropdown` picks which symbol to draw when there is more than one. */
+type BlastFlowNode = Node<{ node: GraphNode }, "blast">;
+
+/** Module-level so React Flow never sees a new `nodeTypes` object per render. */
+const NODE_TYPES: NodeTypes = { blast: BlastGraphNode };
+
+/** Layered graph for ONE symbol: symbol → callers → endpoints/crons, laid out
+ *  by dagre and drawn by React Flow as a static picture (no pan/zoom/drag).
+ *  The canvas is sized to the layout, so the wrapper's native scrollbars take
+ *  over when it is wider or taller than the card. A `Dropdown` picks which
+ *  symbol to draw when there is more than one. */
 export function BlastGraph({ downstream }: BlastGraphProps) {
   const t = useTranslations("blast");
   const [selected, setSelected] = React.useState<string | undefined>(downstream[0]?.symbol);
   const impact = downstream.find((d) => d.symbol === selected) ?? downstream[0];
 
-  if (!impact) {
+  const layout = React.useMemo(() => (impact ? buildGraphLayout(impact) : null), [impact]);
+  const flow = React.useMemo(() => (layout ? toFlow(layout) : null), [layout]);
+
+  if (!impact || !layout || !flow) {
     return <div style={s.noDownstream}>{t("graph.empty")}</div>;
   }
-
-  const { nodes, edges } = buildGraphLayout(impact, {
-    width: GRAPH_WIDTH,
-    height: GRAPH_HEIGHT,
-    maxCallers: GRAPH_MAX_CALLERS,
-  });
-  const byId = new Map(nodes.map((n) => [n.id, n]));
 
   return (
     <div>
@@ -44,55 +57,68 @@ export function BlastGraph({ downstream }: BlastGraphProps) {
         />
       )}
 
-      <svg
-        role="img"
-        aria-label={t("graph.ariaLabel")}
-        width={GRAPH_WIDTH}
-        height={GRAPH_HEIGHT}
-        viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-      >
-        {edges.map((e) => {
-          const from = byId.get(e.from);
-          const to = byId.get(e.to);
-          if (!from || !to) return null;
-          return (
-            <line
-              key={`${e.from}->${e.to}`}
-              x1={from.x}
-              y1={from.y}
-              x2={to.x}
-              y2={to.y}
-              stroke="var(--border)"
-              strokeWidth={1}
-            />
-          );
-        })}
-        {nodes.map((n) => (
-          <GraphNodeShape key={n.id} node={n} moreLabel={t("graph.more", { count: n.moreCount ?? 0 })} />
-        ))}
-      </svg>
+      <div role="img" aria-label={t("graph.ariaLabel")} style={s.graphViewport}>
+        <div style={{ width: layout.width, height: layout.height }}>
+          <ReactFlow
+            key={impact.symbol}
+            nodes={flow.nodes}
+            edges={flow.edges}
+            nodeTypes={NODE_TYPES}
+            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+            panOnDrag={false}
+            panOnScroll={false}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            zoomOnDoubleClick={false}
+            preventScrolling={false}
+            proOptions={{ hideAttribution: true }}
+            style={s.graphFlow}
+          />
+        </div>
+      </div>
 
       <div style={s.legendRow}>
-        <LegendItem color="var(--text-primary)" label={t("graph.legend.symbol")} />
-        <LegendItem color="var(--text-secondary)" label={t("graph.legend.callers")} />
-        <LegendItem color="var(--accent)" label={t("graph.legend.endpoints")} />
-        <LegendItem color="var(--warn)" label={t("graph.legend.crons")} />
+        <LegendItem color={GRAPH_LEGEND_COLOR.symbol} label={t("graph.legend.symbol")} />
+        <LegendItem color={GRAPH_LEGEND_COLOR.caller} label={t("graph.legend.callers")} />
+        <LegendItem color={GRAPH_LEGEND_COLOR.endpoint} label={t("graph.legend.endpoints")} />
+        <LegendItem color={GRAPH_LEGEND_COLOR.cron} label={t("graph.legend.crons")} />
       </div>
     </div>
   );
 }
 
-function GraphNodeShape({ node, moreLabel }: { node: GraphNode; moreLabel: string }) {
-  const stroke =
-    node.kind === "endpoint" ? "var(--accent)" : node.kind === "cron" ? "var(--warn)" : "var(--border-strong)";
-  const label = node.kind === "more" ? moreLabel : node.label;
+function toFlow(layout: GraphLayout): { nodes: BlastFlowNode[]; edges: Edge[] } {
+  return {
+    nodes: layout.nodes.map((n) => ({
+      id: n.id,
+      type: "blast",
+      position: { x: n.x, y: n.y },
+      data: { node: n },
+      width: n.width,
+      height: n.height,
+    })),
+    edges: layout.edges.map((e) => ({
+      id: e.id,
+      source: e.from,
+      target: e.to,
+      type: "default",
+      style: s.graphEdge(e.toKind),
+    })),
+  };
+}
+
+function BlastGraphNode({ data }: NodeProps<BlastFlowNode>) {
+  const { node } = data;
   return (
-    <g>
-      <circle cx={node.x} cy={node.y} r={5} fill="var(--bg-elevated)" stroke={stroke} strokeWidth={1.5} />
-      <text x={node.x} y={node.y - 10} textAnchor="middle" fontSize={11} fill="var(--text-secondary)">
-        {label}
-      </text>
-    </g>
+    <div style={s.graphNode(node.kind, node.width, node.height)} title={node.detail ?? node.label}>
+      <Handle type="target" position={Position.Left} isConnectable={false} style={s.graphHandle} />
+      <span style={s.graphNodeLabel(node.kind)}>{node.label}</span>
+      {node.detail && <span style={s.graphNodeDetail}>{node.detail}</span>}
+      <Handle type="source" position={Position.Right} isConnectable={false} style={s.graphHandle} />
+    </div>
   );
 }
 
