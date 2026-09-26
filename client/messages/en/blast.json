@@ -1,4 +1,9 @@
 {
+  "title": "Blast radius",
+  "loading": "Loading blast radius…",
+  "error": "Could not load the blast radius.",
+  "retry": "Retry",
+  "noSymbols": "No symbols were declared in this PR's changed files.",
   "stat": {
     "symbols": "symbols",
     "callers": "callers",
@@ -9,10 +14,42 @@
     "tree": "tree",
     "graph": "graph"
   },
-  "callerCount": "{count} callers",
+  "callerCount": "{count, plural, one {# caller} other {# callers}}",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
+  "endpointsLabel": "Endpoints",
+  "cronsLabel": "Crons",
+  "degraded": {
+    "badge": "Degraded",
+    "reason": {
+      "flag_off": "Code intelligence is turned off for this workspace.",
+      "index_failed": "The repo index failed to build — resync to retry.",
+      "index_partial": "The repo index is only partially built — some callers may be missing.",
+      "repo_too_large": "This repo is too large for a full index — results are best-effort.",
+      "no_data": "No repo index exists yet — resync to build one.",
+      "files_unavailable": "Could not read this PR's changed files. Open the PR in DevDigest, or configure a GitHub token."
+    }
+  },
+  "resync": "Resync",
+  "resyncing": "Resyncing…",
+  "resyncDone": "Resync complete",
   "graph": {
     "empty": "No downstream callers to graph.",
-    "ariaLabel": "Blast radius graph"
+    "ariaLabel": "Blast radius graph",
+    "legend": {
+      "symbol": "Changed symbol",
+      "callers": "Callers",
+      "endpoints": "Endpoints",
+      "crons": "Crons"
+    },
+    "more": "+{count} more",
+    "symbolPicker": "Symbol"
+  },
+  "history": {
+    "title": "Prior PRs touching these files",
+    "empty": "No prior PRs touched these files.",
+    "noGithub": "Connect a GitHub token to see prior PRs.",
+    "githubError": "Could not load prior PRs from GitHub.",
+    "loading": "Loading prior PRs…",
+    "mergedBy": "Merged by {author}"
   }
 }
