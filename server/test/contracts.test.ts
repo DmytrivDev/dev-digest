@@ -104,6 +104,67 @@ describe('AI contracts parse fixtures', () => {
     ).not.toThrow();
   });
 
+  it('BlastRadius parses every new optional field', () => {
+    const blast = BlastRadius.parse({
+      changed_symbols: [{ name: 'rateLimit', file: 'a.ts', kind: 'function' }],
+      downstream: [
+        {
+          symbol: 'rateLimit',
+          callers: [
+            {
+              name: 'publicRouter',
+              file: 'b.ts',
+              line: 23,
+              endpoints: ['GET /x'],
+              crons: ['reset-buckets (hourly)'],
+            },
+          ],
+          endpoints_affected: ['GET /x'],
+          crons_affected: ['reset-buckets (hourly)'],
+        },
+      ],
+      summary: 's',
+      degraded: true,
+      reason: 'index_partial',
+      index_status: 'partial',
+      indexed_sha: 'abc123',
+      counts: { symbols: 1, callers: 1, endpoints: 1, crons: 1 },
+    });
+    expect(blast.degraded).toBe(true);
+    expect(blast.counts?.callers).toBe(1);
+  });
+
+  it('BlastRadius still parses the OLD shape with no new fields', () => {
+    expect(() =>
+      BlastRadius.parse({
+        changed_symbols: [{ name: 'rateLimit', file: 'a.ts', kind: 'function' }],
+        downstream: [
+          {
+            symbol: 'rateLimit',
+            callers: [{ name: 'publicRouter', file: 'b.ts', line: 23 }],
+            endpoints_affected: ['GET /x'],
+            crons_affected: ['c'],
+          },
+        ],
+        summary: 's',
+      }),
+    ).not.toThrow();
+  });
+
+  it('BlastRadius rejects a bogus reason', () => {
+    const result = BlastRadius.safeParse({
+      changed_symbols: [],
+      downstream: [],
+      summary: 's',
+      reason: 'bogus',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('PrHistory parses reason: no_github', () => {
+    expect(() => PrHistory.parse({ history: [], reason: 'no_github' })).not.toThrow();
+  });
+
   it('SmartDiff (data.jsx DIFF)', () => {
     const d = SmartDiff.parse({
       groups: [

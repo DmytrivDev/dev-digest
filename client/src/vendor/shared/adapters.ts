@@ -140,9 +140,29 @@ export interface CommitFilesPayload {
   files: CommitFile[];
 }
 
+/** One merged PR that touched a given path — the shape `listMergedPullsForPath` returns. */
+export interface PathPullRequest {
+  number: number;
+  title: string;
+  author: string;
+  merged_at: string;
+}
+
 export interface GitHubClient {
   listPullRequests(repo: RepoRef): Promise<PrMeta[]>;
   getPullRequest(repo: RepoRef, n: number): Promise<PrDetail>;
+  /**
+   * Merged PRs that touched `path` on the default branch, newest first.
+   * Two-step REST walk (commits by path, then the PR associated with each
+   * commit): 1 + up to `opts.maxCommits` calls — there is no single-call
+   * search endpoint for "PRs by changed path" (see
+   * docs/plans/blast-radius.plan.md Key decision 8 / Research used).
+   */
+  listMergedPullsForPath(
+    repo: RepoRef,
+    path: string,
+    opts: { maxCommits: number },
+  ): Promise<PathPullRequest[]>;
   postReview(repo: RepoRef, n: number, review: GitHubReviewPayload): Promise<{ id: string }>;
   /** List inline review comments on a PR (for the "Files changed" tab). */
   listReviewComments(repo: RepoRef, n: number): Promise<PrReviewComment[]>;
