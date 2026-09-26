@@ -59,9 +59,8 @@ describe('RepoIntel facade — degraded contract (flag off)', () => {
     expect(Array.isArray(blast.callers)).toBe(true);
     expect(Array.isArray(blast.impactedEndpoints)).toBe(true);
     expect(blast.degraded).toBe(true);
-    // reason is one of the documented DegradedReason values
-    expect(['flag_off', 'no_data', 'index_failed', 'index_partial', 'repo_too_large'])
-      .toContain(blast.reason);
+    // flag is off → the reason must say so, not the generic 'no_data'.
+    expect(blast.reason).toBe('flag_off');
   });
 
   it('getIndexState → degraded row (never throws) when no row exists', async () => {

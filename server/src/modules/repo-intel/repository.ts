@@ -128,6 +128,8 @@ export interface ResolvedCallerRow {
   toSymbol: string;
   line: number;
   rank: number;
+  /** The changed file that declares `toSymbol` — used to exclude self-callers. */
+  declFile: string;
 }
 
 export class RepoIntelRepository {
@@ -523,6 +525,7 @@ export class RepoIntelRepository {
         toSymbol: t.references.toSymbol,
         line: t.references.line,
         rank: t.fileRank.rank,
+        declFile: t.references.declFile,
       })
       .from(t.references)
       .innerJoin(
@@ -538,7 +541,10 @@ export class RepoIntelRepository {
           inArray(t.references.declFile, declFiles),
           inArray(t.references.toSymbol, names),
         ),
-      );
+      )
+      // `declFile` cannot be NULL here: the WHERE clause already restricts it
+      // to one of `declFiles`, but the column type is nullable so we narrow it.
+      .then((rows) => rows.map((r) => ({ ...r, declFile: r.declFile as string })));
   }
 
   /** Per-file facts (endpoints/crons) for the given files. */

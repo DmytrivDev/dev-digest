@@ -50,8 +50,10 @@ export interface IndexState extends IndexResult {
 }
 
 // ---------------------------------------------------------------------------
-// Blast radius (facade method `getBlastRadius`). Adopted by blast/service.ts in
-// T2; in T1 the facade returns a degraded best-effort over container.codeIndex.
+// Blast radius (facade method `getBlastRadius`). Adopted by blast/service.ts
+// (L04) — the facade serves it from the persistent index when one exists and
+// falls back to a ripgrep best-effort otherwise. Both paths return the same
+// shape, with `degraded`/`reason` telling the caller which one ran.
 // ---------------------------------------------------------------------------
 
 export interface BlastChangedSymbol {
@@ -69,6 +71,8 @@ export interface BlastCallerRow {
   line: number;
   /** file_rank.rank of the caller file (0 in the degraded/ripgrep path). */
   rank: number;
+  /** The file that declares `viaSymbol` — used to drop a self-caller row. */
+  declFile: string;
 }
 
 export interface BlastResult {
@@ -84,6 +88,10 @@ export interface BlastResult {
   factsByFile?: Record<string, { endpoints: string[]; crons: string[] }>;
   degraded?: boolean;
   reason?: DegradedReason;
+  /** The index status that produced this result, when a persisted index exists. */
+  indexStatus?: IndexStatus;
+  /** `repo_index_state.last_indexed_sha` — the commit callers were resolved against. */
+  indexedSha?: string;
 }
 
 // ---------------------------------------------------------------------------

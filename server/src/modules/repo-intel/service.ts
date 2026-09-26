@@ -1,18 +1,16 @@
 /**
- * RepoIntelService — T1.1 facade skeleton.
+ * RepoIntelService — the repo-intel facade.
  *
- * Every method returns a DEGRADED-but-valid result (see types.ts header). The
- * only methods that do real work in T1 are:
- *   - `getBlastRadius`: best-effort port of blast/service.ts logic, mapped
- *     into the `BlastResult` shape (and always tagged `degraded: true,
- *     reason: 'no_data'`, because T1 has no persistent index yet).
- *   - `getIndexState`: queries `repo_index_state` if the table exists (T2+),
- *     otherwise synthesises a degraded row so callers never throw.
+ * `getBlastRadius` serves from the persistent index when one exists
+ * (`tryPersistentBlast`) and falls back to a best-effort ripgrep-over-clone
+ * pass otherwise. Both paths report an honest `degraded`/`reason` — `reason`
+ * means "why the index was not fully used", never "no results" (see
+ * `helpers.ts`'s `fallbackReason` and docs/plans/blast-radius.plan.md Key
+ * decision 7). `getIndexState` queries `repo_index_state` if the table has a
+ * row, otherwise synthesises a degraded row so callers never throw.
  *
  * Everything else returns `[]` (array methods) or a degraded object literal
- * (object methods). T1.2 wires the astgrep adapter into
- * `getUnresolvedReferences` and (via T1.3) `getCallerSignatures`. T2 fills in
- * the rank-driven methods. T3 unlocks `getCriticalPaths` etc.
+ * (object methods) until its own lesson wires it up.
  *
  * The constructor takes ONLY a Container. No astgrep / depgraph / tokenizer
  * deps are imported here — those land later and plug into this same shell.
@@ -30,6 +28,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { RepoIntelRepository, type FullSymbolRow } from './repository.js';
+import { capCallersPerSymbol, excludeSelfCallers, fallbackReason } from './helpers.js';
 import type {
   BlastCallerRow,
   BlastChangedSymbol,
@@ -219,28 +218,33 @@ export class RepoIntelService implements RepoIntel {
   // -------------------------------------------------------------------------
 
   /**
-   * Best-effort blast over `container.codeIndex` — a faithful port of
-   * blast/service.ts mapped into the facade's `BlastResult` shape, then
-   * tagged `degraded: true` so consumers can branch.
-   *
-   * Why "always degraded" in T1: there's no persistent rank/decl_file yet, so
-   * every caller gets `rank: 0` and HTTP impact is detected by re-reading the
-   * clone (not the index). T2 promotes this path to the persistent layer.
+   * Serves the blast radius from the persistent index when one exists
+   * (`tryPersistentBlast`), falling back to a best-effort ripgrep-over-clone
+   * pass over `container.codeIndex` otherwise. Both paths return the same
+   * `BlastResult` shape; `degraded`/`reason` tell the caller which one ran
+   * and why — `reason` means "why the index was not fully used", never
+   * "no results" (see docs/plans/blast-radius.plan.md Key decision 7).
    */
   async getBlastRadius(repoId: string, changedFiles: string[]): Promise<BlastResult> {
-    // T3: serve from the persistent index when it's built. Falls through to the
+    // Serve from the persistent index when it's built. Falls through to the
     // ripgrep best-effort below when the flag is off / index is absent.
     if (this.container.config.repoIntelEnabled && changedFiles.length > 0) {
       const persistent = await this.tryPersistentBlast(repoId, changedFiles);
       if (persistent) return persistent;
     }
 
+    const flagOn = this.container.config.repoIntelEnabled;
+    const state = await this.repo.tryGetIndexState(repoId);
+    const reason = fallbackReason({ flagOn, state });
+    const indexedSha = state?.lastIndexedSha || undefined;
+
     const empty: BlastResult = {
       changedSymbols: [],
       callers: [],
       impactedEndpoints: [],
       degraded: true,
-      reason: 'no_data',
+      reason,
+      indexedSha,
     };
 
     const repo = await this.repo.getRepoBasics(repoId);
@@ -267,9 +271,10 @@ export class RepoIntelService implements RepoIntel {
       changedSymbols.push({ file: s.path, name: s.name, kind: s.kind });
     }
 
-    const callerRows: BlastCallerRow[] = [];
+    let callerRows: BlastCallerRow[] = [];
     const endpoints = new Set<string>();
     const callerSeen = new Set<string>();
+    const factsByFile: Record<string, { endpoints: string[]; crons: string[] }> = {};
 
     for (const sym of changedSymbols) {
       let refs;
@@ -280,7 +285,6 @@ export class RepoIntelService implements RepoIntel {
       }
       const callerFiles = new Set<string>();
       for (const r of refs) {
-        if (r.fromPath === sym.file) continue; // skip the decl's own file
         const callerName = enclosingSymbolName(allSymbols, r.fromPath, r.line);
         const key = `${r.fromPath}|${callerName}|${sym.name}`;
         if (callerSeen.has(key)) continue;
@@ -291,25 +295,33 @@ export class RepoIntelService implements RepoIntel {
           viaSymbol: sym.name,
           line: r.line,
           rank: 0, // ripgrep/degraded path has no persistent rank
+          declFile: sym.file,
         });
         callerFiles.add(r.fromPath);
       }
 
       // Detect HTTP routes reachable from any caller file (best-effort, just
-      // like the legacy blast service).
+      // like the legacy blast service). Crons are not derivable from the
+      // clone-read path, so factsByFile carries endpoints only here.
       for (const file of callerFiles) {
         const content = await readClone(repo.clonePath, file);
         if (!content) continue;
-        for (const e of extractEndpoints(content)) endpoints.add(e);
+        const fileEndpoints = extractEndpoints(content);
+        for (const e of fileEndpoints) endpoints.add(e);
+        factsByFile[file] = { endpoints: fileEndpoints, crons: [] };
       }
     }
+
+    callerRows = capCallersPerSymbol(excludeSelfCallers(callerRows), MAX_CALLERS_PER_SYMBOL);
 
     return {
       changedSymbols,
       callers: callerRows,
       impactedEndpoints: [...endpoints],
+      factsByFile,
       degraded: true,
-      reason: 'no_data',
+      reason,
+      indexedSha,
     };
   }
 
@@ -344,8 +356,18 @@ export class RepoIntelService implements RepoIntel {
       }
       nameSet.add(s.name);
     }
+    const degraded = state.status === 'partial';
+    const reason = degraded ? ('index_partial' as const) : undefined;
     if (nameSet.size === 0) {
-      return { changedSymbols, callers: [], impactedEndpoints: [], degraded: false };
+      return {
+        changedSymbols,
+        callers: [],
+        impactedEndpoints: [],
+        degraded,
+        reason,
+        indexStatus: state.status,
+        indexedSha: state.lastIndexedSha,
+      };
     }
 
     // Resolved cross-file callers.
@@ -361,7 +383,7 @@ export class RepoIntelService implements RepoIntel {
       else symsByFile.set(s.path, [s]);
     }
 
-    const callers: BlastCallerRow[] = [];
+    let callers: BlastCallerRow[] = [];
     const seenCaller = new Set<string>();
     for (const c of callerRows) {
       const enclosing =
@@ -377,9 +399,10 @@ export class RepoIntelService implements RepoIntel {
         viaSymbol: c.toSymbol,
         line: c.line,
         rank: c.rank,
+        declFile: c.declFile,
       });
     }
-    callers.sort((a, b) => b.rank - a.rank);
+    callers = capCallersPerSymbol(excludeSelfCallers(callers), MAX_CALLERS_PER_SYMBOL);
 
     // Precomputed facts per caller file (endpoints + crons), so consumers can
     // attribute them to the changed symbol whose callers live in that file.
@@ -393,10 +416,13 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callers.slice(0, MAX_CALLERS_PER_SYMBOL),
+      callers,
       impactedEndpoints: [...endpoints],
       factsByFile,
-      degraded: false,
+      degraded,
+      reason,
+      indexStatus: state.status,
+      indexedSha: state.lastIndexedSha,
     };
   }
 
