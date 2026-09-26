@@ -1,4 +1,6 @@
 import type { BlastRadius, DownstreamImpact } from "@devdigest/shared";
+import type { CSSProperties } from "react";
+import { Position, type Edge, type Node } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import { githubBlobUrl } from "@/lib/github-urls";
 import {
@@ -157,4 +159,42 @@ export function buildGraphLayout(impact: DownstreamImpact): GraphLayout {
   const nodes = placed.map((n) => ({ ...n, x: columnLeft.get(columnOf(n.kind)) ?? n.x }));
   const width = Math.max(...nodes.map((n) => n.x + n.width)) + GRAPH_MARGIN;
   return { nodes, edges, width, height: Math.ceil(g.graph().height ?? 0) };
+}
+
+/** A React Flow node carrying one laid-out `GraphNode` for the custom renderer. */
+export type BlastFlowNode = Node<{ node: GraphNode }, "blast">;
+
+/**
+ * Maps a `GraphLayout` onto React Flow's `nodes`/`edges`. Positions and sizes
+ * are taken as-is (the layout already fixed them); `edgeStyle` tints each edge
+ * by the kind of node it points into. Each node also declares its two handles
+ * (left-centre in, right-centre out), so edges draw from the data alone instead
+ * of waiting for React Flow to measure the DOM — which never happens while the
+ * tab is hidden.
+ */
+export function toFlow(
+  layout: GraphLayout,
+  edgeStyle: (toKind: GraphNodeKind) => CSSProperties,
+): { nodes: BlastFlowNode[]; edges: Edge[] } {
+  return {
+    nodes: layout.nodes.map((n) => ({
+      id: n.id,
+      type: "blast",
+      position: { x: n.x, y: n.y },
+      data: { node: n },
+      width: n.width,
+      height: n.height,
+      handles: [
+        { type: "target" as const, position: Position.Left, x: 0, y: n.height / 2, width: 1, height: 1 },
+        { type: "source" as const, position: Position.Right, x: n.width - 1, y: n.height / 2, width: 1, height: 1 },
+      ],
+    })),
+    edges: layout.edges.map((e) => ({
+      id: e.id,
+      source: e.from,
+      target: e.to,
+      type: "default",
+      style: edgeStyle(e.toKind),
+    })),
+  };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { callerHref, canResync, buildGraphLayout } from "./helpers";
+import { callerHref, canResync, buildGraphLayout, toFlow } from "./helpers";
 import type { DownstreamImpact } from "@devdigest/shared";
 
 describe("callerHref", () => {
@@ -128,5 +128,22 @@ describe("buildGraphLayout", () => {
 
   it("produces deterministic coordinates for the same input", () => {
     expect(buildGraphLayout(impact())).toEqual(buildGraphLayout(impact()));
+  });
+});
+
+describe("toFlow", () => {
+  it("keeps every laid-out position and size, and styles each edge by its target kind", () => {
+    const layout = buildGraphLayout(
+      impact({ callers: [{ name: "a", file: "a.ts", line: 1, endpoints: ["GET /x"] }] }),
+    );
+    const { nodes, edges } = toFlow(layout, (kind) => ({ stroke: kind }));
+    expect(nodes).toHaveLength(layout.nodes.length);
+    for (const n of layout.nodes) {
+      const flowNode = nodes.find((f) => f.id === n.id)!;
+      expect(flowNode).toMatchObject({ type: "blast", position: { x: n.x, y: n.y }, width: n.width, height: n.height });
+      expect(flowNode.handles?.map((h) => h.type)).toEqual(["target", "source"]);
+    }
+    expect(edges.find((e) => e.target === "endpoint:GET /x")?.style).toEqual({ stroke: "endpoint" });
+    expect(edges.find((e) => e.target === "caller:a.ts:1")?.style).toEqual({ stroke: "caller" });
   });
 });

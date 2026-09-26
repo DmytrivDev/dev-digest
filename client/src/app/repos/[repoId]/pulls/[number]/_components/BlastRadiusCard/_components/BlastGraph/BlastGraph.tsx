@@ -2,26 +2,16 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import {
-  Handle,
-  Position,
-  ReactFlow,
-  type Edge,
-  type Node,
-  type NodeProps,
-  type NodeTypes,
-} from "@xyflow/react";
+import { Handle, Position, ReactFlow, type NodeProps, type NodeTypes } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import type { DownstreamImpact } from "@devdigest/shared";
 import { Dropdown, Icon } from "@devdigest/ui";
-import { buildGraphLayout, type GraphLayout, type GraphNode } from "../../helpers";
+import { buildGraphLayout, toFlow, type BlastFlowNode } from "../../helpers";
 import { GRAPH_LEGEND_COLOR, s } from "../../styles";
 
 interface BlastGraphProps {
   downstream: DownstreamImpact[];
 }
-
-type BlastFlowNode = Node<{ node: GraphNode }, "blast">;
 
 /** Module-level so React Flow never sees a new `nodeTypes` object per render. */
 const NODE_TYPES: NodeTypes = { blast: BlastGraphNode };
@@ -37,7 +27,7 @@ export function BlastGraph({ downstream }: BlastGraphProps) {
   const impact = downstream.find((d) => d.symbol === selected) ?? downstream[0];
 
   const layout = React.useMemo(() => (impact ? buildGraphLayout(impact) : null), [impact]);
-  const flow = React.useMemo(() => (layout ? toFlow(layout) : null), [layout]);
+  const flow = React.useMemo(() => (layout ? toFlow(layout, s.graphEdge) : null), [layout]);
 
   if (!impact || !layout || !flow) {
     return <div style={s.noDownstream}>{t("graph.empty")}</div>;
@@ -88,26 +78,6 @@ export function BlastGraph({ downstream }: BlastGraphProps) {
       </div>
     </div>
   );
-}
-
-function toFlow(layout: GraphLayout): { nodes: BlastFlowNode[]; edges: Edge[] } {
-  return {
-    nodes: layout.nodes.map((n) => ({
-      id: n.id,
-      type: "blast",
-      position: { x: n.x, y: n.y },
-      data: { node: n },
-      width: n.width,
-      height: n.height,
-    })),
-    edges: layout.edges.map((e) => ({
-      id: e.id,
-      source: e.from,
-      target: e.to,
-      type: "default",
-      style: s.graphEdge(e.toKind),
-    })),
-  };
 }
 
 function BlastGraphNode({ data }: NodeProps<BlastFlowNode>) {

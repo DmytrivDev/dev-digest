@@ -6,6 +6,7 @@ import type { PrHistory } from "@devdigest/shared";
 import { Badge, MonoLink, Skeleton } from "@devdigest/ui";
 import { githubPrUrl } from "@/lib/github-urls";
 import { formatWhen } from "@/lib/datetime";
+import { s as cardStyles } from "../../../../styles";
 import { s } from "../../styles";
 
 interface PriorPrsListProps {
@@ -25,7 +26,7 @@ export function PriorPrsList({ data, isLoading, repoFullName }: PriorPrsListProp
 
   if (isLoading) {
     return (
-      <div style={s.skeletonStack}>
+      <div style={cardStyles.skeletonStack}>
         <Skeleton height={14} />
       </div>
     );
@@ -33,13 +34,13 @@ export function PriorPrsList({ data, isLoading, repoFullName }: PriorPrsListProp
   if (!data) return null;
 
   if (data.reason === "no_github") {
-    return <div style={s.noDownstream}>{t("history.noGithub")}</div>;
+    return <div style={cardStyles.noDownstream}>{t("history.noGithub")}</div>;
   }
   if (data.reason === "github_error" && data.history.length === 0) {
-    return <div style={s.noDownstream}>{t("history.githubError")}</div>;
+    return <div style={cardStyles.noDownstream}>{t("history.githubError")}</div>;
   }
   if (data.history.length === 0) {
-    return <div style={s.noDownstream}>{t("history.empty")}</div>;
+    return <div style={cardStyles.noDownstream}>{t("history.empty")}</div>;
   }
 
   return (

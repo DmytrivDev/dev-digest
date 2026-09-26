@@ -56,14 +56,4 @@ export const s = {
     gap: 6,
     flexWrap: "wrap",
   } satisfies CSSProperties,
-  skeletonStack: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  } satisfies CSSProperties,
-  noDownstream: {
-    fontSize: 13,
-    color: "var(--text-muted)",
-    padding: "16px 0",
-  } satisfies CSSProperties,
 } as const;
