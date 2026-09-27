@@ -1,0 +1,55 @@
+# mcp suite — local stdio MCP server (@devdigest/mcp).
+# Thin HTTP client of the running API: no DB, no server services. Tests are
+# hermetic (fake API + fake clock, in-memory MCP transport, no network).
+#
+# server/src/vendor/shared/** is in the path filter because mcp/tsconfig.json
+# aliases @devdigest/shared to it at type-check/build time.
+name: mcp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mcp/**'
+      - 'server/src/vendor/shared/**'
+      - '.github/workflows/mcp.yml'
+  pull_request:
+    paths:
+      - 'mcp/**'
+      - 'server/src/vendor/shared/**'
+      - '.github/workflows/mcp.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mcp/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      - run: pnpm arch:check

@@ -68,6 +68,44 @@ export async function listRunsForPull(
   }));
 }
 
+/** One run's summary by id, scoped by workspace, plus its `prId` (needed by
+ *  `GET /runs/:id/result` to resolve the PR/repo without a second query).
+ *  `prId` is nullable — `agent_runs.pr_id` is `ON DELETE SET NULL`, so a run
+ *  whose PR was deleted survives with a null FK. Same select/join shape as
+ *  `listRunsForPull`. */
+export async function getRunSummary(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<(RunSummary & { prId: string | null }) | undefined> {
+  const [row] = await db
+    .select({ run: t.agentRuns, agentName: t.agents.name })
+    .from(t.agentRuns)
+    .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
+    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.id, runId)));
+  if (!row) return undefined;
+  const { run, agentName } = row;
+  return {
+    run_id: run.id,
+    agent_id: run.agentId,
+    agent_name: agentName ?? null,
+    provider: run.provider,
+    model: run.model,
+    status: run.status,
+    error: run.error,
+    duration_ms: run.durationMs,
+    tokens_in: run.tokensIn,
+    tokens_out: run.tokensOut,
+    cost_usd: run.costUsd,
+    findings_count: run.findingsCount,
+    grounding: run.grounding,
+    ran_at: run.ranAt ? run.ranAt.toISOString() : null,
+    score: run.score,
+    blockers: run.blockers,
+    prId: run.prId,
+  };
+}
+
 /**
  * Delete one agent run (+ its trace via FK cascade) AND the review it produced.
  * Workspace-scoped. `reviews.run_id` has no FK to `agent_runs`, so the review

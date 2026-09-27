@@ -15,6 +15,7 @@ lockfile nobody else can install from.
 | `client/` | pnpm | `pnpm typecheck` | `pnpm test` |
 | `reviewer-core/` | **npm** | `npm run typecheck` | `npm test` |
 | `e2e/` | **npm** | `npm run typecheck` | **never** — see below |
+| `mcp/` | pnpm | `pnpm typecheck` | `pnpm test` |
 
 ## Blocking
 
@@ -22,6 +23,7 @@ lockfile nobody else can install from.
 |---|---|---|
 | `<pkg>:typecheck` | the table above | Non-zero exit ⇒ CRITICAL, and the fan-out is **skipped**. |
 | `server:arch` | `cd server && pnpm arch:check` | **Probe first.** Record `unavailable` if the script or `.dependency-cruiser.cjs` is missing. |
+| `mcp:arch` | `cd mcp && pnpm arch:check` | Committed with the package; all rules are `error` (no legacy debt), so any violation is new. |
 | `server:vendor-shared-sync` | `cd server && pnpm exec vitest run test/vendor-shared-sync.test.ts` | Only when the diff touches either `vendor/shared` tree. |
 
 The mechanical rules — migrations, lockfiles, branch, test naming, unrouted new skills —

@@ -32,6 +32,19 @@ describe('mock adapters (no network)', () => {
     expect(url).toContain('github.com');
   });
 
+  it('MockGitHubClient.listMergedPullsForPath returns pathPulls[path], or [] when absent', async () => {
+    const gh = new MockGitHubClient({
+      pathPulls: {
+        'src/a.ts': [{ number: 5, title: 'Earlier fix', author: 'octocat', merged_at: '2026-01-01T00:00:00Z' }],
+      },
+    });
+    const pulls = await gh.listMergedPullsForPath({ owner: 'a', name: 'b' }, 'src/a.ts', { maxCommits: 5 });
+    expect(pulls).toEqual([
+      { number: 5, title: 'Earlier fix', author: 'octocat', merged_at: '2026-01-01T00:00:00Z' },
+    ]);
+    expect(await gh.listMergedPullsForPath({ owner: 'a', name: 'b' }, 'unqueried.ts', { maxCommits: 5 })).toEqual([]);
+  });
+
   it('MockCodeIndex + MockEmbedder return deterministic shapes', async () => {
     const ci = new MockCodeIndex();
     expect((await ci.symbols({ owner: 'a', name: 'b' }))[0]!.name).toBe('rateLimit');

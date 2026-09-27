@@ -68,6 +68,15 @@ export class ReviewRepository {
     return reviewRepo.getReview(this.db, reviewId);
   }
 
+  /** The newest `kind='review'` row for a run (+ its findings), scoped by
+   *  workspace. Used by `GET /runs/:id/result`. */
+  reviewForRun(
+    workspaceId: string,
+    runId: string,
+  ): Promise<{ review: ReviewRow; findings: FindingRow[] } | undefined> {
+    return reviewRepo.reviewForRun(this.db, workspaceId, runId);
+  }
+
   /** In-flight runs for a PR (status='running') — the server-side source of
    *  truth for "which agents are running now". Joined with the agent name. */
   activeRunsForPull(
@@ -80,6 +89,15 @@ export class ReviewRepository {
   /** All runs for a PR (any status), newest first — the PR run history. */
   listRunsForPull(workspaceId: string, prId: string): Promise<RunSummary[]> {
     return runRepo.listRunsForPull(this.db, workspaceId, prId);
+  }
+
+  /** One run's summary by id, scoped by workspace, plus its `prId`. Used by
+   *  `GET /runs/:id/result`. */
+  getRunSummary(
+    workspaceId: string,
+    runId: string,
+  ): Promise<(RunSummary & { prId: string | null }) | undefined> {
+    return runRepo.getRunSummary(this.db, workspaceId, runId);
   }
 
   /** Delete one agent run (+ its trace via FK cascade). Workspace-scoped. */

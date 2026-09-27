@@ -59,6 +59,7 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 | `client/` | `@devdigest/web` | Next.js studio |
 | `reviewer-core/` | `@devdigest/reviewer-core` | pure engine: diff → prompt → LLM → grounded findings |
 | `e2e/` | `@devdigest/e2e` | deterministic browser flows |
+| `mcp/` | `@devdigest/mcp` | stdio MCP server (thin client of the API) |
 | `server/src/vendor/shared` | `@devdigest/shared` | Zod contracts |
 
 `repo-intel` (indexer) lives inside the server: `server/src/modules/repo-intel/`.

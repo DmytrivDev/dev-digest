@@ -154,6 +154,13 @@ Server tests split by filename: `*.it.test.ts` are DB-backed (testcontainers
 Postgres); everything else is hermetic. The browser e2e flows live in
 [`e2e/`](e2e/README.md) and run deterministically (no LLM).
 
+## Use DevDigest from Claude Code (L04)
+
+A local stdio MCP server (`mcp/`) exposes five tools — `list_agents`,
+`run_agent_on_pr`, `get_findings`, `get_conventions`, `get_blast_radius` — so Claude
+Code in this repo can drive DevDigest directly, against the running API. Setup,
+tool table, env vars and manual verification: **[`mcp/README.md`](mcp/README.md)**.
+
 ## Troubleshooting
 
 - **`relation ... does not exist` / API errors on first run** — migrations weren't

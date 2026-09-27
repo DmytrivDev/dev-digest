@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, RunEventKind, RunTrace } from '@devdigest/shared';
+import type { FindingActionKind, RunEventKind, RunSummary, RunTrace } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -12,6 +12,15 @@ import { reviewToDto } from './helpers.js';
 // './service.js' (these previously lived here; logic now in ./helpers.ts).
 export { findingRowToDto, reviewToDto } from './helpers.js';
 export type { ReviewDto, ReviewDtoFinding } from './helpers.js';
+
+/** `GET /runs/:id/result` response (D2). Composed from the existing
+ *  `RunSummary` contract plus a server-local PR summary and `ReviewDto` — not
+ *  added to `vendor/shared` since no client code reads this shape. */
+export interface RunResult {
+  run: RunSummary;
+  pr: { id: string; number: number; repo_id: string; repo_full_name: string };
+  review: ReviewDto | null;
+}
 
 /**
  * Review service (the core). Orchestrates:
@@ -188,5 +197,37 @@ export class ReviewService {
 
   async getRunTrace(workspaceId: string, runId: string): Promise<RunTrace | undefined> {
     return this.repo.getRunTrace(workspaceId, runId);
+  }
+
+  /**
+   * `GET /runs/:id/result` (D2): a run's status, its PR, and its review (or
+   * `null` while running/failed) from a bare run id. All three reads are
+   * workspace-scoped, and findings are read only via this run's own review id
+   * (`server/INSIGHTS.md:35`) — never by `pr_id`.
+   */
+  async getRunResult(workspaceId: string, runId: string): Promise<RunResult | undefined> {
+    const run = await this.repo.getRunSummary(workspaceId, runId);
+    if (!run) return undefined;
+    const { prId, ...runSummary } = run;
+    if (!prId) return undefined;
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) return undefined;
+    const repo = await this.repo.getRepo(pull.repoId);
+    if (!repo) return undefined;
+
+    const found = await this.repo.reviewForRun(workspaceId, runId);
+    let review: ReviewDto | null = null;
+    if (found) {
+      const agentName = found.review.agentId
+        ? (await this.agents.getById(workspaceId, found.review.agentId))?.name ?? null
+        : null;
+      review = reviewToDto(found.review, found.findings, agentName);
+    }
+
+    return {
+      run: runSummary,
+      pr: { id: pull.id, number: pull.number, repo_id: repo.id, repo_full_name: repo.fullName },
+      review,
+    };
   }
 }

@@ -196,6 +196,7 @@ d('intent layer', () => {
         throw new Error('404 Not Found');
       },
       currentLogin: async () => 'mock-user',
+      listMergedPullsForPath: async () => [],
     };
     const failing = await makeApp({ github: throwingGithub });
     const prB = await makePr(repo.id, { number: 3, body: 'Fixes #482.' });

@@ -12,7 +12,7 @@
  */
 import { readFileSync, writeFileSync, renameSync, existsSync, unlinkSync } from "node:fs";
 
-const PACKAGES = ["client", "server", "reviewer-core", "e2e"];
+const PACKAGES = ["client", "server", "reviewer-core", "e2e", "mcp"];
 const SECTIONS = [
   "What Works",
   "What Doesn't Work",

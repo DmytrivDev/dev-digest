@@ -11,6 +11,7 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  PathPullRequest,
 } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
@@ -368,5 +369,52 @@ export class OctokitGitHubClient implements GitHubClient {
       withTimeout(this.octokit.rest.users.getAuthenticated(), TIMEOUT),
     );
     return res.data.login;
+  }
+
+  /**
+   * Two-step walk: commits touching `path` on the default branch, then the
+   * merged PR associated with each commit. 1 + up to `opts.maxCommits` calls
+   * (docs/plans/blast-radius.plan.md Key decision 8). De-duplicates by PR
+   * number and sorts by `merged_at` desc.
+   */
+  async listMergedPullsForPath(
+    repo: RepoRef,
+    path: string,
+    opts: { maxCommits: number },
+  ): Promise<PathPullRequest[]> {
+    return withRetry(() =>
+      withTimeout(
+        (async () => {
+          const { data: commits } = await this.octokit.rest.repos.listCommits({
+            owner: repo.owner,
+            repo: repo.name,
+            path,
+            per_page: opts.maxCommits,
+          });
+
+          const byNumber = new Map<number, PathPullRequest>();
+          for (const commit of commits) {
+            const { data: pulls } = await this.octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: repo.owner,
+              repo: repo.name,
+              commit_sha: commit.sha,
+            });
+            for (const pr of pulls) {
+              if (!pr.merged_at) continue;
+              if (byNumber.has(pr.number)) continue;
+              byNumber.set(pr.number, {
+                number: pr.number,
+                title: pr.title,
+                author: pr.user?.login ?? 'unknown',
+                merged_at: pr.merged_at,
+              });
+            }
+          }
+
+          return [...byNumber.values()].sort((a, b) => b.merged_at.localeCompare(a.merged_at));
+        })(),
+        TIMEOUT,
+      ),
+    );
   }
 }

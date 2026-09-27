@@ -6,7 +6,7 @@
  */
 const context = [
   "engineering-insights loop — before any other work on this prompt:",
-  "read the INSIGHTS.md of the package the prompt touches (client/, server/, reviewer-core/, e2e/).",
+  "read the INSIGHTS.md of the package the prompt touches (client/, server/, reviewer-core/, e2e/, mcp/).",
   "Re-read it when the work moves to a different package; do not rely on an earlier turn's read.",
 ].join(" ");
 

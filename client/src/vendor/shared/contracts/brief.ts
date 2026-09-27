@@ -62,10 +62,37 @@ export const ChangedSymbol = z.object({
 });
 export type ChangedSymbol = z.infer<typeof ChangedSymbol>;
 
+/** Why the facade could not fully use the index — "no results" is not a reason. */
+export const BlastDegradedReason = z.enum([
+  'flag_off',
+  'index_failed',
+  'index_partial',
+  'repo_too_large',
+  'no_data',
+  'files_unavailable',
+]);
+export type BlastDegradedReason = z.infer<typeof BlastDegradedReason>;
+
+/** Named `Blast…` so it does not collide with the `IndexStatus` export in platform.ts. */
+export const BlastIndexStatus = z.enum(['full', 'partial', 'degraded', 'failed']);
+export type BlastIndexStatus = z.infer<typeof BlastIndexStatus>;
+
+export const BlastCounts = z.object({
+  symbols: z.number().int().nonnegative(),
+  callers: z.number().int().nonnegative(),
+  endpoints: z.number().int().nonnegative(),
+  crons: z.number().int().nonnegative(),
+});
+export type BlastCounts = z.infer<typeof BlastCounts>;
+
 export const BlastCaller = z.object({
   name: z.string(),
   file: z.string(),
   line: z.number().int(),
+  // Optional: this caller's own endpoints/crons, so the graph can draw honest
+  // caller→endpoint/cron edges instead of assigning them to the whole group.
+  endpoints: z.array(z.string()).optional(),
+  crons: z.array(z.string()).optional(),
 });
 export type BlastCaller = z.infer<typeof BlastCaller>;
 
@@ -81,6 +108,13 @@ export const BlastRadius = z.object({
   changed_symbols: z.array(ChangedSymbol),
   downstream: z.array(DownstreamImpact),
   summary: z.string(),
+  // Optional fields below are absent when the server predates them.
+  degraded: z.boolean().optional(),
+  reason: BlastDegradedReason.optional(),
+  index_status: BlastIndexStatus.optional(),
+  /** Commit the caller `file:line` links resolve against (repo_index_state.last_indexed_sha). */
+  indexed_sha: z.string().optional(),
+  counts: BlastCounts.optional(),
 });
 export type BlastRadius = z.infer<typeof BlastRadius>;
 
@@ -113,8 +147,13 @@ export const PrHistoryItem = z.object({
 });
 export type PrHistoryItem = z.infer<typeof PrHistoryItem>;
 
+/** Why history is unavailable — absent when history was fetched normally. */
+export const PrHistoryUnavailableReason = z.enum(['no_github', 'github_error']);
+export type PrHistoryUnavailableReason = z.infer<typeof PrHistoryUnavailableReason>;
+
 export const PrHistory = z.object({
   history: z.array(PrHistoryItem),
+  reason: PrHistoryUnavailableReason.optional(),
 });
 export type PrHistory = z.infer<typeof PrHistory>;
 

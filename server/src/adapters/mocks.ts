@@ -17,6 +17,7 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  PathPullRequest,
   GitClient,
   CloneOptions,
   UnifiedDiff,
@@ -125,6 +126,8 @@ export interface MockGitHubOptions {
   login?: string;
   /** Existing inline review comments returned by listReviewComments. */
   comments?: PrReviewComment[];
+  /** `listMergedPullsForPath` results, keyed by path. */
+  pathPulls?: Record<string, PathPullRequest[]>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -236,6 +239,14 @@ export class MockGitHubClient implements GitHubClient {
 
   async currentLogin(): Promise<string> {
     return this.opts.login ?? 'mock-user';
+  }
+
+  async listMergedPullsForPath(
+    _repo: RepoRef,
+    path: string,
+    _opts: { maxCommits: number },
+  ): Promise<PathPullRequest[]> {
+    return this.opts.pathPulls?.[path] ?? [];
   }
 }
 
