@@ -84,6 +84,28 @@ describe('validDiagram (AC-78)', () => {
     expect(validDiagram(src)).not.toBeNull();
   });
 
+  it('keeps known :::role tags and drops styling lines and unknown classes', () => {
+    const src = [
+      'flowchart LR',
+      '  WEB["web"]:::client --> API["api"]:::service',
+      '  API --> DB[("db")]:::data',
+      '  API --> X["x"]:::evil',
+      '  style API fill:#f00,stroke-width:9px',
+      '  classDef evil font-size:80px',
+      '  class X evil',
+      '  click API "javascript:alert(1)"',
+      '  linkStyle 0 stroke:#f00',
+    ].join('\n');
+    expect(validDiagram(src)).toBe(
+      [
+        'flowchart LR',
+        '  WEB["web"]:::client --> API["api"]:::service',
+        '  API --> DB[("db")]:::data',
+        '  API --> X["x"]',
+      ].join('\n'),
+    );
+  });
+
   it('rejects empty and non-string input', () => {
     expect(validDiagram('')).toBeNull();
     expect(validDiagram(null)).toBeNull();

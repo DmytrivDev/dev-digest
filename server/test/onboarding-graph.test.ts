@@ -247,4 +247,48 @@ describe('packageDiagram (AC-82)', () => {
     expect(odd).toContain('["we_ird_name"]');
     expect(odd).not.toContain('"ird');
   });
+
+  it('never draws a dot-directory (tooling) as a package', () => {
+    const diagram =
+      packageDiagram(
+        [{ path: '.claude/hooks/x.ts' }, { path: '.claude/y.ts' }, ...files],
+        [
+          { from: 'server/a.ts', to: 'shared/c.ts' },
+          { from: '.claude/y.ts', to: 'server/a.ts' },
+        ],
+      ) ?? '';
+    expect(diagram).not.toContain('.claude');
+    expect(diagram.split('\n').filter((l) => l.includes('-->'))).toEqual(['  p0 --> p2']);
+  });
+
+  it('lays packages without an edge out left to right with invisible links', () => {
+    // The dev-digest shape: five independent packages, one import between two of them.
+    const repo = [
+      ...Array.from({ length: 5 }, (_, i) => ({ path: `client/c${i}.ts` })),
+      ...Array.from({ length: 4 }, (_, i) => ({ path: `server/s${i}.ts` })),
+      ...Array.from({ length: 3 }, (_, i) => ({ path: `mcp/m${i}.ts` })),
+      ...Array.from({ length: 2 }, (_, i) => ({ path: `reviewer-core/r${i}.ts` })),
+      { path: 'e2e/e.ts' },
+    ];
+    const diagram = packageDiagram(repo, [{ from: 'reviewer-core/r0.ts', to: 'server/s0.ts' }]) ?? '';
+    // client p0, server p1, mcp p2, reviewer-core p3, e2e p4.
+    expect(diagram.split('\n').slice(6)).toEqual([
+      '  p3 --> p1',
+      '  p0 ~~~ p2',
+      '  p2 ~~~ p4',
+      '  p4 ~~~ p3',
+    ]);
+  });
+
+  it('breaks isolated packages into rows of at most 4', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ path: `pkg${String(i).padStart(2, '0')}/x.ts` }));
+    const diagram = packageDiagram(many, [{ from: 'pkg00/x.ts', to: 'pkg01/x.ts' }]) ?? '';
+    const invisible = diagram.split('\n').filter((l) => l.includes('~~~'));
+    // 8 isolated: two rows of 4 (3 links each), the last row leads into p0.
+    expect(invisible).toEqual([
+      '  p2 ~~~ p3', '  p3 ~~~ p4', '  p4 ~~~ p5',
+      '  p6 ~~~ p7', '  p7 ~~~ p8', '  p8 ~~~ p9',
+      '  p9 ~~~ p0',
+    ]);
+  });
 });

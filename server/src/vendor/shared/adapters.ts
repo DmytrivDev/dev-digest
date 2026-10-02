@@ -67,6 +67,12 @@ export interface StructuredRequest<T> {
    * the `session_id` body field; ignored by providers that don't support it.
    */
   sessionId?: string;
+  /**
+   * Ask OpenRouter to skip the model's reasoning pass (`reasoning: { enabled: false }`).
+   * Some upstreams reason by default, and those tokens count against `maxTokens` — a
+   * structured answer can then be cut mid-JSON. Ignored by providers that don't support it.
+   */
+  disableReasoning?: boolean;
 }
 
 export interface StructuredResult<T> {

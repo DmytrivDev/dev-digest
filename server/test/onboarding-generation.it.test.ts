@@ -41,6 +41,7 @@ import { MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
 import { SimpleGitClient } from '../src/adapters/git/simple-git.js';
 import { OnboardingService } from '../src/modules/onboarding/service.js';
 import { OnboardingRepository } from '../src/modules/onboarding/repository.js';
+import { MODEL_MAX_TOKENS } from '../src/modules/onboarding/constants.js';
 import type { RepoIntel } from '../src/modules/repo-intel/types.js';
 
 const hasDocker = await dockerAvailable();
@@ -486,6 +487,9 @@ d('onboarding tour — generation matrix', () => {
       // AC-51: one call, and the request itself forbids a schema-repair retry.
       expect(stub.calls).toHaveLength(1);
       expect(stub.calls[0]!.maxRetries).toBe(0);
+      // A reasoning pass billed against max_tokens truncated the JSON on some upstreams.
+      expect(stub.calls[0]!.disableReasoning).toBe(true);
+      expect(stub.calls[0]!.maxTokens).toBe(MODEL_MAX_TOKENS);
       // AC-104: a failed call is reported as one attempt, with nothing known about its cost.
       expect(tour.usage.llm_calls).toBe(1);
       expect(tour.usage.cost_usd).toBeNull();

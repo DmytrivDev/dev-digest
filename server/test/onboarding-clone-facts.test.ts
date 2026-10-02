@@ -334,6 +334,13 @@ describe('architectureFacts (AC-81)', () => {
     expect(facts.top_folders).toEqual([{ path: 'ok', files: 1 }]);
     expect(facts.package_dirs).toEqual([]);
   });
+
+  it('lists no dot-directory (tooling) as a package, but still counts it as a folder', () => {
+    const files = ['.claude/hooks/x.ts', 'server/a.ts', '.github/ci.yml'];
+    const facts = architectureFacts(files, ['.claude/hooks/x.ts', 'server/a.ts'], null, []);
+    expect(facts.package_dirs).toEqual(['server']);
+    expect(facts.top_folders.map((f) => f.path)).toContain('.claude');
+  });
 });
 
 describe('directoryTree (AC-98)', () => {

@@ -18,7 +18,7 @@ import {
 } from '../constants.js';
 import type { ArchitectureFacts, CloneFacts, RunCandidate } from '../types.js';
 import { hasControlChar } from './rank.js';
-import { packageDirOf } from './graph.js';
+import { isToolingDir, packageDirOf } from './graph.js';
 
 /**
  * Facts read from the clone (SPEC-02 AC-68..AC-71, AC-73..AC-76, AC-81, AC-85, AC-96,
@@ -278,9 +278,9 @@ export function architectureFacts(
       extensions.set(ext, (extensions.get(ext) ?? 0) + 1);
     }
   }
-  const packageDirs = [...new Set(safeFiles(indexedFiles).map(packageDirOf))].sort(
-    compareCodePoints,
-  );
+  const packageDirs = [...new Set(safeFiles(indexedFiles).map(packageDirOf))]
+    .filter((dir) => !isToolingDir(dir))
+    .sort(compareCodePoints);
   return {
     package_manager: pm,
     package_dirs: packageDirs,

@@ -19,7 +19,14 @@ export const ARCH_WORDS_MAX = 180;
 /** A model-written row text longer than this is cut to `ROW_TEXT_MAX - 1` chars + "…". */
 export const ROW_TEXT_MAX = 120;
 export const DIAGRAM_NODES_MAX = 12;
+/**
+ * The roles a node of the model's diagram may carry as a `:::role` tag; the page colours
+ * each node's border by it. Any other class, and every styling line, is stripped.
+ */
+export const DIAGRAM_ROLES = ['client', 'service', 'engine', 'data', 'external', 'shared'] as const;
 export const PACKAGE_DIAGRAM_NODES_MAX = 12;
+/** Packages with no import edge are laid side by side in rows of at most this many. */
+export const PACKAGE_DIAGRAM_ROW_MAX = 4;
 
 // ---- Architecture facts / run targets (AC-69, AC-81) ----
 export const TOP_FOLDERS_MAX = 10;
@@ -69,7 +76,13 @@ export const HISTORY_MAX_COMMITS = 20_000;
 
 // ---- Model call and prompt budget (AC-48, AC-97, AC-98) ----
 export const MODEL_DEADLINE_MS = 120_000;
-export const MODEL_MAX_TOKENS = 4_000;
+/**
+ * Output ceiling. A tour answer is ~1,000–1,400 tokens, but OpenRouter routes deepseek to
+ * upstreams that may still run a reasoning pass (2,000+ tokens, billed against this cap)
+ * even with `disableReasoning`; at 4,000 that cut the JSON mid-object → llm_invalid_output
+ * (measured 2026-10-02). The deadline, not this cap, bounds latency.
+ */
+export const MODEL_MAX_TOKENS = 8_000;
 export const INPUT_TOKEN_BUDGET = 24_000;
 export const README_MAX_CHARS = 8_000;
 export const TREE_MAX_DEPTH = 2;

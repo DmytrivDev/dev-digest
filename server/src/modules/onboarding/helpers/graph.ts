@@ -5,6 +5,7 @@ import {
   CRITICAL_PATHS_MAX,
   PACKAGE_CONTAINERS,
   PACKAGE_DIAGRAM_NODES_MAX,
+  PACKAGE_DIAGRAM_ROW_MAX,
   READING_PATH_MAX,
   ROOT_PACKAGE,
 } from '../constants.js';
@@ -46,6 +47,14 @@ export function packageDirOf(path: string): string {
   const first = segments[0] as string;
   if (CONTAINERS.includes(first) && segments.length >= 3) return `${first}/${segments[1]}`;
   return first;
+}
+
+/**
+ * A dot-directory (`.claude`, `.github`, `.husky`) holds tooling, not a part of the
+ * product, so it is never listed as a package nor drawn in the diagram.
+ */
+export function isToolingDir(dir: string): boolean {
+  return dir.startsWith('.');
 }
 
 function safeEdges(edges: readonly ImportEdge[]): ImportEdge[] {
@@ -186,6 +195,12 @@ const LABEL_UNSAFE_RE = /[^A-Za-z0-9._/@() -]/g;
  * The deterministic skeleton diagram: a `flowchart LR` over the (at most 12) package
  * directories holding the most indexed files, one `A --> B` per distinct pair where an
  * indexed file in A imports one in B. `null` when the index holds no import edges.
+ *
+ * Layout: Mermaid stacks every disconnected node vertically, so a repo of independent
+ * packages renders as a tall column. Packages with no edge are therefore chained with
+ * INVISIBLE links (`a ~~~ b`, drawn as nothing) into rows of `PACKAGE_DIAGRAM_ROW_MAX`,
+ * and the last row leads into the first connected package — the diagram reads left to
+ * right. Invisible links carry no meaning; only `-->` lines are imports.
  */
 export function packageDiagram(
   files: readonly { path: string }[],
@@ -198,6 +213,7 @@ export function packageDiagram(
   for (const f of files) {
     if (hasControlChar(f.path)) continue;
     const dir = packageDirOf(f.path);
+    if (isToolingDir(dir)) continue;
     counts.set(dir, (counts.get(dir) ?? 0) + 1);
   }
   const nodes = [...counts.entries()]
@@ -210,15 +226,31 @@ export function packageDiagram(
   const idOf = new Map(nodes.map((dir, i) => [dir, `p${i}`]));
 
   const links = new Set<string>();
+  const linked = new Set<string>();
   for (const e of clean) {
     const a = idOf.get(packageDirOf(e.from));
     const b = idOf.get(packageDirOf(e.to));
     if (a === undefined || b === undefined || a === b) continue;
     links.add(`  ${a} --> ${b}`);
+    linked.add(a);
+    linked.add(b);
+  }
+  const sortedLinks = [...links].sort();
+  // The source of the first edge: the isolated rows lead into it, left to right.
+  const firstSource = sortedLinks[0]?.trim().split(' ')[0];
+
+  // Isolated packages, in node order, chained into rows (see the doc comment).
+  const isolated = nodes.map((_, i) => `p${i}`).filter((id) => !linked.has(id));
+  const layout: string[] = [];
+  for (let start = 0; start < isolated.length; start += PACKAGE_DIAGRAM_ROW_MAX) {
+    const row = isolated.slice(start, start + PACKAGE_DIAGRAM_ROW_MAX);
+    for (let i = 1; i < row.length; i++) layout.push(`  ${row[i - 1]} ~~~ ${row[i]}`);
+    const isLastRow = start + PACKAGE_DIAGRAM_ROW_MAX >= isolated.length;
+    if (isLastRow && firstSource) layout.push(`  ${row[row.length - 1]} ~~~ ${firstSource}`);
   }
 
   const lines = ['flowchart LR'];
   nodes.forEach((dir, i) => lines.push(`  p${i}["${dir.replace(LABEL_UNSAFE_RE, '_')}"]`));
-  lines.push(...[...links].sort());
+  lines.push(...sortedLinks, ...layout);
   return lines.join('\n');
 }

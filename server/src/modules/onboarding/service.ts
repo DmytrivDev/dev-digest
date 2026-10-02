@@ -442,6 +442,9 @@ export class OnboardingService {
           // Exactly one engine attempt, no schema-repair retry (AC-51). OpenRouter ignores a
           // per-request `timeoutMs`, so the bound is `withTimeout`, not a request field.
           maxRetries: 0,
+          // A reasoning pass took 33–160 s and up to 2,600 extra output tokens per tour on
+          // some OpenRouter upstreams; without it the same answer takes ~14–28 s.
+          disableReasoning: true,
         }),
         this.deps.modelDeadlineMs ?? MODEL_DEADLINE_MS,
       );

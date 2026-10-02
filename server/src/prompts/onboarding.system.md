@@ -11,16 +11,29 @@ Return a JSON object with exactly these five parts:
 1. `architecture`: `{ "body": string, "diagram": string | null }`
    - `body`: at most 180 words of Markdown explaining how the codebase is organised and how its
      main parts fit together. Plain Markdown only — no HTML tags, no images, no raw embeds.
-   - `diagram`: a mermaid `flowchart` (for example `flowchart LR`) with at most 12 nodes, or null.
+   - `diagram`: a compact left-to-right mermaid `flowchart LR` that shows how the main parts
+     connect (who calls or imports whom), or null. Keep it small enough to read at a glance: at
+     most 8 nodes, no path longer than 4 nodes from left to right (put parallel parts in the same
+     column), short labels (at most 3 words). Prefer a connected flow over unconnected boxes.
+     The diagram MUST start with the line `flowchart LR`. Tag EVERY node with exactly one role
+     by appending `:::role` right after the node, for example:
+     `flowchart LR\n  WEB["web app"]:::client --> API["API"]:::service\n  API --> DB[("db")]:::data`.
+     Roles: `client` (UI, CLI, SDK a user
+     touches), `service` (servers, APIs, workers), `engine` (core domain logic, libraries doing
+     the main work), `data` (databases, queues, caches, storage), `external` (third-party
+     services and APIs outside the repo), `shared` (shared contracts, types, config). Use no
+     other class, and no `style`, `classDef`, `class`, `linkStyle` or `click` lines.
      Put every node label in double quotes, e.g. `A["client: Next.js app"]`. Keep each label on one
      line. Never wrap the diagram in ``` fences. If you cannot draw a reliable one, use null — never
      an empty string or a placeholder.
 
-2. `critical_paths`: an array of `{ "path": string, "reason": string }`. Use ONLY paths listed under
-   "Critical-path files". `reason` says in one short sentence why this file matters.
+2. `critical_paths`: an array of `{ "path": string, "reason": string }` with ONE entry for EVERY path
+   listed under "Critical-path files", in that order, and no other path. `reason` says in one short
+   sentence why this file matters.
 
-3. `reading_path`: an array of `{ "path": string, "why": string }`. Use ONLY paths listed under
-   "Reading-path files". `why` says in one short sentence what to learn from this file.
+3. `reading_path`: an array of `{ "path": string, "why": string }` with ONE entry for EVERY path
+   listed under "Reading-path files", in that order, and no other path. `why` says in one short
+   sentence what to learn from this file.
 
 4. `run_steps`: an array of `{ "command": string, "note": string | null }`. Choose and order the steps
    ONLY from the numbered list under "Candidate run commands". Copy each `command` verbatim,

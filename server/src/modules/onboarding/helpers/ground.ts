@@ -18,6 +18,7 @@ import {
   ARCH_WORDS_MAX,
   CONTROL_CHAR_RE,
   DIAGRAM_NODES_MAX,
+  DIAGRAM_ROLES,
   FIRST_TASKS_MAX,
   HOW_TO_RUN_MAX,
   ROW_TEXT_MAX,
@@ -130,13 +131,30 @@ function diagramNodeIds(src: string): Set<string> {
   return ids;
 }
 
+/** Lines that would restyle the diagram — only the page decides how a node looks. */
+const DIAGRAM_STYLE_LINE = /^(?:style|classDef|class|linkStyle|click)\b/;
+const ROLE_SET: ReadonlySet<string> = new Set(DIAGRAM_ROLES);
+
+/**
+ * The model's diagram with every styling line removed and every `:::class` tag that is
+ * not a known role (`DIAGRAM_ROLES`) dropped. The page colours nodes by role itself, so
+ * model-written colours, fills or click handlers never reach the SVG.
+ */
+export function sanitizeDiagram(src: string): string {
+  return src
+    .split('\n')
+    .filter((line) => !DIAGRAM_STYLE_LINE.test(line.trim()))
+    .map((line) => line.replace(/:::(\w+)/g, (tag, role: string) => (ROLE_SET.has(role) ? tag : '')))
+    .join('\n');
+}
+
 /**
  * The model's diagram when it is a Mermaid `flowchart`/`graph` with at most 12 nodes,
- * else `null` (AC-78). Returns the trimmed source.
+ * else `null` (AC-78). Returns the trimmed, sanitised source (`sanitizeDiagram`).
  */
 export function validDiagram(src: string | null | undefined): string | null {
   if (typeof src !== 'string') return null;
-  const trimmed = src.trim();
+  const trimmed = sanitizeDiagram(src.trim()).trim();
   if (!DIAGRAM_START.test(trimmed)) return null;
   return diagramNodeIds(trimmed).size <= DIAGRAM_NODES_MAX ? trimmed : null;
 }
