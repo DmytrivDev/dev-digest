@@ -11,14 +11,18 @@ export interface SkillEditorTab {
  * Editor tabs. The mock's Evals tab still belongs to a later lesson — a tab
  * that renders a placeholder is worse than no tab.
  *
- * Preview comes FIRST because it is also the landing tab: opening a skill from
- * the list is a request to read it, not to edit it, and a tab order that does
- * not start with the default reads as if the page opened on the wrong one.
- * `TABS[0].key` is the default, so the two cannot drift apart.
+ * Config comes FIRST because it is also the landing tab. This REVERSES the
+ * earlier decision (`client/specs/L02-skills.md` R3, "Preview first: opening a
+ * skill is a request to read it") on purpose — SPEC-01 D-18 / AC-24 make Config
+ * the landing tab, with Context right after it. The legacy L02 spec is history
+ * and is left as written. A tab order that does not start with the default reads
+ * as if the page opened on the wrong one, and `TABS[0].key` is the default, so
+ * the two cannot drift apart.
  */
 export const TABS: readonly SkillEditorTab[] = [
-  { key: "preview", labelKey: "editor.tabs.preview", icon: "Eye" },
   { key: "config", labelKey: "editor.tabs.config", icon: "Settings" },
+  { key: "context", labelKey: "editor.tabs.context", icon: "FileText" },
+  { key: "preview", labelKey: "editor.tabs.preview", icon: "Eye" },
   { key: "stats", labelKey: "editor.tabs.stats", icon: "BarChart" },
   { key: "versions", labelKey: "editor.tabs.versions", icon: "History" },
 ];

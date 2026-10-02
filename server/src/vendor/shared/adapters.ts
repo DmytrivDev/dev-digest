@@ -244,6 +244,26 @@ export interface GitClient {
   blame(repo: RepoRef, path: string): Promise<BlameLine[]>;
   log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
   readFile(repo: RepoRef, path: string): Promise<string>;
+  /**
+   * Repository-relative, `/`-separated paths of every regular file in the
+   * clone's working tree. Does not descend into a directory whose name is in
+   * `opts.excludeDirs` (`.git` is always skipped) and never follows a symlinked
+   * directory; a symlinked FILE is listed only when its real path is a regular
+   * file inside the clone. Rejects with an error whose `code` is `ENOENT` when
+   * the clone directory does not exist.
+   */
+  listFiles(repo: RepoRef, opts?: { excludeDirs?: readonly string[] }): Promise<string[]>;
+  /**
+   * Raw bytes of a file INSIDE the clone — same guard as `readFile`
+   * (`code: 'EOUTSIDECLONE'` when it resolves outside; `ENOENT` when missing).
+   * Lets callers detect binary / invalid UTF-8 content that `readFile` would mangle.
+   */
+  readFileBytes(repo: RepoRef, path: string): Promise<Uint8Array>;
+  /**
+   * Branch the clone's HEAD points at (`git rev-parse --abbrev-ref HEAD`); the
+   * literal `HEAD` when detached. Rejects with `code: 'ENOENT'` when not cloned.
+   */
+  currentBranch(repo: RepoRef): Promise<string>;
   clonePathFor(repo: RepoRef): string;
 }
 

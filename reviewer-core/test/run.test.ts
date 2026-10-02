@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { LLMProvider, StructuredResult } from '@devdigest/shared';
+import type { LLMProvider, StructuredResult, UnifiedDiff } from '@devdigest/shared';
 import { MockLLMProvider, MockGitClient } from '../../server/src/adapters/mocks.js';
 import { reviewPullRequest } from '../src/index.js';
 
@@ -134,5 +134,101 @@ describe('reviewPullRequest (engine)', () => {
     await reviewPullRequest({ systemPrompt: 's', model: 'm', diff, llm: recorder, sessionId: 'sess-abc' });
     expect(seen.length).toBeGreaterThan(0);
     expect(seen.every((s) => s === 'sess-abc')).toBe(true);
+  });
+
+  describe('Project Context specs reach every LLM call (AC-63)', () => {
+    const specs = [
+      { path: 'specs/a.md', content: '# A\nalpha body' },
+      { path: 'docs/b.md', content: '# B\nbeta body' },
+    ];
+
+    function recordingLlm(userMessages: string[]): LLMProvider {
+      return {
+        id: 'openrouter',
+        async completeStructured<T>(req): Promise<StructuredResult<T>> {
+          userMessages.push(req.messages.find((m) => m.role === 'user')!.content);
+          return {
+            data: { verdict: 'approve', summary: 'ok', score: 100, findings: [] } as unknown as T,
+            model: req.model,
+            tokensIn: 0,
+            tokensOut: 0,
+            costUsd: 0,
+            raw: '',
+            attempts: 1,
+          };
+        },
+        async listModels() {
+          return [];
+        },
+        async complete() {
+          throw new Error('not used');
+        },
+        async embed() {
+          return [];
+        },
+      };
+    }
+
+    // Two-file diff (distinct paths) so map-reduce yields 2 calls.
+    function twoFileDiff(): UnifiedDiff {
+      const raw = [
+        'diff --git a/src/a.ts b/src/a.ts',
+        '--- a/src/a.ts',
+        '+++ b/src/a.ts',
+        '@@ -1 +1 @@',
+        '-old a',
+        '+new a',
+        'diff --git a/src/b.ts b/src/b.ts',
+        '--- a/src/b.ts',
+        '+++ b/src/b.ts',
+        '@@ -1 +1 @@',
+        '-old b',
+        '+new b',
+        '',
+      ].join('\n');
+      return {
+        raw,
+        files: ['src/a.ts', 'src/b.ts'].map((path) => ({
+          path,
+          additions: 1,
+          deletions: 1,
+          hunks: [
+            { file: path, oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, newLineNumbers: [1] },
+          ],
+        })),
+      };
+    }
+
+    it('map-reduce: assembly.specs is a substring of the user message of each of the 2 calls', async () => {
+      const userMessages: string[] = [];
+      const outcome = await reviewPullRequest({
+        systemPrompt: 's',
+        model: 'm',
+        diff: twoFileDiff(),
+        llm: recordingLlm(userMessages),
+        strategy: 'map-reduce',
+        specs,
+      });
+      expect(outcome.mode).toBe('map-reduce');
+      expect(userMessages).toHaveLength(2);
+      expect(outcome.assembly.specs).toBeTruthy();
+      for (const user of userMessages) expect(user).toContain(outcome.assembly.specs as string);
+    });
+
+    it('single-pass: assembly.specs is a substring of the user message of the 1 call', async () => {
+      const userMessages: string[] = [];
+      const outcome = await reviewPullRequest({
+        systemPrompt: 's',
+        model: 'm',
+        diff: twoFileDiff(),
+        llm: recordingLlm(userMessages),
+        strategy: 'single-pass',
+        specs,
+      });
+      expect(outcome.mode).toBe('single-pass');
+      expect(userMessages).toHaveLength(1);
+      expect(outcome.assembly.specs).toBeTruthy();
+      expect(userMessages[0]).toContain(outcome.assembly.specs as string);
+    });
   });
 });

@@ -15,6 +15,13 @@ import {
   Settings,
   Repo,
   PrDetail,
+  ContextDocList,
+  ContextDocContent,
+  ContextAttachment,
+  InheritedContextAttachment,
+  AgentContextDocs,
+  SkillContextDocs,
+  SaveContextDocsInput,
 } from '@devdigest/shared';
 
 /**
@@ -285,5 +292,84 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+});
+
+describe('Project Context contracts', () => {
+  const uuid = '3f1c8d2e-5b7a-4c1d-9e0f-1a2b3c4d5e6f';
+
+  it('ContextDocList parses the list envelope', () => {
+    const parsed = ContextDocList.parse({
+      repo_id: uuid,
+      branch: 'main',
+      total: 1,
+      truncated: false,
+      docs: [
+        { path: 'specs/a.md', name: 'a.md', folder: 'specs', category: 'specs', approx_tokens: 3 },
+      ],
+    });
+    expect(parsed.docs[0]!.category).toBe('specs');
+  });
+
+  it('ContextDocList rejects an unknown category', () => {
+    expect(
+      ContextDocList.safeParse({
+        repo_id: uuid,
+        branch: 'main',
+        total: 1,
+        truncated: false,
+        docs: [{ path: 'a.md', name: 'a.md', folder: '', category: 'misc', approx_tokens: 1 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('ContextDocContent parses', () => {
+    expect(() =>
+      ContextDocContent.parse({ path: 'a.md', content: '# a', used_by_agents: 2 }),
+    ).not.toThrow();
+  });
+
+  it('ContextAttachment allows a null approx_tokens (missing file) but not an absent field', () => {
+    expect(() =>
+      ContextAttachment.parse({ path: 'a.md', present: false, approx_tokens: null }),
+    ).not.toThrow();
+    expect(ContextAttachment.safeParse({ path: 'a.md', present: false }).success).toBe(false);
+  });
+
+  it('InheritedContextAttachment / AgentContextDocs / SkillContextDocs parse', () => {
+    const inherited = {
+      path: 'b.md',
+      present: true,
+      approx_tokens: 5,
+      skill_id: uuid,
+      skill_name: 'Security',
+    };
+    expect(() => InheritedContextAttachment.parse(inherited)).not.toThrow();
+    expect(() =>
+      AgentContextDocs.parse({
+        repo_id: uuid,
+        attached: [{ path: 'a.md', present: true, approx_tokens: 1 }],
+        inherited: [inherited],
+      }),
+    ).not.toThrow();
+    expect(() => SkillContextDocs.parse({ repo_id: uuid, attached: [] })).not.toThrow();
+  });
+
+  it('SaveContextDocsInput accepts a valid set', () => {
+    expect(SaveContextDocsInput.safeParse({ repo_id: uuid, paths: ['specs/a.md'] }).success).toBe(true);
+    expect(SaveContextDocsInput.safeParse({ repo_id: uuid, paths: [] }).success).toBe(true);
+  });
+
+  it('SaveContextDocsInput accepts exactly 500 paths and rejects 501', () => {
+    const paths = (n: number) => Array.from({ length: n }, (_, i) => `docs/${i}.md`);
+    expect(SaveContextDocsInput.safeParse({ repo_id: uuid, paths: paths(500) }).success).toBe(true);
+    expect(SaveContextDocsInput.safeParse({ repo_id: uuid, paths: paths(501) }).success).toBe(false);
+  });
+
+  it('SaveContextDocsInput rejects a duplicated path and a non-uuid repo_id', () => {
+    expect(
+      SaveContextDocsInput.safeParse({ repo_id: uuid, paths: ['a.md', 'b.md', 'a.md'] }).success,
+    ).toBe(false);
+    expect(SaveContextDocsInput.safeParse({ repo_id: 'nope', paths: ['a.md'] }).success).toBe(false);
   });
 });

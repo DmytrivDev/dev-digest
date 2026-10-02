@@ -1,24 +1,52 @@
 {
   "title": "Project Context",
-  "chunks": "{count} chunks",
-  "reindex": "Re-index",
-  "indexing": "Indexing…",
-  "resync": "Resync",
-  "resyncing": "Resyncing…",
-  "indexStatus": "Index status: {status}",
-  "loadError": "Couldn’t load specs",
-  "kb": "{kb}kb",
+  "repoFallback": "this repository",
+  "refresh": "Refresh",
+  "retry": "Retry",
+  "loadError": "Couldn’t load documents",
+  "truncated": "Showing {shown} of {total} documents",
+  "usedBy": "{count, plural, one {Used by # agent} other {Used by # agents}}",
+  "openOnGithub": "Open on GitHub",
   "empty": {
-    "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+    "title": "No markdown documents found in {repo}@{branch}",
+    "refresh": "Refresh"
   },
-  "mode": {
-    "preview": "preview",
-    "edit": "edit"
+  "list": {
+    "label": "Documents",
+    "loading": "Loading documents…"
   },
-  "editor": {
-    "loadError": "Couldn’t load spec",
-    "save": "Save",
-    "saving": "Saving…"
+  "filter": {
+    "label": "Filter documents by path",
+    "placeholder": "Filter by path…",
+    "noMatches": "No documents match “{query}”."
+  },
+  "preview": {
+    "placeholder": "Select a document to preview it.",
+    "loading": "Loading document…",
+    "loadError": "Couldn’t load this document"
+  },
+  "picker": {
+    "filterLabel": "Filter documents by path",
+    "filterPlaceholder": "Filter documents…",
+    "preview": "Preview",
+    "previewTitle": "Preview: {path}",
+    "close": "Close",
+    "missing": "missing",
+    "via": "via {skill}",
+    "dragHandle": "Drag to reorder {name}",
+    "moveUp": "Move {name} up",
+    "moveDown": "Move {name} down",
+    "attach": "Attach {name}",
+    "noRepo": "Select a repository to attach its documents",
+    "loading": "Loading documents…",
+    "loadError": "Couldn’t load documents",
+    "saveError": "Couldn’t save the attached documents",
+    "noDocs": "No documents to attach.",
+    "noMatches": "No documents match “{query}”.",
+    "category": {
+      "specs": "specs",
+      "docs": "docs",
+      "insights": "insights"
+    }
   }
 }

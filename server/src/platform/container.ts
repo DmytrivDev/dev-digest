@@ -25,6 +25,8 @@ import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
+import { ProjectContextRepository } from '../modules/project-context/repository.js';
+import { ProjectContextService } from '../modules/project-context/service.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
@@ -72,6 +74,7 @@ export class Container {
   // `container.agentsRepo` instead of reaching into another module's folder.
   private _agentsRepo?: AgentsRepository;
   private _reviewRepo?: ReviewRepository;
+  private _projectContext?: ProjectContextService;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
@@ -88,7 +91,11 @@ export class Container {
 
   get git(): GitClient {
     if (this.overrides.git) return this.overrides.git;
-    this._git ??= new SimpleGitClient(this.config.cloneDir);
+    // The PAT is resolved per git command and handed over as an HTTP header; it is
+    // never put in a clone URL, so it cannot end up in `<clone>/.git/config`.
+    this._git ??= new SimpleGitClient(this.config.cloneDir, async () =>
+      (await this.secrets.get('GITHUB_TOKEN')) || undefined,
+    );
     return this._git;
   }
 
@@ -98,6 +105,18 @@ export class Container {
 
   get reviewRepo(): ReviewRepository {
     return (this._reviewRepo ??= new ReviewRepository(this.db));
+  }
+
+  /**
+   * Project Context service (SPEC-01), composed once here from ports
+   * (`{repo, git}`) so `project-context/routes.ts` and the review run-executor
+   * consume the same wiring instead of each assembling their own.
+   */
+  get projectContext(): ProjectContextService {
+    return (this._projectContext ??= new ProjectContextService({
+      repo: new ProjectContextRepository(this.db),
+      git: this.git,
+    }));
   }
 
   get codeIndex(): CodeIndex {

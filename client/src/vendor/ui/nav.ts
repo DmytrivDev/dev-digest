@@ -23,6 +23,8 @@ export const NAV: NavGroup[] = [
     section: "WORKSPACE",
     items: [
       { key: "pulls", label: "Pull Requests", icon: "GitPullRequest", href: "/repos/:repoId/pulls", gKey: "p" },
+      // Repo-scoped like Pull Requests: the documents are the active repo's clone.
+      { key: "context", label: "Project Context", icon: "FileText", href: "/repos/:repoId/context" },
     ],
   },
   {
