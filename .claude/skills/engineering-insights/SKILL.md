@@ -121,7 +121,7 @@ an index is stale; `--package <name>` limits it to one.
 Why it exists: these files have outgrown free reading. `server/INSIGHTS.md` is ~50KB, about
 13k tokens, and grows every session — and every agent that touches the server pays that
 before doing any useful work. In one feature it was paid three times over for the same text
-(dispatcher, planner, implementer). The index is ~11KB and lets a reader decide what is
+(dispatcher, implementation-planner, implementer). The index is ~11KB and lets a reader decide what is
 relevant, then pull just those entries with `sed -n '<line>p' server/INSIGHTS.md`.
 
 It is a **finding aid, not a substitute**. The session protocol in the root `CLAUDE.md` says

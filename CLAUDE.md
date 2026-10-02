@@ -4,9 +4,9 @@ Local-first AI PR reviewer. Course starter: Part-0 works end to end; each lesson
 adds one feature back.
 
 ## Before answering
-Search the relevant package's `docs/`, `specs/`, `INSIGHTS.md` FIRST — they are
-curated and may already answer it — then read code. This applies to every package;
-it is not repeated in the per-package files.
+Search the relevant package's `docs/`, `specs/`, `INSIGHTS.md` FIRST — plus the root
+`specs/` feature specs — they are curated and may already answer it — then read code.
+This applies to every package; it is not repeated in the per-package files.
 
 ## Before commit / push / PR
 MANDATORY: read `docs/git-workflow.md` in full before any `git commit`, `git push`,
@@ -14,12 +14,6 @@ or opening a Pull Request — no exceptions, including one-line changes. It hold
 course branching rules (feature branch per homework; PR targets **your fork's** `main`,
 never upstream; merge each homework PR before branching the next one). Getting the PR
 base wrong is not recoverable by editing the PR later.
-
-ALSO MANDATORY before `git push` or opening a PR: run `/pr-self-review`. It routes the
-diff to the skills that govern each changed file, reviews them in parallel, runs the
-deterministic checks, and returns PASS / BLOCKED / INCOMPLETE. **≥1 CRITICAL ⇒ do not push
-and do not open the PR** until it is fixed or the user explicitly waives it. There is no
-hook enforcing this — it holds by this line.
 
 ## Session protocol (engineering-insights loop)
 Not optional — all three steps run every session, and two hooks in `.claude/settings.json`
@@ -48,9 +42,10 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 - Full stack: `./scripts/dev.sh` (Postgres + API :3001 + web :3000, migrated + seeded)
 - Browser e2e: `./scripts/e2e.sh` (isolated stack — never run e2e against the dev DB)
 - Per-package commands: see that package's CLAUDE.md
-- Checks (run before every commit): `pnpm typecheck` + `pnpm test` in the package
-  you touched; DB-backed suites separately (`pnpm exec vitest run .it.test`, needs
-  Docker). There is NO linter configured in this repo — don't look for one.
+- Checks (run before every commit): `node scripts/verify.mjs <pkg>` for each package you
+  touched (typecheck + unit tests + arch:check, compact output; add file paths to run only
+  the related tests); DB-backed suites separately (`node scripts/verify.mjs server --it`,
+  needs Docker). There is NO linter configured in this repo — don't look for one.
 
 ## Map
 | Folder | Package | Role |
@@ -72,7 +67,9 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 - Contracts: snake_case on the wire (`cost_usd`, `tokens_in`), camelCase in Drizzle/DB
   code (`costUsd`); the Zod schema and its inferred type share one name (`RunSummary`).
 - Migrations: generated names only — `00NN_<slug>.sql` from `pnpm db:generate`.
-- `specs/` → `L0N-<feature>.md` · `docs/` → `<topic>.md` (one topic per file).
+- Specs: root `specs/SPEC-NN-<slug>.md`, one per feature across packages (see
+  `specs/README.md`); `<pkg>/specs/L0N-<feature>.md` are L01–L04 history — cite, never
+  extend. `docs/` → `<topic>.md` (one topic per file).
 - i18n: one namespace file per feature area, dot-path keys (`list.columns.cost`).
 - Server modules: `server/src/modules/<name>/` with `routes.ts` · `service.ts` ·
   `repository.ts` · `constants.ts` · `helpers.ts` as needed.
@@ -102,5 +99,9 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 - Commit / push / open a PR → `docs/git-workflow.md` (read first, every time)
 - Run / architecture / stack overview → `README.md`
 - Prompt authoring rules → `docs/agent-prompts/`
+- New feature, spec to merged code → `docs/sdd-workflow.md`; execute a written plan → `/implement <plan>`
+- New feature spec → `spec-creator` agent (two passes; writes only `specs/`)
+- Which skill governs a path → `.claude/skill-routing.md`
+- Design mock → `docs/design/extracted/INDEX.md` (regenerate: `node scripts/extract-design.mjs`)
 - Testing strategy → `TESTING.md`
 - End of session → `/engineering-insights`
