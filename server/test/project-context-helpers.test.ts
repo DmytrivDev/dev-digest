@@ -34,9 +34,12 @@ describe('selectDocs — listing rule (AC-2, AC-3, AC-5, AC-7)', () => {
       'vendor/c.md',
       '.git/d.md',
       'sub/vendor/e.md',
+      '.claude/agents/reviewer.md',
+      'pkg/.claude/skills/x/SKILL.md',
       'docs/vendored.md',
+      'docs/claude.md',
     ];
-    expect(selectDocs(paths).docs).toEqual(['docs/vendored.md', 'keep.md']);
+    expect(selectDocs(paths).docs).toEqual(['docs/claude.md', 'docs/vendored.md', 'keep.md']);
     expect(hasExcludedSegment('a/node_modules/b.md')).toBe(true);
     expect(hasExcludedSegment('a/node_modules.md')).toBe(false);
   });

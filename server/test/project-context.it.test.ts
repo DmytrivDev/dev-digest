@@ -171,6 +171,7 @@ d('project context', () => {
         'dist/out.md': 'x',
         'web/.next/n.md': 'x',
         'vendor/v.md': 'x',
+        '.claude/agents/reviewer.md': 'x',
       });
       const res = await app.inject({ method: 'GET', url: listUrl(repo.id) });
       expect(res.statusCode).toBe(200);

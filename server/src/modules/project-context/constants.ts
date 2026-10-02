@@ -6,8 +6,11 @@
 /** File-name extensions that make a file a "document" (matched case-insensitively). */
 export const DOC_EXTENSIONS = ['.md', '.markdown'] as const;
 
-/** Directory names the listing never descends into and no listed path may contain (AC-2). */
-export const EXCLUDED_DIRS = ['node_modules', 'dist', '.next', 'vendor', '.git'] as const;
+/**
+ * Directory names the listing never descends into and no listed path may contain (AC-2).
+ * `.claude` holds agent/skill tooling definitions, not project requirements.
+ */
+export const EXCLUDED_DIRS = ['node_modules', 'dist', '.next', 'vendor', '.git', '.claude'] as const;
 
 /** The document list is capped here; `total` + `truncated` report the rest (AC-5). */
 export const MAX_LISTED_DOCS = 500;

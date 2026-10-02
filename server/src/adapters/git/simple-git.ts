@@ -38,6 +38,7 @@ const DOC_EXCLUDED_DIRS: ReadonlySet<string> = new Set([
   'dist',
   '.next',
   'vendor',
+  '.claude',
 ]);
 const GIT_ONLY: ReadonlySet<string> = new Set(['.git']);
 const MARKDOWN_EXT = /\.(md|markdown)$/i;
