@@ -119,3 +119,4 @@ node scripts/extract-design.mjs
 | Spec | Feature | Status | Packages | Supersedes |
 |---|---|---|---|---|
 | [SPEC-01](SPEC-01-project-context.md) | Project Context — repo markdown docs attached to agents and skills, injected into runs | approved | server, client, reviewer-core | none (reverses `client/specs/L02-skills.md` R3 tab order) |
+| [SPEC-02](SPEC-02-onboarding-tour.md) | Onboarding Tour — five-section repo tour from repo-intel facts, one narrative LLM call, deterministic skeleton with honest status | approved | server, client | none |
