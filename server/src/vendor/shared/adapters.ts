@@ -222,6 +222,19 @@ export interface GitCommit {
   date: string;
 }
 
+/** One commit of the local clone with the files it changed (no rename detection). */
+export interface CommitTouch {
+  sha: string;
+  /** ISO 8601 committer date (`%cI`). */
+  committedAt: string;
+  /** Empty for a root or a shallow-boundary commit. */
+  parents: string[];
+  /** True when the sha is listed in the clone's shallow file. */
+  boundary: boolean;
+  /** Repository-relative, '/'-separated. */
+  files: string[];
+}
+
 export interface GitClient {
   clone(repo: RepoRef, url: string, opts?: CloneOptions): Promise<{ path: string }>;
   fetchPullHead(repo: RepoRef, n: number): Promise<void>;
@@ -264,6 +277,21 @@ export interface GitClient {
    * literal `HEAD` when detached. Rejects with `code: 'ENOENT'` when not cloned.
    */
   currentBranch(repo: RepoRef): Promise<string>;
+  /** Committer date (ISO 8601) of `sha`; rejects when the commit is not in the clone. */
+  commitDate(repo: RepoRef, sha: string): Promise<string>;
+  /** Commits reachable from `sha`, newest first, at most `opts.maxCount`, each with its files. */
+  commitTouches(repo: RepoRef, sha: string, opts: { maxCount: number }): Promise<CommitTouch[]>;
+  /**
+   * Deepen the clone's history back to `since` from `ref` (a branch name or a full sha).
+   * Never moves HEAD, the index or the working tree and never writes a credential;
+   * rejects with `code: 'ETIMEDOUT'` after `opts.timeoutMs`.
+   */
+  fetchHistorySince(
+    repo: RepoRef,
+    since: string,
+    ref: string,
+    opts: { timeoutMs: number },
+  ): Promise<void>;
   clonePathFor(repo: RepoRef): string;
 }
 

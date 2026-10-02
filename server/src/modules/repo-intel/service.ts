@@ -28,12 +28,18 @@ import {
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { RepoIntelRepository, type FullSymbolRow } from './repository.js';
-import { capCallersPerSymbol, excludeSelfCallers, fallbackReason } from './helpers.js';
+import {
+  capCallersPerSymbol,
+  excludeSelfCallers,
+  fallbackReason,
+  isJunkPath,
+} from './helpers.js';
 import type {
   BlastCallerRow,
   BlastChangedSymbol,
   BlastResult,
   FileRankRow,
+  GraphSnapshot,
   IndexResult,
   IndexState,
   RefRow,
@@ -736,37 +742,32 @@ export class RepoIntelService implements RepoIntel {
     }
     return paths;
   }
+
+  /**
+   * Whole persisted graph as plain data (onboarding tour). Read-only; never
+   * writes `file_rank`. Empty when the layer is off.
+   */
+  async getGraphSnapshot(repoId: string): Promise<GraphSnapshot> {
+    if (!this.container.config.repoIntelEnabled) {
+      return { files: [], edges: [], endpoints: [] };
+    }
+    const [ranks, edges, facts] = await Promise.all([
+      this.repo.getAllFileRanks(repoId),
+      this.repo.getEdges(repoId),
+      this.repo.getAllFileFacts(repoId),
+    ]);
+    return {
+      files: ranks.map((r) => ({ path: r.path, pagerank: r.pagerank })),
+      edges: edges.map((e) => ({ from: e.fromFile, to: e.toFile })),
+      endpoints: facts.flatMap((f) =>
+        f.endpoints.map((endpoint) => ({ file: f.path, endpoint })),
+      ),
+    };
+  }
 }
 
 /** How many top-ranked files seed `getCriticalPaths` dependency chains. */
 const CRITICAL_PATH_ROOTS = 5;
-
-/**
- * Path kinds excluded from rank-driven file samples (conventions/onboarding):
- * tests, configs, declaration files, migrations, generated dirs. Substring
- * match on the repo-relative path (kept deliberately simple + deterministic).
- */
-const JUNK_PATH_PATTERNS = [
-  '.test.',
-  '.spec.',
-  '.d.ts',
-  '__tests__/',
-  '__mocks__/',
-  '/test/',
-  '/tests/',
-  '/migrations/',
-  '/__fixtures__/',
-  '.config.',
-  'vitest.',
-  'jest.',
-  'eslint',
-  'prettier',
-] as const;
-
-function isJunkPath(path: string): boolean {
-  const lower = path.toLowerCase();
-  return JUNK_PATH_PATTERNS.some((p) => lower.includes(p));
-}
 
 /** Enclosing top-level (bare-name) symbol for a line, from persistent rows. */
 function enclosingFromRows(rows: FullSymbolRow[], line: number): string | null {

@@ -23,6 +23,7 @@ import type {
   UnifiedDiff,
   BlameLine,
   GitCommit,
+  CommitTouch,
   CodeIndex,
   CodeMatch,
   CodeSymbol,
@@ -272,13 +273,24 @@ export interface MockGitOptions {
   branch?: string;
   /** The repository has no local clone: `listFiles`/`readFileBytes`/`currentBranch` throw `ENOENT`. */
   notCloned?: boolean;
+  /** Committer date (ISO 8601) per sha for `commitDate`; an unknown sha rejects. */
+  commitDates?: Record<string, string>;
+  /** What `commitTouches` returns until a successful `fetchHistorySince`. */
+  touches?: CommitTouch[];
+  /** What `commitTouches` returns after a successful `fetchHistorySince` (default: `touches`). */
+  touchesAfterFetch?: CommitTouch[];
+  /** `fetchHistorySince` outcome: `ok` (default) · `fail` (rejects) · `hang` (never settles). */
+  historyFetch?: 'ok' | 'fail' | 'hang';
 }
 
 export class MockGitClient implements GitClient {
   public cloned: { repo: RepoRef; url: string }[] = [];
   public syncs: { repo: RepoRef; branch: string }[] = [];
   public fetchPullHeads: { repo: RepoRef; n: number }[] = [];
+  /** Every `fetchHistorySince` call, in order (recorded before the outcome applies). */
+  public historyFetches: { since: string; ref: string }[] = [];
   private syncedHead?: string;
+  private historyFetched = false;
 
   constructor(private opts: MockGitOptions = {}) {}
 
@@ -343,6 +355,36 @@ export class MockGitClient implements GitClient {
   async currentBranch(): Promise<string> {
     this.assertCloned();
     return this.opts.branch ?? 'main';
+  }
+  async commitDate(_repo: RepoRef, sha: string): Promise<string> {
+    const date = this.opts.commitDates?.[sha];
+    if (date === undefined) {
+      throw Object.assign(new Error(`unknown revision ${sha}`), { code: 'ENOENT' });
+    }
+    return date;
+  }
+  async commitTouches(
+    _repo: RepoRef,
+    _sha: string,
+    opts: { maxCount: number },
+  ): Promise<CommitTouch[]> {
+    const list =
+      this.historyFetched && this.opts.touchesAfterFetch
+        ? this.opts.touchesAfterFetch
+        : (this.opts.touches ?? []);
+    return list.slice(0, opts.maxCount);
+  }
+  async fetchHistorySince(
+    _repo: RepoRef,
+    since: string,
+    ref: string,
+    _opts: { timeoutMs: number },
+  ): Promise<void> {
+    this.historyFetches.push({ since, ref });
+    const mode = this.opts.historyFetch ?? 'ok';
+    if (mode === 'hang') return new Promise<void>(() => {});
+    if (mode === 'fail') throw new Error('mock history fetch failed');
+    this.historyFetched = true;
   }
   /** Test helper: add or replace a document, as if the clone's checkout changed. */
   setDoc(path: string, content: string | Uint8Array): void {

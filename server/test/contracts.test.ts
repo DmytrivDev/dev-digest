@@ -8,7 +8,8 @@ import {
   PrHistory,
   SmartDiff,
   Conformance,
-  Onboarding,
+  OnboardingTour,
+  OnboardingTourResponse,
   EvalRun,
   MemoryItem,
   RunTrace,
@@ -203,18 +204,13 @@ describe('AI contracts parse fixtures', () => {
     expect(d.groups[1]!.role).toBe('docs');
   });
 
-  it('Conformance / Onboarding / EvalRun / MemoryItem', () => {
+  it('Conformance / EvalRun / MemoryItem', () => {
     expect(() =>
       Conformance.parse({
         spec_id: 's1',
         spec_title: 'Spec',
         items: [{ requirement: 'r', status: 'implemented' }],
         completeness_pct: 80,
-      }),
-    ).not.toThrow();
-    expect(() =>
-      Onboarding.parse({
-        sections: [{ kind: 'architecture', title: 'T', body: 'b', links: [] }],
       }),
     ).not.toThrow();
     expect(() =>
@@ -238,6 +234,107 @@ describe('AI contracts parse fixtures', () => {
         sources: [{ pr: 401, context: 'ctx' }],
       }),
     ).not.toThrow();
+  });
+
+  describe('OnboardingTour', () => {
+    const section = {
+      architecture: {
+        kind: 'architecture_overview',
+        title: 'Architecture overview',
+        empty_reason: null,
+        body: 'A small API.',
+        diagram: 'flowchart LR\n  p0 --> p1',
+        facts: {
+          package_manager: 'pnpm',
+          package_dirs: ['server'],
+          top_folders: [{ path: 'server', files: 12 }],
+          compose_services: ['db'],
+          extensions: [{ extension: '.ts', files: 12 }],
+        },
+      },
+      critical: {
+        kind: 'critical_paths',
+        title: 'Critical paths',
+        empty_reason: null,
+        items: [{ path: 'server/src/app.ts', imported_by: 3, reason: 'Entry point.' }],
+      },
+      run: {
+        kind: 'how_to_run',
+        title: 'How to run locally',
+        empty_reason: null,
+        steps: [{ command: 'pnpm install', note: null }],
+      },
+      reading: {
+        kind: 'guided_reading',
+        title: 'Guided reading path',
+        empty_reason: null,
+        items: [{ path: 'server/src/app.ts', why: null }],
+      },
+      tasks: {
+        kind: 'first_tasks',
+        title: 'First tasks',
+        empty_reason: 'no_valid_tasks',
+        items: [],
+      },
+    };
+    const tour = {
+      repo_id: '6f1c2c8e-7b0a-4a52-9d9f-0d3a4b1e5c77',
+      status: 'narrative',
+      reasons: ['index_partial', 'no_history'],
+      generated_at: '2026-10-02T10:00:00.000Z',
+      branch: 'main',
+      indexed_sha: 'abc1234',
+      indexed_files: 120,
+      walk_total: null,
+      stale: false,
+      last_failure: null,
+      usage: {
+        llm_calls: 1,
+        provider: 'openrouter',
+        model: 'deepseek/deepseek-v4-flash',
+        tokens_in: 9000,
+        tokens_out: 900,
+        cost_usd: 0.004,
+        duration_ms: 8000,
+      },
+      sections: [section.architecture, section.critical, section.run, section.reading, section.tasks],
+    };
+
+    it('parses a valid narrative tour and a response with tour: null', () => {
+      expect(() => OnboardingTour.parse(tour)).not.toThrow();
+      expect(() =>
+        OnboardingTourResponse.parse({ readiness: 'ready', generating: false, tour }),
+      ).not.toThrow();
+      expect(() =>
+        OnboardingTourResponse.parse({ readiness: 'not_cloned', generating: false, tour: null }),
+      ).not.toThrow();
+    });
+
+    it('rejects a tour with 4 sections', () => {
+      expect(OnboardingTour.safeParse({ ...tour, sections: tour.sections.slice(0, 4) }).success).toBe(
+        false,
+      );
+    });
+
+    it('rejects sections out of order', () => {
+      const [a, b, ...rest] = tour.sections;
+      expect(OnboardingTour.safeParse({ ...tour, sections: [b, a, ...rest] }).success).toBe(false);
+    });
+
+    it('rejects an unknown reason', () => {
+      expect(OnboardingTour.safeParse({ ...tour, reasons: ['bogus'] }).success).toBe(false);
+    });
+
+    it('rejects an unknown task complexity', () => {
+      const bad = {
+        ...section.tasks,
+        empty_reason: null,
+        items: [{ title: 't', scope: 'server/src', complexity: 'Trivial' }],
+      };
+      expect(
+        OnboardingTour.safeParse({ ...tour, sections: [...tour.sections.slice(0, 4), bad] }).success,
+      ).toBe(false);
+    });
   });
 
   it('RunTrace (data2.jsx TRACE single-document)', () => {

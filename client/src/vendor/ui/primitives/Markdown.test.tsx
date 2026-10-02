@@ -50,6 +50,45 @@ describe("Markdown untrusted", () => {
   });
 });
 
+describe("Markdown untrusted noLinks", () => {
+  it("keeps a link's code text and renders no anchor (AC-83)", () => {
+    const { container } = render(
+      <Markdown untrusted noLinks>
+        {"see [`src/server.ts`](https://x) for the entry"}
+      </Markdown>,
+    );
+    expect(container.querySelector("a")).toBeNull();
+    const code = container.querySelector("code");
+    expect(code).not.toBeNull();
+    expect(code?.textContent).toBe("src/server.ts");
+    expect(container.textContent).toContain("for the entry");
+  });
+
+  it("keeps plain link text as text", () => {
+    const { container } = render(<Markdown noLinks>{"[the docs](https://x) here"}</Markdown>);
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("the docs here");
+  });
+
+  it("still renders no script, no img and no on* attribute (NFR-5)", () => {
+    const { container } = render(
+      <Markdown untrusted noLinks>
+        {
+          "<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n![x](https://e.com/a.png)\n\ntext"
+        }
+      </Markdown>,
+    );
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+    expect(withEventHandlerAttr(container)).toEqual([]);
+  });
+
+  it("leaves links alone when noLinks is not set", () => {
+    const { container } = render(<Markdown untrusted>{"[a](https://x)"}</Markdown>);
+    expect(container.querySelector("a")).not.toBeNull();
+  });
+});
+
 describe("Markdown (default)", () => {
   it("keeps rendering images for trusted callers", () => {
     const { container } = render(<Markdown>{"![x](https://example.com/a.png)"}</Markdown>);

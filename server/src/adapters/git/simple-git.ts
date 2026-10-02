@@ -9,6 +9,7 @@ import type {
   UnifiedDiff,
   BlameLine,
   GitCommit,
+  CommitTouch,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './diff-parser.js';
 
@@ -121,12 +122,30 @@ export class SimpleGitClient implements GitClient {
    * clone left in `remote.origin.url`, then fetch with the token supplied for
    * this one command only.
    */
-  private async authedFetch(repo: RepoRef, args: string[]): Promise<void> {
+  private async authedFetch(
+    repo: RepoRef,
+    args: string[],
+    opts?: { timeoutMs?: number },
+  ): Promise<void> {
     const dir = this.clonePathFor(repo);
     const token = await this.getToken?.();
     await redactingErrors(token, async () => {
       const remote = await this.scrubOrigin(dir);
-      await simpleGit({ baseDir: dir, config: authConfig(remote, token) }).fetch(args);
+      // Absolute deadline on the git child (opt-in): `block` fires after that long
+      // regardless of output, so a hung origin cannot outlive the caller's budget.
+      const timeout = opts?.timeoutMs
+        ? { timeout: { block: opts.timeoutMs, stdOut: false, stdErr: false } }
+        : {};
+      try {
+        await simpleGit({ baseDir: dir, config: authConfig(remote, token), ...timeout }).fetch(args);
+      } catch (err) {
+        if (opts?.timeoutMs && isTimeoutError(err)) {
+          throw Object.assign(new Error(`git fetch timed out after ${opts.timeoutMs}ms`), {
+            code: 'ETIMEDOUT',
+          });
+        }
+        throw err;
+      }
     });
   }
 
@@ -281,6 +300,61 @@ export class SimpleGitClient implements GitClient {
     return out;
   }
 
+  async commitDate(repo: RepoRef, sha: string): Promise<string> {
+    assertNotOption(sha);
+    // `--end-of-options` keeps a hostile value from being read as a flag.
+    const out = await this.git(repo).raw(['show', '-s', '--format=%cI', '--end-of-options', sha]);
+    return out.trim();
+  }
+
+  async commitTouches(
+    repo: RepoRef,
+    sha: string,
+    opts: { maxCount: number },
+  ): Promise<CommitTouch[]> {
+    assertNotOption(sha);
+    const g = this.git(repo);
+    // No `--since`: it stops early on clock-skewed dates. The window is applied by the caller.
+    const raw = await g.raw([
+      'log',
+      '-z',
+      '--name-only',
+      '--no-renames',
+      `--max-count=${Math.max(1, Math.floor(opts.maxCount))}`,
+      '--format=%x01%H%x1f%cI%x1f%P',
+      '--end-of-options',
+      sha,
+    ]);
+    return parseCommitTouches(raw, await this.shallowShas(repo));
+  }
+
+  async fetchHistorySince(
+    repo: RepoRef,
+    since: string,
+    ref: string,
+    opts: { timeoutMs: number },
+  ): Promise<void> {
+    // Discrete args only — never a shell string. No `--filter=blob:none`: it would
+    // turn the clone into a partial clone for good (promisor config + lazy fetches).
+    assertNotOption(since);
+    assertNotOption(ref);
+    await this.authedFetch(repo, [`--shallow-since=${since}`, 'origin', ref], {
+      timeoutMs: opts.timeoutMs,
+    });
+  }
+
+  /** Shas listed in the clone's shallow file; empty when the clone is not shallow. */
+  private async shallowShas(repo: RepoRef): Promise<Set<string>> {
+    const dir = this.clonePathFor(repo);
+    try {
+      const rel = (await this.git(repo).raw(['rev-parse', '--git-path', 'shallow'])).trim();
+      const text = await readFile(isAbsolute(rel) ? rel : join(dir, rel), 'utf8');
+      return new Set(text.split(/\s+/).filter((l) => l.length > 0));
+    } catch {
+      return new Set(); // no shallow file → no commit is a boundary
+    }
+  }
+
   /** Branch HEAD points at; the literal `HEAD` when detached. `ENOENT` when not cloned. */
   async currentBranch(repo: RepoRef): Promise<string> {
     const dir = this.clonePathFor(repo);
@@ -289,6 +363,46 @@ export class SimpleGitClient implements GitClient {
     }
     return (await this.git(repo).revparse(['--abbrev-ref', 'HEAD'])).trim();
   }
+}
+
+/** A value handed to git as a positional arg must never be readable as an option. */
+function assertNotOption(value: string): void {
+  if (value.startsWith('-')) {
+    throw Object.assign(new Error(`refusing option-like git argument`), { code: 'EINVAL' });
+  }
+}
+
+/** simple-git's timeout plugin raises a `GitPluginError` whose `plugin` is `timeout`. */
+function isTimeoutError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { plugin?: string }).plugin === 'timeout';
+}
+
+/**
+ * Parses `git log -z --name-only --no-renames --format=%x01%H%x1f%cI%x1f%P`: one `\x01`
+ * starts each commit, the header ends at the first NUL, the changed paths follow,
+ * NUL-separated (so a path with a space or non-ASCII char arrives verbatim).
+ */
+function parseCommitTouches(raw: string, shallow: ReadonlySet<string>): CommitTouch[] {
+  const out: CommitTouch[] = [];
+  // Split only at a \x01 that starts a header, so a path containing \x01 cannot forge a commit.
+  for (const chunk of raw.split(/\x01(?=[0-9a-f]{40,64}\x1f)/)) {
+    if (chunk.length === 0) continue;
+    const nul = chunk.indexOf('\0');
+    const header = nul < 0 ? chunk : chunk.slice(0, nul);
+    let rest = nul < 0 ? '' : chunk.slice(nul + 1);
+    if (rest.startsWith('\n')) rest = rest.slice(1);
+    const [sha, committedAt, parentText = ''] = header.split('\x1f');
+    if (!sha || !committedAt) continue;
+    const parents = parentText.split(' ').filter((p) => p.length > 0);
+    out.push({
+      sha,
+      committedAt,
+      parents,
+      boundary: parents.length === 0 && shallow.has(sha),
+      files: rest.split('\0').filter((f) => f.length > 0),
+    });
+  }
+  return out;
 }
 
 /** True when `target` is a strict descendant of `root` (both already real paths). */

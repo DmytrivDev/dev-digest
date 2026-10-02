@@ -47,6 +47,12 @@ export interface IndexState extends IndexResult {
   /** True when the layer is running on the ripgrep fallback. */
   degraded?: boolean;
   degradedReason?: DegradedReason;
+  /**
+   * Total files the walk found when it kept only the first N (the overflow is
+   * recorded by the indexer as `stats.bounded`); `null`/absent when the walk
+   * was not truncated.
+   */
+  walkTotal?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +135,17 @@ export interface FileRankRow {
   percentile: number;
 }
 
+/**
+ * The persisted graph as plain data (no Drizzle rows): every indexed file with
+ * its PageRank (NOT the stored `rank`), every import edge and every endpoint
+ * fact. Empty when the layer is off or nothing is indexed.
+ */
+export interface GraphSnapshot {
+  files: { path: string; pagerank: number }[];
+  edges: { from: string; to: string }[];
+  endpoints: { file: string; endpoint: string }[];
+}
+
 export interface RepoMapResult {
   text: string;
   tokens: number;
@@ -177,4 +194,6 @@ export interface RepoIntel {
     opts?: { exclude?: string[] },
   ): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
+  /** Whole persisted graph (files + PageRank, edges, endpoints); empty when off/unindexed. */
+  getGraphSnapshot(repoId: string): Promise<GraphSnapshot>;
 }

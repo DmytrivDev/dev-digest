@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTheme } from "@/lib/theme";
 
 let seq = 0;
 
@@ -17,9 +18,18 @@ function looksLikeMermaid(src: string): boolean {
  * Renders a mermaid diagram string to inline SVG. mermaid is imported lazily
  * (client-only). We VALIDATE with mermaid.parse({suppressErrors}) before
  * rendering — mermaid otherwise injects a "Syntax error" bomb graphic into the
- * DOM on bad input instead of throwing. Junk/unparseable input renders nothing.
+ * DOM on bad input instead of throwing. Junk/unparseable input renders
+ * `fallback` (default: nothing). The mermaid theme follows the app theme and a
+ * toggle re-renders; `securityLevel` stays "strict" (mermaid sanitises the SVG).
  */
-export function MermaidDiagram({ chart }: { chart: string }) {
+export function MermaidDiagram({
+  chart,
+  fallback = null,
+}: {
+  chart: string;
+  fallback?: React.ReactNode;
+}) {
+  const { theme } = useTheme();
   const ref = React.useRef<HTMLDivElement>(null);
   const [state, setState] = React.useState<"pending" | "ok" | "invalid">("pending");
 
@@ -34,7 +44,7 @@ export function MermaidDiagram({ chart }: { chart: string }) {
     (async () => {
       try {
         const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
+        mermaid.initialize({ startOnLoad: false, theme: theme === "light" ? "default" : "dark", securityLevel: "strict" });
         // parse first; suppressErrors → returns false (no throw, no DOM bomb).
         const valid = await mermaid.parse(src, { suppressErrors: true });
         if (cancelled) return;
@@ -53,10 +63,10 @@ export function MermaidDiagram({ chart }: { chart: string }) {
     return () => {
       cancelled = true;
     };
-  }, [chart]);
+  }, [chart, theme]);
 
-  // Not a (valid) diagram → render nothing rather than a broken box.
-  if (state === "invalid") return null;
+  // Not a (valid) diagram → the caller's fallback (default nothing), never a broken box.
+  if (state === "invalid") return <>{fallback}</>;
 
   return (
     <div

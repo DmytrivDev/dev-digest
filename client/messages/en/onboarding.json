@@ -1,17 +1,108 @@
 {
-  "title": "Onboarding Tour",
-  "sections": "Sections",
-  "sectionCount": "{count} sections",
-  "regenerate": "Regenerate",
-  "regenerating": "Regenerating…",
-  "unknownError": "Unknown error",
-  "generate": {
+  "page": {
+    "crumb": "Onboarding Tour"
+  },
+  "header": {
+    "titlePrefix": "Onboarding for",
+    "subtitle": "Generated from {files} indexed source files{truncated} · branch {branch} @ {sha} · last refreshed {when}",
+    "truncated": " (first {shown} of {total})",
+    "regenerate": "Regenerate",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "copyMarkdown": "Copy as Markdown",
+    "markdownCopied": "Markdown copied",
+    "stale": "Index has changed since this tour was generated"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutes": "{n}m ago",
+    "hours": "{n}h ago",
+    "days": "{n}d ago"
+  },
+  "readiness": {
+    "notCloned": "This repository has no local clone yet — the tour needs one. Cloning may still be running or may have failed.",
+    "checkAgain": "Check again",
+    "notIndexed": "Indexing in progress or not run yet",
+    "generating": "Generating… up to 2 minutes"
+  },
+  "empty": {
     "title": "Generate onboarding tour",
-    "body": "DevDigest indexes the repo and specs, then writes a 5-section guided tour: overview, architecture, key modules, getting started, and conventions & gotchas.",
-    "cta": "Generate onboarding tour",
-    "generating": "Generating…"
+    "body": "DevDigest reads the repository index and writes a guided tour: architecture, critical paths, how to run, a reading order, and first tasks. Takes up to 2 minutes · one model call.",
+    "cta": "Generate onboarding tour"
+  },
+  "banner": {
+    "failure": "Regeneration failed: {reason} — showing the tour from {when}",
+    "apiKeysLink": "Settings → API Keys"
+  },
+  "reasons": {
+    "index_partial": "The index is partial: some files could not be parsed or indexing ran out of time.",
+    "index_truncated": "The index stopped at the first 5,000 source files; the rest are not ranked.",
+    "unsupported_language": "No JavaScript or TypeScript files were indexed — the import graph covers JS/TS only.",
+    "no_import_graph": "The index holds no import edges, so critical paths are unavailable.",
+    "no_history": "No commit history was available, so files are ranked by the import graph only.",
+    "facts_truncated": "Some repository facts were shortened or left out to fit the model's input budget.",
+    "llm_not_configured": "No API key is configured for {provider}.",
+    "llm_timeout": "The model did not answer within 120 seconds.",
+    "llm_failed": "The model call failed.",
+    "llm_invalid_output": "The model's answer did not match the expected structure."
+  },
+  "emptyReasons": {
+    "unsupported_language": "No JavaScript or TypeScript files were indexed — the import graph covers JS/TS only.",
+    "no_import_graph": "The index holds no import edges, so critical paths are unavailable.",
+    "no_run_facts": "No package manifest or compose file was found.",
+    "needs_model": "Needs the model — regenerate when the model is available.",
+    "no_valid_tasks": "The model proposed no task whose scope exists in the repository."
+  },
+  "sections": {
+    "architecture_overview": "Architecture overview",
+    "critical_paths": "Critical paths",
+    "how_to_run": "How to run locally",
+    "guided_reading": "Guided reading path",
+    "first_tasks": "First tasks",
+    "toc": "On this page"
+  },
+  "architecture": {
+    "diagramUnavailable": "Diagram unavailable",
+    "facts": {
+      "packageManager": "Package manager",
+      "packageDirs": "Packages",
+      "topFolders": "Top folders",
+      "composeServices": "Compose services",
+      "extensions": "File types",
+      "files": "{count} files"
+    }
+  },
+  "criticalPaths": {
+    "open": "Open",
+    "importedBy": "imported by {count}"
+  },
+  "howToRun": {
+    "copy": "Copy command",
+    "copied": "Copied"
+  },
+  "firstTasks": {
+    "label": "Suggested by the model",
+    "scope": "Scope",
+    "complexity": {
+      "Low": "Low",
+      "Medium": "Medium",
+      "High": "High"
+    }
+  },
+  "usage": {
+    "calls": "{count, plural, one {# model call} other {# model calls}}",
+    "tokens": "{count} tokens",
+    "tokensUnknown": "tokens unknown",
+    "costUnknown": "cost unknown",
+    "none": "No model call"
+  },
+  "providers": {
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "openrouter": "OpenRouter"
   },
   "loadError": {
     "title": "Couldn’t load the onboarding tour"
-  }
+  },
+  "retry": "Retry"
 }
