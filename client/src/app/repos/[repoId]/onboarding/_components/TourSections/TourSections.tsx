@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Icon } from "@devdigest/ui";
 import type { OnboardingSection, OnboardingTour } from "@devdigest/shared";
 import { SectionCard } from "./_components/SectionCard";
 import { ArchitectureSection } from "./_components/ArchitectureSection";
@@ -25,7 +26,10 @@ function SectionBody({
 }) {
   const t = useTranslations("onboarding");
   const note = section.empty_reason ? (
-    <p style={s.empty}>{t(`emptyReasons.${section.empty_reason}`)}</p>
+    <p style={s.empty}>
+      <Icon.Info size={14} aria-hidden="true" style={s.emptyIcon} />
+      <span>{t(`emptyReasons.${section.empty_reason}`)}</span>
+    </p>
   ) : null;
 
   switch (section.kind) {

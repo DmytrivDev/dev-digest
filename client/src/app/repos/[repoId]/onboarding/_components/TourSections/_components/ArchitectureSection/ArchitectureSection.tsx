@@ -2,9 +2,11 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Markdown } from "@devdigest/ui";
+import { Badge, Markdown, SectionLabel } from "@devdigest/ui";
 import type { OnboardingArchitectureSection } from "@devdigest/shared";
 import { MermaidDiagram } from "@/components/mermaid-diagram";
+import { DIAGRAM_ROLE_STYLES } from "../../constants";
+import { diagramRoles } from "../../helpers";
 import { s } from "./styles";
 
 /** Architecture overview: the model's prose and diagram, plus the facts the
@@ -63,34 +65,58 @@ export function ArchitectureSection({
     });
   }
 
+  const roles = diagramRoles(section.diagram);
+
   return (
     <div style={s.root}>
       {note ?? (
         <>
-          <Markdown untrusted noLinks>
-            {section.body}
-          </Markdown>
+          {section.body && (
+            <div style={s.prose}>
+              <Markdown untrusted noLinks>
+                {section.body}
+              </Markdown>
+            </div>
+          )}
           {section.diagram && (
-            <MermaidDiagram
-              chart={section.diagram}
-              fallback={<p style={{ margin: 0 }}>{t("architecture.diagramUnavailable")}</p>}
-            />
+            <div style={s.diagram}>
+              <MermaidDiagram
+                chart={section.diagram}
+                nodeClasses={DIAGRAM_ROLE_STYLES}
+                fallback={<p style={s.diagramFallback}>{t("architecture.diagramUnavailable")}</p>}
+              />
+              {roles.length > 0 && (
+                <ul aria-label={t("architecture.legend")} style={s.legend}>
+                  {roles.map((role) => (
+                    <li key={role} style={s.legendItem}>
+                      <span aria-hidden="true" style={s.swatch(DIAGRAM_ROLE_STYLES[role])} />
+                      {t(`architecture.roles.${role}`)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </>
       )}
       {rows.length > 0 && (
-        <dl style={s.facts}>
-          {rows.map((row) => (
-            <React.Fragment key={row.key}>
-              <dt style={s.factLabel}>{row.label}</dt>
-              <dd className="mono" style={s.factValue}>
-                {row.values.map((v) => (
-                  <span key={v.key}>{v.text}</span>
-                ))}
-              </dd>
-            </React.Fragment>
-          ))}
-        </dl>
+        <div style={s.factsBlock}>
+          <SectionLabel icon="Database">{t("architecture.factsTitle")}</SectionLabel>
+          <dl style={s.facts}>
+            {rows.map((row) => (
+              <React.Fragment key={row.key}>
+                <dt style={s.factLabel}>{row.label}</dt>
+                <dd style={s.factValue}>
+                  {row.values.map((v) => (
+                    <Badge key={v.key} mono color="var(--text-primary)" bg="var(--bg-surface)" style={s.chip}>
+                      {v.text}
+                    </Badge>
+                  ))}
+                </dd>
+              </React.Fragment>
+            ))}
+          </dl>
+        </div>
       )}
     </div>
   );

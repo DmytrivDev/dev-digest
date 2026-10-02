@@ -4,6 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import type { OnboardingSectionKind } from "@devdigest/shared";
+import { SECTION_ICONS } from "../../constants";
 import { s } from "./styles";
 
 /** One collapsible tour section. The collapsed state is local to the card, so
@@ -20,7 +21,7 @@ export function SectionCard({
   const [open, setOpen] = React.useState(true);
   const headingId = `${kind}-heading`;
   const bodyId = `${kind}-body`;
-  const Chevron = open ? Icon.ChevronDown : Icon.ChevronRight;
+  const KindIcon = Icon[SECTION_ICONS[kind]];
 
   return (
     <section id={kind} aria-labelledby={headingId} style={s.card}>
@@ -32,13 +33,16 @@ export function SectionCard({
           onClick={() => setOpen((o) => !o)}
           style={s.header}
         >
-          <span aria-hidden="true" style={s.chevron}>
-            <Chevron size={14} />
+          <span aria-hidden="true" style={s.iconTile}>
+            <KindIcon size={15} />
           </span>
-          {t(`sections.${kind}`)}
+          <span style={s.title}>{t(`sections.${kind}`)}</span>
+          <span aria-hidden="true" style={s.chevron(open)}>
+            <Icon.ChevronDown size={16} />
+          </span>
         </button>
       </h2>
-      <div id={bodyId} hidden={!open} style={s.body(open)}>
+      <div id={bodyId} hidden={!open} style={s.body}>
         {children}
       </div>
     </section>

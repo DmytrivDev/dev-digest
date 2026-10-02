@@ -54,20 +54,23 @@ describe("MermaidDiagram", () => {
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
-  it("follows the app theme: dark, then default after switching to light, then dark again (AC-80)", async () => {
+  it("follows the app theme: dark, then light, then dark again, re-rendering each time (AC-80)", async () => {
     render(
       <ThemeProvider>
         <ThemeButtons />
         <MermaidDiagram chart={CHART} />
       </ThemeProvider>,
     );
-    const themes = () => mermaid.initialize.mock.calls.map(([cfg]) => cfg.theme);
+    const modes = () => mermaid.initialize.mock.calls.map(([cfg]) => cfg.darkMode);
 
-    await waitFor(() => expect(themes()).toEqual(["dark"]));
+    await waitFor(() => expect(modes()).toEqual([true]));
     fireEvent.click(screen.getByText("light"));
-    await waitFor(() => expect(themes()).toEqual(["dark", "default"]));
+    await waitFor(() => expect(modes()).toEqual([true, false]));
     fireEvent.click(screen.getByText("dark"));
-    await waitFor(() => expect(themes()).toEqual(["dark", "default", "dark"]));
+    await waitFor(() => expect(modes()).toEqual([true, false, true]));
+    // One base theme painted with the app tokens, whichever mode.
+    expect(new Set(mermaid.initialize.mock.calls.map(([cfg]) => cfg.theme))).toEqual(new Set(["base"]));
+    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(3));
   });
 
   it("never initializes mermaid with a securityLevel other than strict (NFR-6)", async () => {

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Badge, Icon } from "@devdigest/ui";
 import type { OnboardingCriticalPathsSection } from "@devdigest/shared";
 import { githubBlobUrl } from "@/lib/github-urls";
 import { s } from "./styles";
@@ -22,21 +23,25 @@ export function CriticalPathsSection({
     <ul style={s.list}>
       {section.items.map((item) => (
         <li key={item.path} style={s.row}>
-          <div style={s.head}>
-            <span className="mono" style={s.path}>
-              {item.path}
-            </span>
-            <span style={s.meta}>{t("criticalPaths.importedBy", { count: item.imported_by })}</span>
-            <a
-              href={githubBlobUrl(repoFullName, sha, item.path)}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={s.open}
-            >
-              {t("criticalPaths.open")}
-            </a>
+          <Icon.FileText size={14} aria-hidden="true" style={s.icon} />
+          <div style={s.main}>
+            <div style={s.head}>
+              <span className="mono" style={s.path}>
+                {item.path}
+              </span>
+              <Badge style={s.count}>{t("criticalPaths.importedBy", { count: item.imported_by })}</Badge>
+            </div>
+            {item.reason && <p style={s.reason}>{item.reason}</p>}
           </div>
-          {item.reason && <p style={s.reason}>{item.reason}</p>}
+          <a
+            href={githubBlobUrl(repoFullName, sha, item.path)}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={s.open}
+          >
+            {t("criticalPaths.open")}
+            <Icon.ExternalLink size={12} aria-hidden="true" />
+          </a>
         </li>
       ))}
     </ul>

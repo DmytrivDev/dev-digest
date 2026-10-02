@@ -176,6 +176,22 @@ describe("TourSections", () => {
     expect(run.getByText("Copied")).toBeInTheDocument();
   });
 
+  it("keeps the copy button's box and content when it shows 'Copied' (no row jump)", () => {
+    renderSections();
+    const run = region("How to run locally");
+    const button = run.getAllByRole("button", { name: "Copy command" })[0] as HTMLElement;
+    const before = { width: button.style.width, height: button.style.height };
+    expect(before.width).not.toBe("");
+
+    fireEvent.click(button);
+
+    expect(run.getByText("Copied")).toBeInTheDocument();
+    expect({ width: button.style.width, height: button.style.height }).toEqual(before);
+    // The confirmation floats outside the button rather than growing it.
+    expect(button).not.toHaveTextContent("Copied");
+    expect(getComputedStyle(run.getByText("Copied").parentElement as HTMLElement).position).toBe("absolute");
+  });
+
   it("labels the first tasks as the model's suggestion (AC-86)", () => {
     renderSections();
     const tasks = region("First tasks");

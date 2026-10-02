@@ -63,6 +63,16 @@
   },
   "architecture": {
     "diagramUnavailable": "Diagram unavailable",
+    "factsTitle": "Repository facts",
+    "legend": "Diagram legend",
+    "roles": {
+      "client": "Client / UI",
+      "service": "Service / API",
+      "engine": "Core logic",
+      "data": "Data store",
+      "external": "External service",
+      "shared": "Shared contracts"
+    },
     "facts": {
       "packageManager": "Package manager",
       "packageDirs": "Packages",

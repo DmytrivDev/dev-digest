@@ -1,3 +1,5 @@
+import { DIAGRAM_ROLE_STYLES, type DiagramRole } from "./constants";
+
 /** A section's distance (px) from the top of the scroll container. */
 export interface SectionTop<K extends string = string> {
   kind: K;
@@ -17,4 +19,11 @@ export function activeSection<K extends string>(
     if (top <= offset) active = kind;
   }
   return active;
+}
+
+/** The known roles a diagram tags its nodes with (`A:::role`), in legend order. */
+export function diagramRoles(src: string | null): DiagramRole[] {
+  if (!src) return [];
+  const used = new Set([...src.matchAll(/:::(\w+)/g)].map((m) => m[1]));
+  return (Object.keys(DIAGRAM_ROLE_STYLES) as DiagramRole[]).filter((role) => used.has(role));
 }

@@ -1,6 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { activeSection } from "./helpers";
+import { activeSection, diagramRoles } from "./helpers";
 import { SECTION_KINDS } from "./constants";
+
+describe("diagramRoles", () => {
+  it("lists the known roles a diagram uses, once each, in legend order", () => {
+    const src = 'flowchart LR\n  A["db"]:::data --> B["api"]:::service\n  C:::service --> D:::bogus\n  E:::client';
+    expect(diagramRoles(src)).toEqual(["client", "service", "data"]);
+  });
+
+  it("is empty for an untagged or missing diagram", () => {
+    expect(diagramRoles("flowchart LR\n  A --> B")).toEqual([]);
+    expect(diagramRoles(null)).toEqual([]);
+  });
+});
 
 const tops = (values: number[]) =>
   SECTION_KINDS.map((kind, i) => ({ kind, top: values[i] ?? 0 }));
