@@ -96,7 +96,7 @@ Verify: unit — the navigation renders the entry with that href resolved for th
 **AC-2 [server]** WHEN the document list of a repository is requested, the system shall return
 every file of the repository's local clone whose name ends in `.md` or `.markdown`
 (case-insensitive) and whose path has no segment named `node_modules`, `dist`, `.next`,
-`vendor` or `.git`.
+`vendor`, `.git` or `.claude`.
 Verify: integration — a fixture clone holding included files and files under each excluded
 directory returns exactly the included set.
 
@@ -698,7 +698,7 @@ Sources: `docs/design/extracted/screen_tour_context.jsx` (N6), `screen_trace.jsx
 
 | # | Finding / proposal | Evidence | Decision | Destination |
 |---|---|---|---|---|
-| D-1 | Which files are documents: the mock roots at `.devdigest/specs/`, the tabs show `specs/`, `docs/`, `insights/` | `screen_tour_context.jsx:111`; `2.png`, `3.png` | decided by user: every `.md`/`.markdown`, excluding `node_modules`, `dist`, `.next`, `vendor`, `.git`; category rule as proposed | accepted → AC-2, AC-4 |
+| D-1 | Which files are documents: the mock roots at `.devdigest/specs/`, the tabs show `specs/`, `docs/`, `insights/` | `screen_tour_context.jsx:111`; `2.png`, `3.png` | decided by user: every `.md`/`.markdown`, excluding `node_modules`, `dist`, `.next`, `vendor`, `.git`, `.claude` (amended by D-31); category rule as proposed | accepted → AC-2, AC-4 |
 | D-2 | Where the list comes from: `GitClient` has no listing (`server/INSIGHTS.md:22`); the server keeps a local clone (`repos.clone_path`, `server/src/db/schema/repos.ts:16`; `simple-git.ts:37`) | `simple-git.ts:37-145` | decided by user: the local clone, no GitHub request | accepted → AC-2, AC-9 |
 | D-3 | Which ref a run reads: base, head or default branch | `server/src/modules/reviews/diff-loader.ts:20-24` uses `pull.base` | decided by user: the PR's base branch. The clone has exactly one branch checked out, GitHub's default branch at clone time (`server/src/modules/repos/service.ts:55-57` clones with no `--branch`; `simple-git.ts:65-68`), and `readFile` reads the working tree (`:135-145`), so a base other than that branch is settled by D-26. Wording corrected by D-28 | accepted → AC-50 |
 | D-4 | When the text is read | — | decided by user: at run start, exact text kept in the trace | accepted → AC-50, AC-63 |
@@ -728,6 +728,7 @@ Sources: `docs/design/extracted/screen_tour_context.jsx` (N6), `screen_trace.jsx
 | D-28 | `repos.default_branch` is never read from GitHub. Only the schema default `'main'` and the seed write it, so it is wrong for a repo whose real default is not `main`. The clone's checkout is set by `git clone` with no `--branch`, i.e. GitHub's real default at clone time, and moved only by a resync to `origin/<repos.default_branch>` | `server/src/db/schema/repos.ts:15`, `server/src/db/seed.ts:99`, `server/src/modules/repos/service.ts:55-57`, `simple-git.ts:65-68`, `:84-86`, `server/src/modules/repo-intel/service.ts:160`; retro `docs/retros/2026-10-02-spec-01-project-context.md` *Missed / lost* 1 | factual correction within D-26, no behaviour change: AC-50 reads the clone's current checkout, and AC-74 compares the PR base with the clone's checked-out branch, not `repos.default_branch`. The list contract's `branch` is the same checked-out branch. Correcting how `repos.default_branch` is written stays out of scope | accepted → AC-50, AC-74, EC-11, EC-27; not correcting the stored value → Non-goal |
 | D-29 | Client and contract scaffolding for this page already exists: `useContextFiles` / `useReindexContext` call `GET /repos/:id/context` and `POST /repos/:id/context/reindex`, no route serves them, and `SpecFile`, `IndexStatus` and `client/messages/en/context.json` (`.devdigest/specs/` empty state) have no consumer | `client/src/lib/hooks/core.ts:122-137`, `server/src/vendor/shared/contracts/platform.ts:254-269` (and the client copy), `client/messages/en/context.json:11-14`; retro *Missed / lost* 2 | factual alignment, no behaviour change: reuse the list path and the `context` namespace, replace `SpecFile` with `ContextDoc` in an envelope, leave the reindex hook and `IndexStatus` unused; AC-17's empty-state copy wins over `context.json` | accepted → Module interactions (Existing scaffolding table), AC-1, AC-16, AC-17, NFR-2 |
 | D-30 | In map-reduce mode the persisted `prompt_assembly` is the whole-diff assembly, which differs from every per-file call; AC-63's "text sent to the model" was only exact for single-pass | `reviewer-core/src/review/run.ts:107`, `:145-146`, `:177`; `reviewer-core/src/prompt.ts:103-106`, `:155` (`specs` is built without the diff); retro *Missed / lost* 3 | factual tightening, no behaviour change: AC-63 now requires `prompt_assembly.specs` to equal the block in every call, in both modes | accepted → AC-63, EC-28 |
+| D-31 | Markdown under the repository's `.claude/` directory was listed as project documents; on the shipped page the list was dominated by `.claude/agents/*.md` agent definitions, which are tooling, not project requirements | the shipped Project Context page, seen by the user on 2026-10-02 | decided by user 2026-10-02: exclude any path with a `.claude` segment (nested ones too). Supersedes D-1's excluded-directory list. This in-place amendment of an approved spec was explicitly authorized by the user as a one-off exception to the lifecycle in `specs/README.md:27-28` | accepted → AC-2 |
 | P-1 | Reuse the agent Skills-tab pattern: linked first, drag + ↑/↓, filter, "{n} of {total} attached", whole set saved (`client/specs/L02-skills.md` R7) | `2.png` drag handles | decided by user: accepted | accepted → AC-25, AC-28..AC-34, AC-37 |
 | P-2 | Per-row token counts | — | decided by user: declined | declined → Non-goal |
 | P-3 | Inherited rows on the agent tab | — | decided by user: accepted | accepted → AC-40, AC-42 |
@@ -742,7 +743,7 @@ Sources: `docs/design/extracted/screen_tour_context.jsx` (N6), `screen_trace.jsx
 | AC / NFR | From (US / EC / design review) | Packages | Verify |
 |---|---|---|---|
 | AC-1 | US-1, D-29 | client | unit |
-| AC-2 | US-1, D-1, D-2 | server | integration |
+| AC-2 | US-1, D-1, D-2, D-31 | server | integration |
 | AC-3 | US-1 | server | unit |
 | AC-4 | US-1, D-1 | server | unit |
 | AC-5 | EC-9, D-17 | server | integration |
