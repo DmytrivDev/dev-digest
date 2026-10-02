@@ -18,8 +18,9 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [typescript-expert](typescript-expert/SKILL.md) | Full-stack | Type-level programming, performance, tooling, migrations |
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
+| [implement](implement/SKILL.md) | Meta | `/implement <plan>` — runs a finished plan through implementer → checks → plan-verifier → architecture review ⟲ fixes → final verdict; never commits |
+| [workflow-retro](workflow-retro/SKILL.md) | Meta | `/workflow-retro [deep]` — manual only. Analysis and proposals for a finished multi-agent run: agents, order, tokens, hard/easy/duplicated/missed. Output: chat plus an append-only entry in `docs/retro/ledger.md`, module insights included. Source: in-context; `deep` reads the transcripts. |
 | [engineering-insights](engineering-insights/SKILL.md) | Meta | Capture non-obvious findings into the touched module's INSIGHTS.md (read-first, dedup, append-only, fixed sections) |
-| [pr-self-review](pr-self-review/SKILL.md) | Meta | Gate before a PR: route the diff to the skills that govern it, review in parallel, run the deterministic checks, BLOCK on any CRITICAL |
 
 ## What Are Skills?
 

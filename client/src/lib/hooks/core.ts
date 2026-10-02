@@ -15,7 +15,8 @@ import type {
   Repo,
   PrMeta,
   PrDetail,
-  SpecFile,
+  ContextDocList,
+  ContextDocContent,
   IndexStatus,
 } from "../types";
 
@@ -123,8 +124,20 @@ export function usePullDetail(prId: string | number | null | undefined) {
 export function useContextFiles(repoId: string | null | undefined) {
   return useQuery({
     queryKey: ["context", repoId],
-    queryFn: () => api.get<SpecFile[]>(`/repos/${repoId}/context`),
+    queryFn: () => api.get<ContextDocList>(`/repos/${repoId}/context`),
     enabled: !!repoId,
+  });
+}
+
+/** One document's full text + "used by N agents" (GET /repos/:id/context/doc). */
+export function useContextDoc(repoId: string | null | undefined, path: string | null | undefined) {
+  return useQuery({
+    queryKey: ["context-doc", repoId, path],
+    queryFn: () =>
+      api.get<ContextDocContent>(
+        `/repos/${repoId}/context/doc?path=${encodeURIComponent(path as string)}`,
+      ),
+    enabled: !!repoId && !!path,
   });
 }
 

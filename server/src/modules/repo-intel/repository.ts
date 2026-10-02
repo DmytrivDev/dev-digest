@@ -17,6 +17,7 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import { clampIndexedName } from '../../db/schema/context.js';
+import { walkTotalFromStats } from './helpers.js';
 import type { DegradedReason, FileRankRow, IndexState, IndexStatus } from './types.js';
 
 /** Chunk size for batched inserts — same value blast already uses. */
@@ -243,6 +244,7 @@ export class RepoIntelRepository {
         degradedReason: isDegraded
           ? ((stats.degradedReason as DegradedReason | undefined) ?? 'index_failed')
           : undefined,
+        walkTotal: walkTotalFromStats(stats),
       };
     } catch {
       // Table missing / schema drift / connection blip — degrade silently. The
@@ -469,6 +471,32 @@ export class RepoIntelRepository {
       .where(eq(t.fileRank.repoId, repoId))
       .orderBy(desc(t.fileRank.rank))
       .limit(limit);
+  }
+
+  /** Every `{path, pagerank}` of a repo, ordered by path (onboarding graph snapshot). */
+  async getAllFileRanks(repoId: string): Promise<Array<{ path: string; pagerank: number }>> {
+    return this.db
+      .select({ path: t.fileRank.filePath, pagerank: t.fileRank.pagerank })
+      .from(t.fileRank)
+      .where(eq(t.fileRank.repoId, repoId))
+      .orderBy(asc(t.fileRank.filePath));
+  }
+
+  /** Every file's endpoint strings, ordered by path (onboarding graph snapshot). */
+  async getAllFileFacts(
+    repoId: string,
+  ): Promise<Array<{ path: string; endpoints: string[] }>> {
+    const rows = await this.db
+      .select({ path: t.fileFacts.filePath, endpoints: t.fileFacts.endpoints })
+      .from(t.fileFacts)
+      .where(eq(t.fileFacts.repoId, repoId))
+      .orderBy(asc(t.fileFacts.filePath));
+    return rows.map((r) => ({
+      path: r.path,
+      endpoints: Array.isArray(r.endpoints)
+        ? r.endpoints.filter((e): e is string => typeof e === 'string')
+        : [],
+    }));
   }
 
   /** Repo-map candidates: symbols with a signature, joined to rank, ordered. */

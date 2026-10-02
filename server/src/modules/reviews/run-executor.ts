@@ -22,6 +22,7 @@ import { resolveFeatureModel } from '../settings/feature-models.js';
 import { IntentRepository } from '../intent/repository.js';
 import { IntentService } from '../intent/service.js';
 import { renderIntentBlock } from '../intent/helpers.js';
+import type { RunContextDoc } from '../project-context/service.js';
 
 /** What the shared intent pre-work hands to every per-agent run: the rendered
  *  block for the prompt slot, and the tool-call entry each agent's trace
@@ -220,6 +221,12 @@ export class ReviewRunExecutor {
       // `used` is the trace record and covers linked-but-disabled skills too.
       const { blocks: skillBlocks, used: skillsUsed } = await this.buildSkills(agent.id, runLog);
 
+      // SPEC-01 — the documents attached to this agent (and its enabled linked
+      // skills) for THIS PR's repository, read from the clone's current
+      // checkout. Best-effort and read-only: an unreadable document is skipped
+      // with a Run Log line, never a failed run.
+      const projectDocs = await this.buildProjectContext(workspaceId, pull, repo, agent, runLog);
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -246,6 +253,10 @@ export class ReviewRunExecutor {
         // L02 — linked, enabled skills. No skills ⇒ the slot is absent and the
         // prompt is byte-identical to the pre-L02 shape.
         ...(skillBlocks.length > 0 ? { skills: skillBlocks } : {}),
+        // SPEC-01 — attached Project Context documents (untrusted; the engine
+        // delimiter-wraps each one). None ⇒ the section is absent and the
+        // prompt is byte-identical to the pre-SPEC-01 shape.
+        ...(projectDocs.length > 0 ? { specs: projectDocs } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -335,7 +346,9 @@ export class ReviewRunExecutor {
         ],
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        // The documents that actually reached the prompt, in injection order
+        // (skipped ones are excluded — their Run Log lines say why).
+        specs_read: projectDocs.map((d) => d.path),
         // The agent's linked skills as THIS run resolved them (disabled ones
         // included, marked). A snapshot: re-reading agent_skills later would
         // describe the picker's current state, not this run's prompt.
@@ -516,6 +529,38 @@ export class ReviewRunExecutor {
         (skipped > 0 ? ` (${skipped} disabled)` : ''),
     );
     return assembly;
+  }
+
+  /**
+   * SPEC-01 — resolve the Project Context documents for one agent run and
+   * stream the service's Run Log lines. Uses `container.projectContext`
+   * (composed once in the composition root); the service itself takes ports and
+   * never fetches, syncs or clones (AC-75).
+   *
+   * Best-effort: `resolveForRun` never throws, and the try/catch is the second
+   * net for construction failures — this must NEVER reach `failAll` or fail
+   * the run (AC-60).
+   */
+  private async buildProjectContext(
+    workspaceId: string,
+    pull: PullRow,
+    repo: typeof schema.repos.$inferSelect,
+    agent: AgentRow,
+    runLog: RunLogger,
+  ): Promise<RunContextDoc[]> {
+    try {
+      const { docs, lines } = await this.container.projectContext.resolveForRun({
+        workspaceId,
+        agentId: agent.id,
+        repo: { id: repo.id, owner: repo.owner, name: repo.name, clonePath: repo.clonePath },
+        prBase: pull.base,
+      });
+      for (const line of lines) runLog.info(line);
+      return docs;
+    } catch (err) {
+      runLog.info(`project context: skipped — ${(err as Error).message}`);
+      return [];
+    }
   }
 
   /**

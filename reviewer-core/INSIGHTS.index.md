@@ -3,7 +3,7 @@
 GENERATED FILE — do not edit by hand, and do not add an insight here. Rebuild with
 `node .claude/skills/engineering-insights/scripts/build-index.mjs` after every append.
 
-Source: `reviewer-core/INSIGHTS.md` — 2 entries, 1,479 bytes.
+Source: `reviewer-core/INSIGHTS.md` — 3 entries, 2,157 bytes.
 
 This index exists so you do not have to load the whole file to find out whether it
 has anything to say about your task. Scan it, then read only the entries you need:
@@ -19,7 +19,8 @@ protocol says to read this package's insights, the source file is what it means.
 ## Codebase Patterns
 
 - `L13` · 2026-06-14 · reviewPullRequest already returns tokensIn/tokensOut/costUsd in ReviewOutcome — consumers wanting cost should READ it from the outcome, not recompute…
+- `L14` · 2026-10-02 · In map-reduce mode the persisted prompt_assembly is NOT what any model call received: runReview stores the WHOLE-DIFF assembly…
 
 ## Tool & Library Notes
 
-- `L17` · 2026-09-15 · Although reviewer-core is consumed as SOURCE via tsconfig path aliases (never as a built/published module), it still needs its OWN node_modules: Node…
+- `L18` · 2026-09-15 · Although reviewer-core is consumed as SOURCE via tsconfig path aliases (never as a built/published module), it still needs its OWN node_modules: Node…

@@ -22,11 +22,15 @@ export function isTextInput(el: EventTarget | null): boolean {
   );
 }
 
+/** `/repos/<id>/onboarding` and below — segment-exact, so `/onboarding` does not match. */
+const ONBOARDING_TOUR_PATH = /^\/repos\/[^/]+\/onboarding(\/|$)/;
+
 /** Derive the active sidebar key from the current pathname. */
 export function activeKeyFor(pathname: string): string {
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.includes("/multi-agent")) return "multi-agent";
-  if (pathname.includes("/onboarding")) return "onboarding-tour";
+  // Repo-scoped only: the bare `/onboarding` is the add-repository wizard.
+  if (ONBOARDING_TOUR_PATH.test(pathname)) return "onboarding-tour";
   if (pathname.includes("/context")) return "context";
   if (pathname.includes("/conventions")) return "conventions";
   if (pathname.includes("/pulls")) return "pulls";

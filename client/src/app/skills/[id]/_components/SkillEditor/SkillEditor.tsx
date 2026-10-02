@@ -1,5 +1,5 @@
-/* SkillEditor — Config + Preview tabs over one skill, mirroring the agent
-   editor's shell so the two read the same way. */
+/* SkillEditor — Config, Context, Preview, Stats and Versions tabs over one
+   skill, mirroring the agent editor's shell so the two read the same way. */
 "use client";
 
 import React from "react";
@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { ConfigTab } from "./_components/ConfigTab";
+import { ContextTab } from "./_components/ContextTab";
 import { PreviewTab } from "./_components/PreviewTab";
 import { StatsTab } from "./_components/StatsTab";
 import { VersionsTab } from "./_components/VersionsTab";
@@ -34,6 +35,8 @@ export function SkillEditor({
             skill without an effect mirroring every field into state. */}
         {tab === "preview" ? (
           <PreviewTab skill={skill} />
+        ) : tab === "context" ? (
+          <ContextTab key={skill.id} skill={skill} />
         ) : tab === "stats" ? (
           <StatsTab key={skill.id} skill={skill} />
         ) : tab === "versions" ? (

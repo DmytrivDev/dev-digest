@@ -4,7 +4,7 @@
  * Encodes the inward-only dependency rule from `.claude/skills/onion-architecture/`:
  * a file may import from its own ring and rings closer to the core, never outward.
  *
- *   ring 1 core        pure rules, no I/O      modules/<n>/{cost,status,findings,helpers}.ts
+ *   ring 1 core        pure rules, no I/O      modules/<n>/{cost,status,findings,helpers}.ts, modules/<n>/helpers/*.ts
  *   ring 2 ports       interfaces              vendor/shared/**
  *   ring 3 application services, repositories  modules/<n>/{service,repository}.ts
  *   ring 4 adapters    routes, db, SDKs        modules/<n>/routes.ts, adapters/**, db/**
@@ -20,7 +20,7 @@
  */
 
 /** Ring-1 rule/mapper files: pure functions, unit-tested without a database. */
-const RING1 = '^src/modules/[^/]+/(cost|status|findings|helpers)\\.ts$';
+const RING1 = '^src/modules/[^/]+/((cost|status|findings|helpers)\\.ts|helpers/[^/]+\\.ts)$';
 const ROUTES = '^src/modules/[^/]+/routes\\.ts$';
 const SERVICES = '^src/modules/[^/]+/service\\.ts$';
 

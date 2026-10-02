@@ -1,6 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { mkdir, readFile, realpath, access, rm } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, access, rm, stat, lstat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
   GitClient,
@@ -9,6 +9,7 @@ import type {
   UnifiedDiff,
   BlameLine,
   GitCommit,
+  CommitTouch,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './diff-parser.js';
 
@@ -19,12 +20,44 @@ import { parseUnifiedDiff } from './diff-parser.js';
  */
 const RESYNC_FETCH_DEPTH = 50;
 
+/** Resolves the GitHub PAT at call time (never cached here), `undefined` when none is configured. */
+export type GitTokenProvider = () => Promise<string | undefined>;
+
+/** Host whose HTTPS remotes get the token; any other host is fetched unauthenticated. */
+const AUTH_HOST = 'github.com';
+/** Basic-auth username GitHub expects for a token. */
+const TOKEN_USERNAME = 'x-access-token';
+
+/**
+ * Directories whose contents are never a project document. `.git` holds the
+ * clone's own `config`; the rest mirrors the Project Context excluded dirs
+ * (kept here so the adapter imports nothing from `modules/`).
+ */
+const DOC_EXCLUDED_DIRS: ReadonlySet<string> = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  '.next',
+  'vendor',
+  '.claude',
+]);
+const GIT_ONLY: ReadonlySet<string> = new Set(['.git']);
+const MARKDOWN_EXT = /\.(md|markdown)$/i;
+
 /**
  * GitClient over simple-git. Repos clone to
  * `<cloneDir>/<owner>/<repo>`. We NEVER execute repo code — only git ops.
  */
 export class SimpleGitClient implements GitClient {
-  constructor(private cloneDir: string) {
+  /**
+   * `getToken` supplies the GitHub PAT for network commands only. It is handed to
+   * git per command (`-c http.<host>.extraHeader`) and is never written to the
+   * clone's `.git/config` nor embedded in a remote URL.
+   */
+  constructor(
+    private cloneDir: string,
+    private getToken?: GitTokenProvider,
+  ) {
     // Force non-interactive auth so an unauthenticated/private clone fails in
     // ~1s with a clear error instead of hanging on a credential prompt until the
     // job timeout. Set on process.env (inherited by git subprocesses) rather
@@ -56,22 +89,81 @@ export class SimpleGitClient implements GitClient {
     await mkdir(join(this.cloneDir, repo.owner), { recursive: true });
     if (await this.exists(join(dest, '.git'))) {
       // already cloned → fetch latest
-      await simpleGit(dest).fetch();
+      await this.authedFetch(repo, []);
       return { path: dest };
     }
     // A prior clone may have timed out mid-write, leaving a partial dir without
     // a .git — git clone refuses a non-empty dest, so clear it first.
     if (await this.exists(dest)) await rm(dest, { recursive: true, force: true });
+    // Defence in depth: a caller that still embeds credentials in the URL gets
+    // them moved to the per-command header, so they never land in `.git/config`.
+    const { url: cleanUrl, token: embedded } = splitCredentials(url);
+    const token = embedded ?? (await this.getToken?.());
     const args: string[] = [];
     if (opts?.depth) args.push('--depth', String(opts.depth));
     if (opts?.branch) args.push('--branch', opts.branch);
-    await simpleGit(this.cloneDir).clone(url, dest, args);
+    await redactingErrors(token, () =>
+      simpleGit({ baseDir: this.cloneDir, config: authConfig(cleanUrl, token) }).clone(
+        cleanUrl,
+        dest,
+        args,
+      ),
+    );
     return { path: dest };
   }
 
   async fetchPullHead(repo: RepoRef, n: number): Promise<void> {
     // Fetch the PR head ref into a local ref (GitHub exposes pull/<n>/head).
-    await this.git(repo).fetch(['origin', `pull/${n}/head:pr-${n}`]);
+    await this.authedFetch(repo, ['origin', `pull/${n}/head:pr-${n}`]);
+  }
+
+  /**
+   * Every network fetch goes through here: first drop any credentials a pre-fix
+   * clone left in `remote.origin.url`, then fetch with the token supplied for
+   * this one command only.
+   */
+  private async authedFetch(
+    repo: RepoRef,
+    args: string[],
+    opts?: { timeoutMs?: number },
+  ): Promise<void> {
+    const dir = this.clonePathFor(repo);
+    const token = await this.getToken?.();
+    await redactingErrors(token, async () => {
+      const remote = await this.scrubOrigin(dir);
+      // Absolute deadline on the git child (opt-in): `block` fires after that long
+      // regardless of output, so a hung origin cannot outlive the caller's budget.
+      const timeout = opts?.timeoutMs
+        ? { timeout: { block: opts.timeoutMs, stdOut: false, stdErr: false } }
+        : {};
+      try {
+        await simpleGit({ baseDir: dir, config: authConfig(remote, token), ...timeout }).fetch(args);
+      } catch (err) {
+        if (opts?.timeoutMs && isTimeoutError(err)) {
+          throw Object.assign(new Error(`git fetch timed out after ${opts.timeoutMs}ms`), {
+            code: 'ETIMEDOUT',
+          });
+        }
+        throw err;
+      }
+    });
+  }
+
+  /**
+   * Resets `origin` to its credential-free URL when it carries any (clones made
+   * before the token moved out of the URL) and returns that clean URL.
+   */
+  private async scrubOrigin(dir: string): Promise<string | undefined> {
+    const g = simpleGit(dir);
+    let current: string;
+    try {
+      current = (await g.raw(['config', '--get', 'remote.origin.url'])).trim();
+    } catch {
+      return undefined; // no origin — the fetch will report it
+    }
+    const { url: clean } = splitCredentials(current);
+    if (clean !== current) await g.raw(['remote', 'set-url', 'origin', clean]);
+    return clean;
   }
 
   async sync(repo: RepoRef, branch: string): Promise<{ head: string }> {
@@ -81,8 +173,8 @@ export class SimpleGitClient implements GitClient {
     // Fetch a bounded depth (> the shallow CLONE_DEPTH) so the prior indexed sha
     // is usually reachable for an incremental diff; the indexer falls back to a
     // full reindex when it isn't.
+    await this.authedFetch(repo, ['origin', branch, '--depth', String(RESYNC_FETCH_DEPTH)]);
     const g = this.git(repo);
-    await g.fetch(['origin', branch, '--depth', String(RESYNC_FETCH_DEPTH)]);
     await g.reset(['--hard', `origin/${branch}`]);
     return { head: (await g.revparse(['HEAD'])).trim() };
   }
@@ -127,22 +219,263 @@ export class SimpleGitClient implements GitClient {
   }
 
   /**
-   * Reads a file INSIDE the clone. The path is checked where it really lands,
-   * not just as text: a symlink committed to the repo (`docs/spec.md ->
-   * ~/.devdigest/secrets.json`) passes any text-only gate, and `readFile`
-   * follows it. Resolving both ends with `realpath` closes that.
+   * Resolves `path` to the real file it lands on and proves that file is INSIDE
+   * the clone. The path is checked where it really lands, not just as text: a
+   * symlink committed to the repo (`docs/spec.md -> ~/.devdigest/secrets.json`)
+   * passes any text-only gate, and `readFile` follows it. Resolving both ends
+   * with `realpath` closes that. Missing file → `ENOENT`; outside → `EOUTSIDECLONE`.
+   *
+   * "Inside" excludes the clone's own `.git` directory: it holds `config`, which
+   * is repo-controlled data a symlink can point at (`docs/a.md -> ../.git/config`).
+   * With `docsOnly` the target must additionally avoid every document-excluded
+   * dir, and a symlink must land on a markdown file.
    */
-  async readFile(repo: RepoRef, path: string): Promise<string> {
+  private async resolveInside(
+    repo: RepoRef,
+    path: string,
+    opts?: { docsOnly?: boolean },
+  ): Promise<string> {
     const root = await realpath(this.clonePathFor(repo));
-    const target = await realpath(join(root, path));
-    const rel = relative(root, target);
-    if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
-      throw Object.assign(new Error('path resolves outside the repository clone'), {
-        code: 'EOUTSIDECLONE',
-      });
+    const lexical = join(root, path);
+    const target = await realpath(lexical);
+    if (!isInside(root, target) || hasSegment(root, target, GIT_ONLY)) throw outsideClone();
+    if (opts?.docsOnly) {
+      if (hasSegment(root, target, DOC_EXCLUDED_DIRS)) throw outsideClone();
+      if ((await lstat(lexical)).isSymbolicLink() && !MARKDOWN_EXT.test(target)) {
+        throw outsideClone();
+      }
     }
-    return readFile(target, 'utf8');
+    return target;
   }
+
+  /** Reads a file INSIDE the clone as UTF-8 text (see `resolveInside`). */
+  async readFile(repo: RepoRef, path: string): Promise<string> {
+    return readFile(await this.resolveInside(repo, path), 'utf8');
+  }
+
+  /** Raw bytes of a file INSIDE the clone — same guard as `readFile`. */
+  async readFileBytes(repo: RepoRef, path: string): Promise<Uint8Array> {
+    return readFile(await this.resolveInside(repo, path, { docsOnly: true }));
+  }
+
+  /**
+   * Every regular file of the working tree, as `/`-separated relative paths.
+   * Directories are walked with `withFileTypes` (no per-entry stat); a symlink
+   * entry reports `isSymbolicLink()` only, so it is resolved with `realpath` —
+   * listed only when it lands on a markdown file inside the clone, outside `.git`
+   * and the excluded dirs. Symlinked
+   * directories are never followed, which also rules out cycles.
+   */
+  async listFiles(repo: RepoRef, opts?: { excludeDirs?: readonly string[] }): Promise<string[]> {
+    const root = await realpath(this.clonePathFor(repo)); // ENOENT when not cloned
+    const skip = new Set<string>(['.git', ...(opts?.excludeDirs ?? [])]);
+    const out: string[] = [];
+    const stack: { abs: string; rel: string }[] = [{ abs: root, rel: '' }];
+    while (stack.length > 0) {
+      const dir = stack.pop()!;
+      for (const entry of await readdir(dir.abs, { withFileTypes: true })) {
+        const rel = dir.rel === '' ? entry.name : `${dir.rel}/${entry.name}`;
+        const abs = join(dir.abs, entry.name);
+        if (entry.isDirectory()) {
+          if (!skip.has(entry.name)) stack.push({ abs, rel });
+        } else if (entry.isFile()) {
+          out.push(rel);
+        } else if (entry.isSymbolicLink()) {
+          try {
+            const target = await realpath(abs);
+            if (
+              isInside(root, target) &&
+              !hasSegment(root, target, skip) &&
+              MARKDOWN_EXT.test(target) &&
+              (await stat(target)).isFile()
+            ) {
+              out.push(rel);
+            }
+          } catch {
+            // dangling or unreadable link — not a document
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  async commitDate(repo: RepoRef, sha: string): Promise<string> {
+    assertNotOption(sha);
+    // `--end-of-options` keeps a hostile value from being read as a flag.
+    const out = await this.git(repo).raw(['show', '-s', '--format=%cI', '--end-of-options', sha]);
+    return out.trim();
+  }
+
+  async commitTouches(
+    repo: RepoRef,
+    sha: string,
+    opts: { maxCount: number },
+  ): Promise<CommitTouch[]> {
+    assertNotOption(sha);
+    const g = this.git(repo);
+    // No `--since`: it stops early on clock-skewed dates. The window is applied by the caller.
+    const raw = await g.raw([
+      'log',
+      '-z',
+      '--name-only',
+      '--no-renames',
+      `--max-count=${Math.max(1, Math.floor(opts.maxCount))}`,
+      '--format=%x01%H%x1f%cI%x1f%P',
+      '--end-of-options',
+      sha,
+    ]);
+    return parseCommitTouches(raw, await this.shallowShas(repo));
+  }
+
+  async fetchHistorySince(
+    repo: RepoRef,
+    since: string,
+    ref: string,
+    opts: { timeoutMs: number },
+  ): Promise<void> {
+    // Discrete args only — never a shell string. No `--filter=blob:none`: it would
+    // turn the clone into a partial clone for good (promisor config + lazy fetches).
+    assertNotOption(since);
+    assertNotOption(ref);
+    await this.authedFetch(repo, [`--shallow-since=${since}`, 'origin', ref], {
+      timeoutMs: opts.timeoutMs,
+    });
+  }
+
+  /** Shas listed in the clone's shallow file; empty when the clone is not shallow. */
+  private async shallowShas(repo: RepoRef): Promise<Set<string>> {
+    const dir = this.clonePathFor(repo);
+    try {
+      const rel = (await this.git(repo).raw(['rev-parse', '--git-path', 'shallow'])).trim();
+      const text = await readFile(isAbsolute(rel) ? rel : join(dir, rel), 'utf8');
+      return new Set(text.split(/\s+/).filter((l) => l.length > 0));
+    } catch {
+      return new Set(); // no shallow file → no commit is a boundary
+    }
+  }
+
+  /** Branch HEAD points at; the literal `HEAD` when detached. `ENOENT` when not cloned. */
+  async currentBranch(repo: RepoRef): Promise<string> {
+    const dir = this.clonePathFor(repo);
+    if (!(await this.exists(dir))) {
+      throw Object.assign(new Error(`no clone at ${dir}`), { code: 'ENOENT' });
+    }
+    return (await this.git(repo).revparse(['--abbrev-ref', 'HEAD'])).trim();
+  }
+}
+
+/** A value handed to git as a positional arg must never be readable as an option. */
+function assertNotOption(value: string): void {
+  if (value.startsWith('-')) {
+    throw Object.assign(new Error(`refusing option-like git argument`), { code: 'EINVAL' });
+  }
+}
+
+/** simple-git's timeout plugin raises a `GitPluginError` whose `plugin` is `timeout`. */
+function isTimeoutError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { plugin?: string }).plugin === 'timeout';
+}
+
+/**
+ * Parses `git log -z --name-only --no-renames --format=%x01%H%x1f%cI%x1f%P`: one `\x01`
+ * starts each commit, the header ends at the first NUL, the changed paths follow,
+ * NUL-separated (so a path with a space or non-ASCII char arrives verbatim).
+ */
+function parseCommitTouches(raw: string, shallow: ReadonlySet<string>): CommitTouch[] {
+  const out: CommitTouch[] = [];
+  // Split only at a \x01 that starts a header, so a path containing \x01 cannot forge a commit.
+  for (const chunk of raw.split(/\x01(?=[0-9a-f]{40,64}\x1f)/)) {
+    if (chunk.length === 0) continue;
+    const nul = chunk.indexOf('\0');
+    const header = nul < 0 ? chunk : chunk.slice(0, nul);
+    let rest = nul < 0 ? '' : chunk.slice(nul + 1);
+    if (rest.startsWith('\n')) rest = rest.slice(1);
+    const [sha, committedAt, parentText = ''] = header.split('\x1f');
+    if (!sha || !committedAt) continue;
+    const parents = parentText.split(' ').filter((p) => p.length > 0);
+    out.push({
+      sha,
+      committedAt,
+      parents,
+      boundary: parents.length === 0 && shallow.has(sha),
+      files: rest.split('\0').filter((f) => f.length > 0),
+    });
+  }
+  return out;
+}
+
+/** True when `target` is a strict descendant of `root` (both already real paths). */
+function isInside(root: string, target: string): boolean {
+  const rel = relative(root, target);
+  return !(rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel));
+}
+
+/** True when any path segment of `target` (relative to `root`) is in `names` (case-insensitive). */
+function hasSegment(root: string, target: string, names: ReadonlySet<string>): boolean {
+  const lower = new Set([...names].map((n) => n.toLowerCase()));
+  return relative(root, target)
+    .split(sep)
+    .some((seg) => lower.has(seg.toLowerCase()));
+}
+
+/** Splits `user:pass@` off an http(s) URL. Non-URLs (ssh form) pass through untouched. */
+function splitCredentials(url: string): { url: string; token?: string } {
+  try {
+    const u = new URL(url);
+    if ((u.protocol === 'https:' || u.protocol === 'http:') && (u.username || u.password)) {
+      const token = decodeURIComponent(u.password || u.username);
+      u.username = '';
+      u.password = '';
+      return { url: u.toString(), token: token || undefined };
+    }
+  } catch {
+    /* not a URL (e.g. git@github.com:owner/repo.git) */
+  }
+  return { url };
+}
+
+/**
+ * `-c` config granting the token to github.com over HTTPS for ONE git command.
+ * Scoped to the host (`http.<url>.extraHeader`) so a redirect elsewhere never
+ * receives it; empty when there is no token or the remote is not GitHub HTTPS.
+ */
+function authConfig(remoteUrl: string | undefined, token: string | undefined): string[] {
+  if (!token || !remoteUrl) return [];
+  try {
+    const u = new URL(remoteUrl);
+    if (u.protocol !== 'https:' || u.hostname !== AUTH_HOST) return [];
+  } catch {
+    return [];
+  }
+  const basic = Buffer.from(`${TOKEN_USERNAME}:${token}`).toString('base64');
+  return [`http.https://${AUTH_HOST}/.extraHeader=Authorization: Basic ${basic}`];
+}
+
+/** Runs `fn`; any error leaves with the token (raw, base64, or as URL userinfo) scrubbed out. */
+async function redactingErrors<T>(token: string | undefined, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof Error) {
+      const secrets = token
+        ? [token, Buffer.from(`${TOKEN_USERNAME}:${token}`).toString('base64')]
+        : [];
+      const scrub = (text: string): string =>
+        secrets
+          .reduce((acc, secret) => acc.split(secret).join('***'), text)
+          .replace(/(https?:\/\/)[^@\s/]+@/g, '$1***@');
+      err.message = scrub(err.message);
+      if (err.stack) err.stack = scrub(err.stack);
+    }
+    throw err;
+  }
+}
+
+function outsideClone(): Error {
+  return Object.assign(new Error('path resolves outside the repository clone'), {
+    code: 'EOUTSIDECLONE',
+  });
 }
 
 function parseBlamePorcelain(raw: string): BlameLine[] {

@@ -52,6 +52,7 @@
     "tabs": {
       "config": "Config",
       "skills": "Skills",
+      "context": "Context",
       "evals": "Evals",
       "stats": "Stats",
       "ci": "CI"
@@ -99,6 +100,12 @@
     "filterPlaceholder": "Filter skills…",
     "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Drag a handle to reorder, or focus one and use ↑ / ↓. A disabled skill stays attached but is left out of the prompt.",
     "dragHandle": "Reorder {name} — drag, or use the up and down arrow keys"
+  },
+  "context": {
+    "title": "Project context",
+    "attachedOf": "{n} of {total} attached",
+    "tokens": "≈ {count} tokens",
+    "note": "Injected as an untrusted block (## Project context) into every run."
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

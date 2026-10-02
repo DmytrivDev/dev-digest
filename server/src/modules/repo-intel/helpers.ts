@@ -40,6 +40,46 @@ export function capCallersPerSymbol(
 }
 
 /**
+ * Path kinds excluded from rank-driven file samples (conventions/onboarding):
+ * tests, configs, declaration files, migrations, generated dirs. Substring
+ * match on the repo-relative path (kept deliberately simple + deterministic).
+ */
+export const JUNK_PATH_PATTERNS = [
+  '.test.',
+  '.spec.',
+  '.d.ts',
+  '__tests__/',
+  '__mocks__/',
+  '/test/',
+  '/tests/',
+  '/migrations/',
+  '/__fixtures__/',
+  '.config.',
+  'vitest.',
+  'jest.',
+  'eslint',
+  'prettier',
+] as const;
+
+export function isJunkPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return JUNK_PATH_PATTERNS.some((p) => lower.includes(p));
+}
+
+/**
+ * Total number of candidate files the walk found, when it kept only the first
+ * N (`stats.bounded` = how many it dropped, `stats.filesSeen` = how many it
+ * kept). `null` when the walk was not truncated or the stats lack the numbers.
+ */
+export function walkTotalFromStats(stats: Record<string, unknown>): number | null {
+  const bounded = stats.bounded;
+  const seen = stats.filesSeen;
+  if (typeof bounded !== 'number' || !(bounded > 0)) return null;
+  if (typeof seen !== 'number') return null;
+  return seen + bounded;
+}
+
+/**
  * The facade's `reason` means "why the index was not fully used", never
  * "no results". Order matches Key decision 7 of docs/plans/blast-radius.plan.md.
  */

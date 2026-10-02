@@ -7,7 +7,7 @@ import type {
   UnifiedDiff,
 } from '@devdigest/shared';
 import { Review as ReviewSchema } from '@devdigest/shared';
-import { assemblePrompt } from '../prompt.js';
+import { assemblePrompt, type ProjectContextDoc } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 
@@ -22,8 +22,9 @@ import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
  * (no DB, GitHub, fs, memory retrieval, intent, or persistence) — those stay in
  * the caller (server persists + streams SSE; runner posts + writes an artifact).
  *
- * Skill bodies / memory / specs are RESOLVED strings here: the caller turns
- * AgentManifest skill slugs into bodies (DB in the studio, fs in the runner).
+ * Skill bodies / memory / spec documents are RESOLVED here (strings, or
+ * `{ path, content }` for specs): the caller turns AgentManifest skill slugs
+ * into bodies (DB in the studio, fs in the runner).
  */
 
 /** Default map-reduce threshold (matches the server's FILE_MAP_THRESHOLD_LINES). */
@@ -56,8 +57,8 @@ export interface ReviewInput {
   skills?: string[];
   /** Curated memory items. */
   memory?: string[];
-  /** Project-context spec chunks (untrusted; delimiter-wrapped downstream). */
-  specs?: string[];
+  /** Project Context documents (untrusted; each delimiter-wrapped downstream, never truncated). */
+  specs?: readonly ProjectContextDoc[];
   /**
    * Optional callers-of-changed-symbols digest (T1.3). Untrusted; rendered
    * before the diff section. Empty/undefined → section omitted.

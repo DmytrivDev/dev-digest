@@ -1,0 +1,57 @@
+import type React from "react";
+
+export const s = {
+  list: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  } satisfies React.CSSProperties,
+  row: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    minWidth: 0,
+  } satisfies React.CSSProperties,
+  commandRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "var(--bg-hover)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    borderRadius: 6,
+    padding: "6px 8px 6px 12px",
+  } satisfies React.CSSProperties,
+  command: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    color: "var(--text-primary)",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+  } satisfies React.CSSProperties,
+  copyBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: "4px 6px",
+    borderRadius: 5,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--bg-elevated)",
+    color: "var(--text-muted)",
+    fontSize: 12,
+    cursor: "pointer",
+  } satisfies React.CSSProperties,
+  note: {
+    margin: 0,
+    fontSize: 13,
+    color: "var(--text-secondary)",
+  } satisfies React.CSSProperties,
+};
