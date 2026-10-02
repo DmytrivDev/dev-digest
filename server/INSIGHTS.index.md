@@ -3,7 +3,7 @@
 GENERATED FILE — do not edit by hand, and do not add an insight here. Rebuild with
 `node .claude/skills/engineering-insights/scripts/build-index.mjs` after every append.
 
-Source: `server/INSIGHTS.md` — 79 entries, 68,040 bytes.
+Source: `server/INSIGHTS.md` — 80 entries, 69,286 bytes.
 
 This index exists so you do not have to load the whole file to find out whether it
 has anything to say about your task. Scan it, then read only the entries you need:
@@ -115,3 +115,4 @@ protocol says to read this package's insights, the source file is what it means.
 - `L104` · 2026-06-14 · PR-list "latest review batch" uses a 120s ranAt window as a proxy for a review session. If a real review-session / batch id is ever added to the…
 - `L105` · 2026-09-18 · server/src/platform/model-router.ts is an ORPHAN — nothing in src imports it (surfaced by pnpm arch:check's no-orphans rule, the only file it flags).…
 - `L106` · 2026-09-18 · Linking or reordering an agent's skills now changes its effective PROMPT, but setSkills/linkSkill (modules/agents/repository.ts:207-240) neither bump…
+- `L107` · 2026-10-02 · Refines the 2026-09-26 "POST /repos/:id/resync can wedge the whole API" entry — its credential-prompt hypothesis is WRONG. Reproduced twice on…
