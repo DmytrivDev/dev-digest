@@ -265,6 +265,9 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
             additions: detail.additions,
             deletions: detail.deletions,
             filesCount: detail.files_count,
+            // GitHub's live head. The PR-list import lags it; the brief's `stale`
+            // flag compares its own head_sha against this column (SPEC-03).
+            headSha: detail.head_sha,
           })
           .where(eq(t.pullRequests.id, pr.id));
       });

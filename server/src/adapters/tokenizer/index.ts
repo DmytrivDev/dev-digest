@@ -28,13 +28,18 @@ export class TiktokenTokenizer implements Tokenizer {
 
   count(text: string): number {
     if (this.broken) return approxTokens(text);
-    try {
-      this.enc ??= getEncoding('cl100k_base');
-      return this.enc.encode(text).length;
-    } catch {
-      // BPE load failed once — don't retry per call; stick to the heuristic.
-      this.broken = true;
-      return approxTokens(text);
+    if (!this.enc) {
+      try {
+        this.enc = getEncoding('cl100k_base');
+      } catch {
+        // BPE load failed once — don't retry per call; stick to the heuristic.
+        this.broken = true;
+        return approxTokens(text);
+      }
     }
+    // `disallowedSpecial: []`: a text that holds `<|endoftext|>` (a PR title, a document) is
+    // counted as the ordinary text it is. By default the encoder THROWS on it, which used to
+    // flip this process-wide instance to the heuristic for good.
+    return this.enc.encode(text, [], []).length;
   }
 }

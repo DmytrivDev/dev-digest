@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { FindingRecord, PrFile, ReviewRecord, SmartDiff } from "@devdigest/shared";
@@ -16,6 +16,7 @@ vi.mock("@/lib/hooks/reviews", () => ({
 }));
 
 import { DiffTab } from "./DiffTab";
+import { parseDiffTarget } from "./helpers";
 
 afterEach(() => {
   cleanup();
@@ -208,5 +209,90 @@ describe("DiffTab — inline finding collapses to one line (W9)", () => {
     fireEvent.click(screen.getByText("Hardcoded secret"));
     expect(screen.queryByText("A secret is committed.")).not.toBeInTheDocument();
     expect(screen.getByText("Hardcoded secret")).toBeInTheDocument();
+  });
+});
+
+describe("DiffTab — deep link (?file=&line=)", () => {
+  const scrollIntoView = vi.fn();
+
+  beforeEach(() => {
+    scrollIntoView.mockClear();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    smartDiffData = { data: fullSmartDiff() };
+    reviewsData = { data: [] };
+  });
+
+  // The boilerplate lockfile is collapsed by default AND over the 200-line
+  // auto-expand ceiling, so it only shows its lines when the link targets it.
+  const LOCK_LINE = "lockfileVersion: 9";
+  const DEEP_FILES: PrFile[] = FILES.map((f) =>
+    f.path === "pnpm-lock.yaml"
+      ? { ...f, additions: 300, patch: `@@ -1,1 +1,2 @@
++${LOCK_LINE}
+ x` }
+      : f,
+  );
+
+  function renderWith(query: string, files: PrFile[] = DEEP_FILES) {
+    return render(
+      <NextIntlClientProvider
+        locale="en"
+        messages={{ prReview: prReviewMessages, shell: shellMessages }}
+      >
+        <DiffTab
+          prId="pr1"
+          filesCount={files.length}
+          files={files}
+          canComment={false}
+          focus={parseDiffTarget(new URLSearchParams(query))}
+        />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  const scrolledElement = (n = 0) => scrollIntoView.mock.contexts[n] as HTMLElement;
+
+  it("a boilerplate target expands its role group and its card", () => {
+    renderWith("tab=diff&file=pnpm-lock.yaml");
+    expect(screen.getByText(LOCK_LINE)).toBeInTheDocument();
+  });
+
+  it("without a link the boilerplate group stays collapsed and nothing scrolls", () => {
+    renderWith("tab=diff");
+    expect(screen.queryByText(LOCK_LINE)).not.toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("an unknown file renders the normal diff: no error, nothing expanded, no scroll", () => {
+    renderWith("tab=diff&file=nope.ts&line=3");
+    expect(screen.queryByText(LOCK_LINE)).not.toBeInTheDocument();
+    expect(screen.getByText("src/config.ts")).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("a malformed line (line=0) is no target at all", () => {
+    renderWith("tab=diff&file=pnpm-lock.yaml&line=0");
+    expect(screen.queryByText(LOCK_LINE)).not.toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("scrolls to and highlights the targeted line in Smart order and again in Original order", () => {
+    const { container } = renderWith("tab=diff&file=src/config.ts&line=10");
+    expect(scrolledElement(0).textContent).toContain("stripeKey: x");
+    expect(container.querySelectorAll("[data-highlighted]")).toHaveLength(1);
+
+    scrollIntoView.mockClear();
+    fireEvent.click(screen.getByText("Original order"));
+    expect(screen.queryByText("Core")).not.toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrolledElement(0).textContent).toContain("stripeKey: x");
+    expect(container.querySelectorAll("[data-highlighted]")).toHaveLength(1);
+  });
+
+  it("a line that is not in the diff scrolls the card header instead", () => {
+    renderWith("tab=diff&file=src/config.ts&line=9999");
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrolledElement(0).textContent).toContain("src/config.ts");
   });
 });

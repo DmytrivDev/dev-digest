@@ -36,13 +36,16 @@ const CLOSING_KEYWORDS =
  * tier (§2.7).
  */
 const ISSUE_REF_RE = new RegExp(
-  `(?:\\b(?:${CLOSING_KEYWORDS})\\b\\s*:?\\s+)?` +
+  // `\s*:?\s+` written as the two shapes it means — whitespace, or a colon with whitespace on
+  // each side — so the engine has one way to match a whitespace run, not n² (ReDoS, F14).
+  `(?:\\b(?:${CLOSING_KEYWORDS})\\b(?:\\s+|\\s*:\\s+))?` +
     '(?:' +
     // full GitHub issue URL
     'https?://github\\.com/([\\w.-]+)/([\\w.-]+)/issues/(\\d+)' +
     '|' +
-    // owner/repo#N or bare #N
-    '(?:([\\w.-]+)/([\\w.-]+))?#(\\d+)' +
+    // owner/repo#N or bare #N. The lookbehind lets `owner` start only at the beginning of a
+    // name run: without it every position of a long `[\w.-]` run re-scanned the run (F14).
+    '(?:(?<![\\w.-])([\\w.-]+)/([\\w.-]+))?#(\\d+)' +
     ')',
   'gi',
 );

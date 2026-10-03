@@ -3,14 +3,22 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button, SEV } from "@devdigest/ui";
-import { DiffViewer, type DiffCommentApi, type DiffAnnotation } from "@/components/diff-viewer";
+import { DiffViewer, type DiffCommentApi, type DiffAnnotation, type DiffFocus } from "@/components/diff-viewer";
 import { usePrComments, useCreatePrComment, useSmartDiff, usePrReviews, useFindingAction } from "@/lib/hooks/reviews";
 import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
 import { FindingCard } from "../FindingCard";
 import { SmartDiffGroup } from "./_components/SmartDiffGroup";
 import { ROLE_META, FINDING_LABEL_KEY, COLLAPSED_BY_DEFAULT } from "./constants";
-import { selectLatestReview, groupFilesByRole, filesWithFindings, markedPaths, sortFindingsForDiff } from "./helpers";
+import {
+  selectLatestReview,
+  groupFilesByRole,
+  filesWithFindings,
+  markedPaths,
+  sortFindingsForDiff,
+  resolveDiffFocus,
+  bucketHasFocus,
+} from "./helpers";
 import { s } from "./styles";
 
 interface DiffTabProps {
@@ -19,9 +27,12 @@ interface DiffTabProps {
   files: PrFile[];
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
+  /** Deep-link target from `?file=&line=` (see `parseDiffTarget`). A target that
+      names no file of this PR is ignored, so the tab renders as without one. */
+  focus?: DiffFocus | null;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabProps) {
   const t = useTranslations("prReview");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
@@ -90,6 +101,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   const annotations = { items: annotationItems, visible: showNotes };
 
   const buckets = order === "smart" && smartDiff ? groupFilesByRole(smartDiff, files) : null;
+  const effectiveFocus = resolveDiffFocus(focus, files);
 
   return (
     <section>
@@ -137,24 +149,33 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
         <div style={s.groupWrap}>
           {buckets.map((bucket, i) => {
             const meta = ROLE_META[bucket.role];
+            const hasTarget = bucketHasFocus(bucket, effectiveFocus);
             return (
               <SmartDiffGroup
-                key={bucket.role}
+                // The target's group must open even when its role collapses by
+                // default; the key remounts the group if the target changes.
+                key={`${bucket.role}:${hasTarget ? effectiveFocus?.path : ""}`}
                 label={t(`smartDiff.${meta.labelKey}`)}
                 hint={t(`smartDiff.${meta.hintKey}`)}
                 color={meta.color}
                 filesCount={bucket.files.length}
                 filesWithFindings={latestReview ? filesWithFindings(bucket, smartDiff!) : null}
-                defaultOpen={!COLLAPSED_BY_DEFAULT.includes(bucket.role)}
+                defaultOpen={hasTarget || !COLLAPSED_BY_DEFAULT.includes(bucket.role)}
                 showReviewNotRun={i === 0}
               >
-                <DiffViewer files={bucket.files} commenting={commenting} annotations={annotations} marks={marks} />
+                <DiffViewer
+                  files={bucket.files}
+                  commenting={commenting}
+                  annotations={annotations}
+                  marks={marks}
+                  focus={effectiveFocus}
+                />
               </SmartDiffGroup>
             );
           })}
         </div>
       ) : (
-        <DiffViewer files={files} commenting={commenting} annotations={annotations} marks={marks} />
+        <DiffViewer files={files} commenting={commenting} annotations={annotations} marks={marks} focus={effectiveFocus} />
       )}
     </section>
   );

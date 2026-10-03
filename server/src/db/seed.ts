@@ -18,7 +18,7 @@ import {
   SEMVER_DISCIPLINE,
   TEST_QUALITY_RUBRIC,
 } from './seed-skills.js';
-import { SEED_PR_482_FILES } from './seed-pulls.js';
+import { SEED_PR_482_BRIEF, SEED_PR_482_FILES } from './seed-pulls.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -203,6 +203,10 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       sourceKey: '',
     });
   }
+
+  // The stored PR Brief of PR #482 (SPEC-03). Outside the `if (!pr)` block on purpose: the seed
+  // never updates, so an existing dev DB only gets the brief through this unconditional insert.
+  await db.insert(t.prBrief).values({ prId: pr!.id, json: SEED_PR_482_BRIEF }).onConflictDoNothing();
 
   // ---- built-in agents (the three starter presets) ----
   // Prompt bodies live in ./seed-prompts.ts (mirrored in docs/agent-prompts/*.md).

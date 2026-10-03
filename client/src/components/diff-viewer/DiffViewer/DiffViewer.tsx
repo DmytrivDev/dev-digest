@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import type { PrFile } from "@/lib/types";
 import { type DiffCommentApi } from "../comments";
 import { type DiffAnnotationApi } from "../annotations";
+import { type DiffFocus } from "../focus";
 import { s } from "../styles";
 import { FileCard } from "../FileCard";
 
@@ -17,6 +18,7 @@ export function DiffViewer({
   commenting,
   annotations,
   marks,
+  focus,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
@@ -25,6 +27,8 @@ export function DiffViewer({
   annotations?: DiffAnnotationApi;
   /** Files to mark with a small dot next to the path. */
   marks?: { paths: ReadonlySet<string>; label: string };
+  /** Deep-link target: expands, outlines and scrolls to this file (and line). */
+  focus?: DiffFocus | null;
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -32,8 +36,15 @@ export function DiffViewer({
   }
   return (
     <div style={s.list}>
-      {files.map((f, i) => (
-        <FileCard key={i} file={f} commenting={commenting} annotations={annotations} marks={marks} />
+      {files.map((f) => (
+        <FileCard
+          key={f.path}
+          file={f}
+          commenting={commenting}
+          annotations={annotations}
+          marks={marks}
+          focus={focus}
+        />
       ))}
     </div>
   );

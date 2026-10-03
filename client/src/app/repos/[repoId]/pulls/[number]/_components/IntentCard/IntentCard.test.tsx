@@ -4,6 +4,7 @@
  * is not calibrated precision), and no raw i18n key ever leaks through (a
  * missing key renders the key itself, silently — client/CLAUDE.md).
  */
+import React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
@@ -45,10 +46,10 @@ function intent(o: Partial<PrIntentRecord> = {}): PrIntentRecord {
   };
 }
 
-function renderCard() {
+function renderCard(riskAreas?: React.ReactNode) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ brief: messages }}>
-      <IntentCard prId="pr-1" />
+      <IntentCard prId="pr-1" riskAreas={riskAreas} />
     </NextIntlClientProvider>,
   );
 }
@@ -142,5 +143,35 @@ describe("IntentCard", () => {
 
     const recalculating = screen.getByRole("button", { name: /Recalculating/ });
     expect(recalculating).toBeDisabled();
+  });
+
+  describe("riskAreas slot (SPEC-03 AC-3, A-C2)", () => {
+    const slot = <div data-testid="risk-slot">Risk areas</div>;
+
+    it("renders no divider and no slot without the prop", () => {
+      usePrIntent.mockReturnValue({ data: { intent: intent() }, isLoading: false, isError: false });
+      renderCard();
+      expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+    });
+
+    it("renders a divider followed by the slot at the bottom of the filled card", () => {
+      usePrIntent.mockReturnValue({ data: { intent: intent() }, isLoading: false, isError: false });
+      renderCard(slot);
+      const divider = screen.getByRole("separator");
+      const risk = screen.getByTestId("risk-slot");
+      expect(divider.compareDocumentPosition(risk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByText("IN SCOPE").compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it.each([
+      ["loading", { data: undefined, isLoading: true, isError: false }],
+      ["error", { data: undefined, isLoading: false, isError: true }],
+      ["empty", { data: { intent: null }, isLoading: false, isError: false }],
+    ])("renders the slot in the %s state too", (_name, state) => {
+      usePrIntent.mockReturnValue(state);
+      renderCard(slot);
+      expect(screen.getByRole("separator")).toBeInTheDocument();
+      expect(screen.getByTestId("risk-slot")).toBeInTheDocument();
+    });
   });
 });

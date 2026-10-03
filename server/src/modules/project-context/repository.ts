@@ -34,6 +34,15 @@ export interface LinkedSkillDocs {
   paths: string[];
 }
 
+/** One ENABLED agent and the documents it attaches for a repo — what the PR brief reads (SPEC-03). */
+export interface EnabledAgentDocs {
+  agentName: string;
+  /** The agent's own attached paths, in attachment order. */
+  own: string[];
+  /** Its linked skills, in link order, each with its enabled flag and paths. */
+  linked: { enabled: boolean; paths: string[] }[];
+}
+
 export class ProjectContextRepository {
   constructor(private db: Db) {}
 
@@ -168,6 +177,84 @@ export class ProjectContextRepository {
         ),
       );
     return new Set([...direct, ...viaSkill].map((r) => r.id)).size;
+  }
+
+  /**
+   * The workspace's ENABLED agents with their attached documents for `repoId`, agents ordered
+   * by name then id; the same attachment / link-order reads as `agentPaths` and
+   * `linkedSkillPaths`, batched over every agent. The run order is applied by the caller
+   * (`orderRunDocs`). Read by the PR brief through an injected function, so the agent
+   * selection, the ordering and the skill-link semantics have ONE home.
+   */
+  async enabledAgentDocs(workspaceId: string, repoId: string): Promise<EnabledAgentDocs[]> {
+    const agents = await this.db
+      .select({ id: t.agents.id, name: t.agents.name })
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.enabled, true)))
+      .orderBy(asc(t.agents.name), asc(t.agents.id));
+    if (agents.length === 0) return [];
+    const agentIds = agents.map((a) => a.id);
+
+    const own = await this.db
+      .select({ agentId: t.agentContextDocs.agentId, path: t.agentContextDocs.path })
+      .from(t.agentContextDocs)
+      .where(
+        and(inArray(t.agentContextDocs.agentId, agentIds), eq(t.agentContextDocs.repoId, repoId)),
+      )
+      .orderBy(asc(t.agentContextDocs.position));
+
+    const links = await this.db
+      .select({
+        agentId: t.agentSkills.agentId,
+        skillId: t.skills.id,
+        enabled: t.skills.enabled,
+      })
+      .from(t.agentSkills)
+      .innerJoin(t.skills, eq(t.skills.id, t.agentSkills.skillId))
+      .where(
+        and(inArray(t.agentSkills.agentId, agentIds), eq(t.skills.workspaceId, workspaceId)),
+      )
+      .orderBy(asc(t.agentSkills.agentId), asc(t.agentSkills.order));
+
+    const skillIds = [...new Set(links.map((l) => l.skillId))];
+    const skillDocs =
+      skillIds.length === 0
+        ? []
+        : await this.db
+            .select({ skillId: t.skillContextDocs.skillId, path: t.skillContextDocs.path })
+            .from(t.skillContextDocs)
+            .where(
+              and(
+                inArray(t.skillContextDocs.skillId, skillIds),
+                eq(t.skillContextDocs.repoId, repoId),
+              ),
+            )
+            .orderBy(asc(t.skillContextDocs.position));
+
+    const ownByAgent = new Map<string, string[]>();
+    for (const d of own) {
+      const list = ownByAgent.get(d.agentId) ?? [];
+      list.push(d.path);
+      ownByAgent.set(d.agentId, list);
+    }
+    const pathsBySkill = new Map<string, string[]>();
+    for (const d of skillDocs) {
+      const list = pathsBySkill.get(d.skillId) ?? [];
+      list.push(d.path);
+      pathsBySkill.set(d.skillId, list);
+    }
+    const linksByAgent = new Map<string, EnabledAgentDocs['linked']>();
+    for (const l of links) {
+      const list = linksByAgent.get(l.agentId) ?? [];
+      list.push({ enabled: l.enabled, paths: pathsBySkill.get(l.skillId) ?? [] });
+      linksByAgent.set(l.agentId, list);
+    }
+
+    return agents.map((a) => ({
+      agentName: a.name,
+      own: ownByAgent.get(a.id) ?? [],
+      linked: linksByAgent.get(a.id) ?? [],
+    }));
   }
 
   // ------------------------------------------------------------ writes

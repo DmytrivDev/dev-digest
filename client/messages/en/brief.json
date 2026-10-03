@@ -1,15 +1,68 @@
 {
+  "section": "PR Brief",
   "block": {
     "intent": "Intent",
     "blast": "Blast radius",
-    "risks": "Risks",
+    "risks": "Risk areas",
     "history": "PR history"
   },
   "noRisks": "No notable risks flagged.",
   "noHistory": "No prior PRs overlap these files.",
   "overlap": "{count} overlap",
   "unavailable": "Brief not available yet.",
-  "unavailableHint": "Run a review or open the PR to compute it.",
+  "unavailableHint": "Generate a brief to see why this PR exists, what is risky and where to start reading.",
+  "banner": {
+    "generate": "Generate brief",
+    "generating": "Generating…",
+    "retry": "Retry",
+    "refresh": "Regenerate brief",
+    "regenerate": "Regenerate",
+    "stale": "Generated for {sha} — the PR has new commits",
+    "error": "Could not generate the brief.",
+    "builtWithout": "Built without:",
+    "truncated": "Truncated:",
+    "dropped": "{count, plural, one {# item referencing an unknown file was removed} other {# items referencing unknown files were removed}}"
+  },
+  "risks": {
+    "notGenerated": "Not generated yet.",
+    "expand": "Show details",
+    "collapse": "Hide details"
+  },
+  "focus": {
+    "title": "Review focus — read these first",
+    "notGenerated": "Not generated yet.",
+    "empty": "No focus lines — nothing the brief could ground in this diff"
+  },
+  "nav": {
+    "notInDiff": "File not in this PR's diff",
+    "openOnGithub": "Open on GitHub"
+  },
+  "inputs": {
+    "source": {
+      "intent": "intent",
+      "blast": "blast radius",
+      "diff_stats": "changed files",
+      "description": "description",
+      "linked_issue": "linked issue",
+      "specs": "specs"
+    },
+    "reason": {
+      "not_derived": "not derived",
+      "no_linked_issue": "no linked issue",
+      "github_unavailable": "GitHub unavailable",
+      "none_attached": "none attached",
+      "clone_unavailable": "clone unavailable",
+      "over_budget": "over budget",
+      "file_list_truncated": "file list truncated",
+      "empty": "empty",
+      "flag_off": "feature off",
+      "index_failed": "index failed",
+      "index_partial": "index partial",
+      "repo_too_large": "repository too large",
+      "no_data": "no data",
+      "files_unavailable": "files unavailable"
+    }
+  },
   "intent": {
     "inScope": "IN SCOPE",
     "outOfScope": "OUT OF SCOPE",

@@ -194,10 +194,78 @@ export const SmartDiff = z.object({
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
 // ---- Composed PR Brief (pr_brief.json) ----
+// Declaration order matters: every schema referenced here is declared above.
+
+/** Which input the brief was built from — exactly one entry per source, always. */
+export const BriefInputSource = z.enum([
+  'intent',
+  'blast',
+  'diff_stats',
+  'description',
+  'linked_issue',
+  'specs',
+]);
+export type BriefInputSource = z.infer<typeof BriefInputSource>;
+
+export const BriefInputStatus = z.enum(['used', 'truncated', 'missing']);
+export type BriefInputStatus = z.infer<typeof BriefInputStatus>;
+
+export const BriefInput = z
+  .object({
+    source: BriefInputSource,
+    status: BriefInputStatus,
+    reason: z.string().optional(),
+    /** diff_stats only: how many file rows the token budget cut. */
+    omitted: z.number().int().nonnegative().optional(),
+  })
+  .refine((i) => i.status === 'used' || (i.reason !== undefined && i.reason.length > 0), {
+    message: 'reason is required when status is not used',
+    path: ['reason'],
+  });
+export type BriefInput = z.infer<typeof BriefInput>;
+
+export const ReviewFocusItem = z.object({
+  file: z.string().min(1),
+  line: z.number().int().min(1),
+  reason: z.string().max(200),
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+export const BriefUsage = z.object({
+  llm_calls: z.number().int().nonnegative(),
+  tokens_in: z.number().int().nonnegative().nullable(),
+  tokens_out: z.number().int().nonnegative().nullable(),
+  cost_usd: z.number().nonnegative().nullable(),
+  duration_ms: z.number().int().nonnegative(),
+});
+export type BriefUsage = z.infer<typeof BriefUsage>;
+
+/** Items the server removed after the model answered (unknown file / line outside the diff). */
+export const BriefDropped = z.object({
+  risks: z.number().int().nonnegative(),
+  review_focus: z.number().int().nonnegative(),
+});
+export type BriefDropped = z.infer<typeof BriefDropped>;
+
 export const PrBrief = z.object({
-  intent: Intent,
-  blast: BlastRadius,
+  summary: z.string().max(400),
   risks: Risks,
-  history: PrHistory,
+  review_focus: z.array(ReviewFocusItem),
+  intent: Intent.nullable(),
+  blast: BlastRadius.nullable(),
+  history: PrHistory.optional(),
+  head_sha: z.string(),
+  generated_at: z.string(),
+  model: z.string(),
+  usage: BriefUsage,
+  inputs: z.array(BriefInput),
+  dropped: BriefDropped,
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+export const PrBriefResponse = z.object({
+  brief: PrBrief.nullable(),
+  generating: z.boolean(),
+  stale: z.boolean(),
+});
+export type PrBriefResponse = z.infer<typeof PrBriefResponse>;

@@ -17,6 +17,8 @@ export function CodeLine({
   threads,
   commenting,
   annotations = [],
+  highlighted = false,
+  rowRef,
 }: {
   ln: Line;
   path: string;
@@ -24,6 +26,10 @@ export function CodeLine({
   commenting?: DiffCommentApi;
   /** Caller-built annotations anchored to this line, highest-priority first. */
   annotations?: DiffAnnotation[];
+  /** The deep-link target line: tinted so the reader finds it at a glance. */
+  highlighted?: boolean;
+  /** Ref to the line's own row (not its comment/annotation children). */
+  rowRef?: React.Ref<HTMLDivElement>;
 }) {
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
@@ -52,8 +58,11 @@ export function CodeLine({
       onMouseLeave={() => setHover(false)}
     >
       <div
+        ref={rowRef}
+        data-highlighted={highlighted || undefined}
         style={{
           ...lineRowFor(ln.kind),
+          ...(highlighted ? { background: "var(--accent-bg)" } : {}),
           ...(primary ? { boxShadow: `inset 3px 0 0 ${primary.color}` } : {}),
         }}
       >

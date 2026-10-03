@@ -16,6 +16,7 @@ import { PrDetailHeader } from "./_components/PrDetailHeader";
 import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
 import { DiffTab } from "./_components/DiffTab";
+import { diffTargetQuery, parseDiffTarget } from "./_components/DiffTab/helpers";
 import RunTraceDrawer from "./_components/RunTraceDrawer";
 import { usePullDetail, usePulls } from "@/lib/hooks/core";
 import { useQueryClient } from "@tanstack/react-query";
@@ -65,6 +66,9 @@ export default function PRDetailPage() {
 
   const tab = search.get("tab") ?? "overview";
   const traceRunId = search.get("trace");
+  // `?tab=diff&file=&line=` deep link (from the PR Brief). Parsed here, from the
+  // same search params a cold load and an in-app navigation both read.
+  const focus = parseDiffTarget(search);
   const setParam = (key: string, val: string | null) => {
     const sp = new URLSearchParams(search.toString());
     if (val == null) sp.delete(key);
@@ -147,6 +151,11 @@ export default function PRDetailPage() {
             repoId={repoId}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            reviews={reviews}
+            files={pr.files}
+            onOpenInDiff={(path, line) =>
+              router.replace(`/repos/${repoId}/pulls/${number}?${diffTargetQuery(path, line)}`)
+            }
           />
         )}
 
@@ -180,6 +189,7 @@ export default function PRDetailPage() {
             filesCount={pr.files_count}
             files={pr.files}
             canComment={pr.status === "open"}
+            focus={focus}
           />
         )}
       </div>

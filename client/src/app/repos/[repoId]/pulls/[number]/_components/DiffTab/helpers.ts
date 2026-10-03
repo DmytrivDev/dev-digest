@@ -1,4 +1,5 @@
 import type { FindingRecord, PrFile, ReviewRecord, SmartDiff, SmartDiffRole } from "@devdigest/shared";
+import { isFocusedFile, type DiffFocus } from "@/components/diff-viewer";
 import { SEVERITY_RANK } from "./constants";
 
 /**
@@ -65,4 +66,40 @@ export function sortFindingsForDiff(findings: FindingRecord[]): FindingRecord[] 
     if (rankA !== rankB) return rankA - rankB;
     return a.start_line - b.start_line;
   });
+}
+
+/**
+ * The deep link into Files changed (SPEC-03 C-5): `?tab=diff&file=<path>&line=<n>`.
+ * This pair of functions is the only owner of that grammar — the Overview's
+ * Review-focus and Risk-area links build it, the page parses it.
+ */
+
+/** Read the deep-link target from the page's search params, or null when the
+    link carries none or a malformed one. `file` must be non-empty; `line` is
+    optional but, when present, must be a positive integer (`0`, `abc`, `-3`
+    and `1.5` reject the whole target). */
+export function parseDiffTarget(search: URLSearchParams): DiffFocus | null {
+  const file = search.get("file");
+  if (!file) return null;
+  const raw = search.get("line");
+  if (raw == null) return { path: file, line: null };
+  return /^[1-9]\d*$/.test(raw) ? { path: file, line: Number(raw) } : null;
+}
+
+/** Query string (no leading `?`) that opens Files changed on `path`, and on
+    `line` when one is known. */
+export function diffTargetQuery(path: string, line: number | null): string {
+  const base = `tab=diff&file=${encodeURIComponent(path)}`;
+  return line == null ? base : `${base}&line=${line}`;
+}
+
+/** The target only counts when it names a file of this PR — an unknown file
+    renders the diff exactly as if no target were given (no error state). */
+export function resolveDiffFocus(focus: DiffFocus | null | undefined, files: PrFile[]): DiffFocus | null {
+  return focus && files.some((f) => isFocusedFile(f, focus)) ? focus : null;
+}
+
+/** Does this role bucket hold the target file? Its group then opens by default. */
+export function bucketHasFocus(bucket: RoleBucket, focus: DiffFocus | null): boolean {
+  return !!focus && bucket.files.some((f) => isFocusedFile(f, focus));
 }

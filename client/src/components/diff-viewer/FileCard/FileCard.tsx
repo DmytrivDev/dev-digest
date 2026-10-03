@@ -22,6 +22,7 @@ import {
   type DiffAnnotation,
   type DiffAnnotationApi,
 } from "../annotations";
+import { focusRowIndex, isFocusedFile, type DiffFocus } from "../focus";
 import { s, chevronFor } from "../styles";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
@@ -50,6 +51,7 @@ export function FileCard({
   commenting,
   annotations,
   marks,
+  focus,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -57,12 +59,30 @@ export function FileCard({
   annotations?: DiffAnnotationApi;
   /** Files to mark with a small dot next to the path (e.g. "has findings"). */
   marks?: { paths: ReadonlySet<string>; label: string };
+  /** Deep-link target. When it names this file the card starts open (even past
+      the large-file collapse), is outlined, and scrolls the target into view. */
+  focus?: DiffFocus | null;
 }) {
   const t = useTranslations("shell");
+  const focused = isFocusedFile(file, focus);
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    focused || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
+  const targetIndex = focused ? focusRowIndex(lines, focus?.line) : -1;
+
+  // Scroll the target row (new side only) into view, else the card header. This
+  // syncs with the DOM after the card has rendered open, which is what an effect
+  // is for. A card the reader collapses afterwards is not scrolled again.
+  const headerRef = React.useRef<HTMLDivElement>(null);
+  const targetRef = React.useRef<HTMLDivElement>(null);
+  const focusLine = focus?.line;
+  React.useEffect(() => {
+    if (!focused || !open) return;
+    const el = (targetIndex >= 0 ? targetRef.current : null) ?? headerRef.current;
+    el?.scrollIntoView({ block: "center" });
+    // `open` is deliberately not a dependency: re-opening by hand must not re-scroll.
+  }, [focused, focusLine, lines]);
 
   // Group this file's comments into threads, then split into ones we can anchor
   // to a rendered line vs. "outdated" (GitHub dropped the line / it's not here).
@@ -104,8 +124,8 @@ export function FileCard({
   const hasMark = marks?.paths.has(file.path) ?? false;
 
   return (
-    <div style={s.fileCard}>
-      <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
+    <div style={focused ? s.fileCardFocused : s.fileCard}>
+      <div ref={headerRef} onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />
         <span className="mono" style={s.filePath}>
@@ -140,6 +160,8 @@ export function FileCard({
                 threads={threadsForLine(ln, matched)}
                 commenting={commenting}
                 annotations={annotationsForLine(ln, matchedAnnotations)}
+                highlighted={i === targetIndex}
+                rowRef={i === targetIndex ? targetRef : undefined}
               />
             ))
           )}
