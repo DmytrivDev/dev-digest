@@ -127,17 +127,19 @@ Design references used below:
 bottom:
 1. a "PR Brief" section label with the `FileText` icon (`screen_pr_detail.jsx:138`);
 2. the brief banner;
-3. a two-column grid with the Intent card on the left and the Blast radius card on the right
-   (`BriefCard` :68-79, `1.webp`);
+3. the Intent card, then the Blast radius card directly below it, each full width (amended
+   2026-10-03 from the mock's two-column grid, user-authorized: side by side, the Blast
+   radius card's long mono paths and graph were cramped into half the width);
 4. the full-width Review focus card (`1.webp`);
 5. the existing Description section (`OverviewTab.tsx:31-36`).
 
 Verify: unit — the rendered Overview's sections appear in that DOM order.
 
-**AC-2 [client]** WHERE the viewport is narrower than 900 px, the Intent / Blast radius grid
-shall render as a single column, Intent first.
-Verify: manual — at 899 px width the Blast radius card sits below the Intent card. jsdom has no
-layout, and e2e flows assert only text and URL (`e2e/README.md:26-33`).
+**AC-2 [client]** The Intent and Blast radius cards shall render one under the other at every
+viewport width, Intent first (amended 2026-10-03 with AC-1; it previously applied only below
+900 px).
+Verify: unit — both cards are separate direct children of the brief section, Intent first;
+manual — at desktop width the Blast radius card sits below the Intent card, full width.
 
 **AC-3 [client]** The Intent card shall show a "Risk areas" block with the `AlertTriangle` icon.
 The block sits below the in-scope / out-of-scope lists, separated by a 1 px divider
@@ -977,7 +979,7 @@ integer, optional>` on `/repos/:repoId/pulls/:number`.
 | AC / NFR | From (US / EC / design review) | Packages | Verify |
 |---|---|---|---|
 | AC-1 | US-10, DR-13, DR-15, DR-37 | client | unit |
-| AC-2 | EC-35, DR-35 | client | manual |
+| AC-2 | EC-35, DR-35 | client | unit, manual |
 | AC-3 | US-2, DR-15 | client | unit |
 | AC-4 | US-3, DR-18 | client | unit |
 | AC-5 | US-10, DR-20, DR-21 | client | unit |
