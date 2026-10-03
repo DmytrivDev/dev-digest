@@ -226,7 +226,10 @@ Verify: unit — no reviews → none of the three elements render.
 **AC-18 [client]** WHEN a brief exists, the banner shall show the generation's cost and tokens
 below the score column, as `$<cost> <in>K→<out>K` (`findings.jsx:97-99`, `1.webp`). The cost is
 formatted by the existing `formatCost` (`client/src/lib/cost.ts:13`), so an unknown cost reads
-"—".
+"—". `<in>` is `usage.prompt_tokens` (the budget's cl100k count) when present, else `tokens_in`;
+the tooltip names the prompt, the 8K budget and the provider's own count (amended 2026-10-03,
+user-authorized: DeepSeek counted 8.6K for a prompt the budget measured within 8,000, which read
+as an over-budget call).
 Verify: unit — `cost_usd 0.014, tokens 8200/1300` → "$0.014 8.2K→1.3K"; `cost_usd null` → "—".
 
 **AC-19 [client]** The banner's cost element shall carry the brief's `model` (`provider/model`)
@@ -483,16 +486,22 @@ in this order until it fits:
 2. linked issue body, truncated to 1,500 characters, then dropped;
 3. PR description, truncated to 2,000 characters;
 4. blast caller list, lowest-ranked caller first;
-5. per-file rows, lowest churn (additions + deletions) first, down to zero rows if needed (no
-   30-file floor);
+5. per-file rows, lowest churn (additions + deletions) first, down to 40 rows (all rows when the
+   PR has 40 or fewer);
 6. the text of the blast summary, then of the intent, then of the PR title, truncated until the
-   prompt fits.
+   prompt fits;
+7. the remaining per-file rows, lowest churn first, down to zero rows if needed.
+
+(Amended 2026-10-03, user-authorized: with tier 5 cutting rows to zero before tier 6, a real
+372-file PR lost every file row to its blast text and the model returned no risk and no focus
+line — the rows are what both are grounded in.)
 
 The diff-stats header and the system prompt are never cut. Generation always proceeds: no input
 size ever refuses a generation (DR-56).
 Verify: unit — inputs over budget in each tier are cut in exactly that order, and a lower tier is
 untouched while a higher tier still suffices; a fixture whose intent alone exceeds 8,000 tokens
-yields zero file rows, a truncated intent and a prompt of at most 8,000 tokens.
+yields zero file rows, a truncated intent and a prompt of at most 8,000 tokens; a 372-row fixture
+whose blast text overflows keeps at least 40 rows while the blast text is truncated.
 
 **AC-63 [server]** WHEN an input is cut by the budget, the system shall record it in `inputs` as
 `truncated` (partly kept) or `missing` (fully dropped) with reason `over_budget`. The
@@ -613,6 +622,7 @@ Verify: integration — the POST response body equals a subsequent GET's body.
 
 **AC-85 [server]** The stored `usage` shall carry:
 - `llm_calls` — the attempts the engine reports;
+- `prompt_tokens` — the cl100k count of the prompt sent (the AC-61 measure; amended 2026-10-03);
 - `tokens_in`, `tokens_out` and `cost_usd` — as the provider reports them, null when unknown;
 - `duration_ms` — of the model call.
 
@@ -661,7 +671,7 @@ Verify: integration — a PR of a second workspace → 404 on both routes, and 0
 
 **AC-94 [server]** WHEN a generation ends, successfully or not, the system shall write exactly
 one log line through an injected logger:
-`brief: pr=<id> llm_calls=<n> model=<provider/model> tokens_in=<n|unknown> tokens_out=<n|unknown> cost_usd=<x|unknown> duration_ms=<n> status=<ok|failed> reason=<code|none> dropped_risks=<n> dropped_focus=<n> truncated=<sections|none>`.
+`brief: pr=<id> llm_calls=<n> model=<provider/model> prompt_tokens=<n|unknown> tokens_in=<n|unknown> tokens_out=<n|unknown> cost_usd=<x|unknown> duration_ms=<n> status=<ok|failed> reason=<code|none> dropped_risks=<n> dropped_focus=<n> truncated=<sections|none>`.
 Verify: integration — a captured logger receives one line with `llm_calls=1 status=ok`; on a
 timeout, one line with `status=failed reason=llm_timeout`.
 
@@ -697,6 +707,18 @@ Verify: integration — a mock GitHub client returning head `bbb222` for a PR st
 `pull_requests.head_sha` unchanged (DR-58).
 Verify: integration — a mock GitHub client that throws → the PR row keeps its earlier
 `head_sha`.
+
+**AC-100 [server]** WHEN `GET /pulls/:id` loads the PR from GitHub, the system shall fetch every
+page of the PR's changed files (GitHub lists at most 3,000), not only the first 100.
+(Added 2026-10-03, user-authorized: on a 372-file PR only 100 files reached the brief, the risky
+server files among them were missing, and the model pinned two risks on unrelated client files.)
+Verify: manual — a PR with more than 100 changed files stores as many `pr_files` rows as its
+`files_count`.
+
+**AC-101 [server]** The system prompt shall instruct the model to cite, for a risk, only the file
+where the risky change itself lives, and to omit the risk when that file is not listed, instead
+of attaching it to a related file. (Added 2026-10-03 with AC-100.)
+Verify: unit — the system template contains that rule.
 
 ## Edge cases
 
@@ -1077,6 +1099,8 @@ integer, optional>` on `/repos/:repoId/pulls/:number`.
 | AC-97 | EC-27, DR-57 | server | unit |
 | AC-98 | US-5, EC-37, DR-58 | server | integration |
 | AC-99 | EC-37, DR-58 | server | integration |
+| AC-100 | user amendment 2026-10-03 | server | manual |
+| AC-101 | user amendment 2026-10-03 | server | unit |
 | NFR-1 | DR-36 | client | unit |
 | NFR-2 | DR-36 | client | unit |
 | NFR-3 | DR-14, DR-32 | client | unit |
