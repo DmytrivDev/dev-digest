@@ -720,6 +720,17 @@ where the risky change itself lives, and to omit the risk when that file is not 
 of attaching it to a related file. (Added 2026-10-03 with AC-100.)
 Verify: unit — the system template contains that rule.
 
+**AC-102 [client]** WHILE a brief exists, Files changed shall mark every risk reference that
+carries a line and every review-focus item on its diff row, the way findings are marked: a
+stripe in the risk's severity colour (`RISK_SEV`) or the accent colour for focus, a right-side
+label ("Risk" / "Focus") with the risk-kind or `ListChecks` icon, and an inline card under the
+row with the risk title and explanation or the focus reason, marked "From the PR Brief". A
+finding on the same row keeps the row's stripe and label. The "Hide notes" toggle hides these
+too. (Added 2026-10-03, user-authorized: the brief's lines were invisible in the diff unless
+reached by a click.)
+Verify: unit — a brief with a `path:2-3` risk and a line-3 focus item renders both labels and
+both cards on that file; manual — PR #9 shows the high risk on `simple-git.ts:89`.
+
 ## Edge cases
 
 - **EC-1** The user double-clicks "Generate brief". → AC-10, AC-91
@@ -1101,6 +1112,7 @@ integer, optional>` on `/repos/:repoId/pulls/:number`.
 | AC-99 | EC-37, DR-58 | server | integration |
 | AC-100 | user amendment 2026-10-03 | server | manual |
 | AC-101 | user amendment 2026-10-03 | server | unit |
+| AC-102 | user amendment 2026-10-03 | client | unit, manual |
 | NFR-1 | DR-36 | client | unit |
 | NFR-2 | DR-36 | client | unit |
 | NFR-3 | DR-14, DR-32 | client | unit |

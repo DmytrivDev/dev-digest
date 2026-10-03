@@ -1,4 +1,5 @@
-import type { FindingRecord, PrFile, ReviewRecord, SmartDiff, SmartDiffRole } from "@devdigest/shared";
+import type { FindingRecord, PrBrief, PrFile, ReviewRecord, SmartDiff, SmartDiffRole } from "@devdigest/shared";
+import { splitRef } from "../BriefFileRef";
 import { isFocusedFile, type DiffFocus } from "@/components/diff-viewer";
 import { SEVERITY_RANK } from "./constants";
 
@@ -102,4 +103,52 @@ export function resolveDiffFocus(focus: DiffFocus | null | undefined, files: PrF
 /** Does this role bucket hold the target file? Its group then opens by default. */
 export function bucketHasFocus(bucket: RoleBucket, focus: DiffFocus | null): boolean {
   return !!focus && bucket.files.some((f) => isFocusedFile(f, focus));
+}
+
+/** One PR Brief item pinned to a line of the diff: a risk reference with a line, or a
+    review-focus item. A risk ref with no line names a whole file and has no row to mark. */
+export interface BriefLineNote {
+  id: string;
+  kind: "risk" | "focus";
+  path: string;
+  line: number;
+  title: string;
+  text: string;
+  /** Risk only: the model's `severity` and `kind`. */
+  severity?: string;
+  riskKind?: string;
+}
+
+/** The brief's risks and review focus as line notes for the diff — risks first, in brief
+    order, then focus items; a `path:line` repeated within one kind is marked once. */
+export function briefLineNotes(brief: PrBrief | null | undefined): BriefLineNote[] {
+  if (!brief) return [];
+  const notes: BriefLineNote[] = [];
+  const seen = new Set<string>();
+  const push = (note: BriefLineNote) => {
+    const key = `${note.kind}|${note.path}|${note.line}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    notes.push(note);
+  };
+  brief.risks.risks.forEach((r, i) => {
+    for (const ref of r.file_refs) {
+      const { path, line } = splitRef(ref);
+      if (line == null) continue;
+      push({
+        id: `brief-risk-${i}-${path}:${line}`,
+        kind: "risk",
+        path,
+        line,
+        title: r.title,
+        text: r.explanation,
+        severity: r.severity,
+        riskKind: r.kind,
+      });
+    }
+  });
+  brief.review_focus.forEach((f, i) =>
+    push({ id: `brief-focus-${i}`, kind: "focus", path: f.file, line: f.line, title: f.reason, text: "" }),
+  );
+  return notes;
 }

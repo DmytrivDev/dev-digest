@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { FindingRecord, PrFile, ReviewRecord, SmartDiff } from "@devdigest/shared";
+import type { FindingRecord, PrBrief, PrFile, ReviewRecord, SmartDiff } from "@devdigest/shared";
 import prReviewMessages from "../../../../../../../../messages/en/prReview.json";
 import shellMessages from "../../../../../../../../messages/en/shell.json";
+import briefMessages from "../../../../../../../../messages/en/brief.json";
 
 const mutate = vi.fn();
 
@@ -15,6 +16,10 @@ vi.mock("@/lib/hooks/reviews", () => ({
   useFindingAction: () => ({ mutate, ...findingActionState }),
 }));
 
+vi.mock("@/lib/hooks/brief", () => ({
+  usePrBrief: () => ({ data: briefData === null ? undefined : { brief: briefData, generating: false, stale: false } }),
+}));
+
 import { DiffTab } from "./DiffTab";
 import { parseDiffTarget } from "./helpers";
 
@@ -22,9 +27,11 @@ afterEach(() => {
   cleanup();
   mutate.mockClear();
   findingActionState = { isPending: false, variables: undefined };
+  briefData = null;
 });
 
 let smartDiffData: { data: SmartDiff | undefined } = { data: undefined };
+let briefData: PrBrief | null = null;
 let reviewsData: { data: ReviewRecord[] | undefined } = { data: undefined };
 let findingActionState: { isPending: boolean; variables: { findingId: string } | undefined } = {
   isPending: false,
@@ -100,7 +107,7 @@ function renderTab() {
   return render(
     <NextIntlClientProvider
       locale="en"
-      messages={{ prReview: prReviewMessages, shell: shellMessages }}
+      messages={{ prReview: prReviewMessages, shell: shellMessages, brief: briefMessages }}
     >
       <DiffTab prId="pr1" filesCount={FILES.length} files={FILES} canComment={false} />
     </NextIntlClientProvider>,
@@ -237,7 +244,7 @@ describe("DiffTab — deep link (?file=&line=)", () => {
     return render(
       <NextIntlClientProvider
         locale="en"
-        messages={{ prReview: prReviewMessages, shell: shellMessages }}
+        messages={{ prReview: prReviewMessages, shell: shellMessages, brief: briefMessages }}
       >
         <DiffTab
           prId="pr1"
@@ -294,5 +301,55 @@ describe("DiffTab — deep link (?file=&line=)", () => {
     renderWith("tab=diff&file=src/config.ts&line=9999");
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(scrolledElement(0).textContent).toContain("src/config.ts");
+  });
+});
+
+describe("DiffTab — PR Brief marks", () => {
+  const PATCHED: PrFile[] = [
+    {
+      path: "src/config.ts",
+      additions: 2,
+      deletions: 0,
+      patch: ["@@ -1,1 +1,3 @@", " line one", "+const key = 'x';", "+const other = 2;"].join("\n"),
+    },
+  ];
+
+  function brief(): PrBrief {
+    return {
+      summary: "s",
+      risks: {
+        risks: [
+          { kind: "security", title: "Live key committed", explanation: "A key sits in config.", severity: "high", file_refs: ["src/config.ts:2-3", "src/config.ts"] },
+        ],
+      },
+      review_focus: [{ file: "src/config.ts", line: 3, reason: "Check the second constant" }],
+      intent: null,
+      blast: null,
+      head_sha: "abc",
+      generated_at: "2026-10-03T00:00:00.000Z",
+      model: "openrouter/x",
+      usage: { llm_calls: 1, tokens_in: 1, tokens_out: 1, cost_usd: 0, duration_ms: 1 },
+      inputs: [],
+      dropped: { risks: 0, review_focus: 0 },
+    } as unknown as PrBrief;
+  }
+
+  it("marks risk and focus lines with a label and an inline card, like findings", () => {
+    briefData = brief();
+    smartDiffData = { data: undefined };
+    reviewsData = { data: [] };
+    render(
+      <NextIntlClientProvider locale="en" messages={{ prReview: prReviewMessages, shell: shellMessages, brief: briefMessages }}>
+        <DiffTab prId="pr1" filesCount={1} files={PATCHED} canComment={false} />
+      </NextIntlClientProvider>,
+    );
+    // No Smart Diff → one flat list, the file card open. Row labels (the stripe's text) on line 2 (risk) and line 3 (focus).
+    expect(screen.getAllByText("Risk").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Focus").length).toBeGreaterThan(0);
+    // Inline cards with the brief's own text.
+    expect(screen.getByText("Live key committed")).toBeInTheDocument();
+    expect(screen.getByText("A key sits in config.")).toBeInTheDocument();
+    expect(screen.getByText("Check the second constant")).toBeInTheDocument();
+    expect(screen.getAllByText("From the PR Brief")).toHaveLength(2);
   });
 });

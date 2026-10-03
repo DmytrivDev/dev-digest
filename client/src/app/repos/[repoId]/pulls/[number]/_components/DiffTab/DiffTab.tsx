@@ -5,10 +5,13 @@ import { useTranslations } from "next-intl";
 import { SectionLabel, Button, SEV } from "@devdigest/ui";
 import { DiffViewer, type DiffCommentApi, type DiffAnnotation, type DiffFocus } from "@/components/diff-viewer";
 import { usePrComments, useCreatePrComment, useSmartDiff, usePrReviews, useFindingAction } from "@/lib/hooks/reviews";
+import { usePrBrief } from "@/lib/hooks/brief";
 import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
 import { FindingCard } from "../FindingCard";
+import { riskColor, riskIconName } from "../RiskAreas";
 import { SmartDiffGroup } from "./_components/SmartDiffGroup";
+import { BriefNote } from "./_components/BriefNote";
 import { ROLE_META, FINDING_LABEL_KEY, COLLAPSED_BY_DEFAULT } from "./constants";
 import {
   selectLatestReview,
@@ -16,6 +19,7 @@ import {
   filesWithFindings,
   markedPaths,
   sortFindingsForDiff,
+  briefLineNotes,
   resolveDiffFocus,
   bucketHasFocus,
 } from "./helpers";
@@ -34,10 +38,12 @@ interface DiffTabProps {
 
 export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabProps) {
   const t = useTranslations("prReview");
+  const tb = useTranslations("brief");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   const { data: smartDiff } = useSmartDiff(prId);
   const { data: reviews } = usePrReviews(prId);
+  const { data: briefEnvelope } = usePrBrief(prId);
   const action = useFindingAction();
 
   // Findings in the diff are the point of Smart Diff, so comments AND
@@ -48,7 +54,9 @@ export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabP
   const commentCount = comments?.length ?? 0;
   const latestReview = selectLatestReview(reviews ?? []);
   const findingsCount = latestReview?.findings.length ?? 0;
-  const noteCount = commentCount + findingsCount;
+  // The PR Brief's risk areas and review-focus lines, marked on their rows like findings.
+  const briefNotes = briefLineNotes(briefEnvelope?.brief);
+  const noteCount = commentCount + findingsCount + briefNotes.length;
 
   const commenting: DiffCommentApi = {
     comments: comments ?? [],
@@ -95,10 +103,25 @@ export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabP
       })
     : [];
 
+  // After the findings: a finding at the same line keeps the row's stripe and label.
+  const briefItems: DiffAnnotation[] = briefNotes.map((n) => {
+    const color = n.kind === "risk" ? riskColor(n.severity ?? "") : "var(--accent)";
+    const icon = n.kind === "risk" ? riskIconName(n.riskKind ?? "") : "ListChecks";
+    return {
+      id: n.id,
+      path: n.path,
+      line: n.line,
+      color,
+      icon,
+      label: tb(n.kind === "risk" ? "diff.riskLabel" : "diff.focusLabel"),
+      content: <BriefNote note={n} color={color} icon={icon} />,
+    };
+  });
+
   const marks = smartDiff
     ? { paths: markedPaths(smartDiff), label: t("smartDiff.fileHasFindings") }
     : undefined;
-  const annotations = { items: annotationItems, visible: showNotes };
+  const annotations = { items: [...annotationItems, ...briefItems], visible: showNotes };
 
   const buckets = order === "smart" && smartDiff ? groupFilesByRole(smartDiff, files) : null;
   const effectiveFocus = resolveDiffFocus(focus, files);

@@ -34,6 +34,13 @@
     "notGenerated": "Not generated yet.",
     "empty": "No focus lines — nothing the brief could ground in this diff"
   },
+  "diff": {
+    "riskLabel": "Risk",
+    "focusLabel": "Focus",
+    "riskHeading": "Risk area · {severity}",
+    "focusHeading": "Review focus",
+    "source": "From the PR Brief"
+  },
   "nav": {
     "notInDiff": "File not in this PR's diff",
     "openOnGithub": "Open on GitHub"
