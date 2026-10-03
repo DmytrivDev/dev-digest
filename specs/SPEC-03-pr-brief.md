@@ -726,10 +726,16 @@ stripe in the risk's severity colour (`RISK_SEV`) or the accent colour for focus
 label ("Risk" / "Focus") with the risk-kind or `ListChecks` icon, and an inline card under the
 row with the risk title and explanation or the focus reason, marked "From the PR Brief". A
 finding on the same row keeps the row's stripe and label. The "Hide notes" toggle hides these
-too. (Added 2026-10-03, user-authorized: the brief's lines were invisible in the diff unless
-reached by a click.)
-Verify: unit — a brief with a `path:2-3` risk and a line-3 focus item renders both labels and
-both cards on that file; manual — PR #9 shows the high risk on `simple-git.ts:89`.
+too. A risk reference without a line is pinned to the file's first diff row with an "About the
+whole file" note (skipped when the same risk already marks a line in that file; no patch → shown
+unanchored). Two different risks on one row each keep their card. Each file header shows the
+brief's counters: a risk icon with the number of distinct risks in the colour of the highest
+severity, and a `ListChecks` icon with the number of focus items. (Added 2026-10-03,
+user-authorized: the brief's lines were invisible in the diff unless reached by a click; whole-
+file risks and collapsed large files hid the rest.)
+Verify: unit — a brief with a `path:2-3` risk, a whole-file risk and a line-3 focus item renders
+the labels, one card per risk and the header counters "2 risks" / "1 review-focus line"; manual —
+PR #9 shows the high risk on `simple-git.ts:89` and counters on all nine files the brief names.
 
 ## Edge cases
 

@@ -39,7 +39,10 @@
     "focusLabel": "Focus",
     "riskHeading": "Risk area · {severity}",
     "focusHeading": "Review focus",
-    "source": "From the PR Brief"
+    "source": "From the PR Brief",
+    "wholeFile": "About the whole file",
+    "riskBadge": "{count, plural, one {# risk} other {# risks}} from the PR Brief",
+    "focusBadge": "{count, plural, one {# review-focus line} other {# review-focus lines}} from the PR Brief"
   },
   "nav": {
     "notInDiff": "File not in this PR's diff",

@@ -32,6 +32,7 @@ export function BriefNote({ note, color, icon }: BriefNoteProps) {
         <span style={s.label(color)}>{heading}</span>
         <span style={s.title}>{note.title}</span>
       </div>
+      {note.wholeFile && <div style={s.source}>{t("diff.wholeFile")}</div>}
       {note.text && <div style={s.text}>{note.text}</div>}
       <div style={s.source}>{t("diff.source")}</div>
     </div>

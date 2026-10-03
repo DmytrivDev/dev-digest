@@ -320,6 +320,7 @@ describe("DiffTab — PR Brief marks", () => {
       risks: {
         risks: [
           { kind: "security", title: "Live key committed", explanation: "A key sits in config.", severity: "high", file_refs: ["src/config.ts:2-3", "src/config.ts"] },
+          { kind: "perf", title: "Config read on every request", explanation: "No cache.", severity: "medium", file_refs: ["src/config.ts"] },
         ],
       },
       review_focus: [{ file: "src/config.ts", line: 3, reason: "Check the second constant" }],
@@ -347,9 +348,16 @@ describe("DiffTab — PR Brief marks", () => {
     expect(screen.getAllByText("Risk").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Focus").length).toBeGreaterThan(0);
     // Inline cards with the brief's own text.
+    // One card per risk: the first risk's whole-file ref repeats its `:2-3` line and is skipped.
     expect(screen.getByText("Live key committed")).toBeInTheDocument();
     expect(screen.getByText("A key sits in config.")).toBeInTheDocument();
+    expect(screen.getByText("Config read on every request")).toBeInTheDocument();
     expect(screen.getByText("Check the second constant")).toBeInTheDocument();
-    expect(screen.getAllByText("From the PR Brief")).toHaveLength(2);
+    // The bare `src/config.ts` ref is pinned to the file's first diff row as a whole-file note.
+    expect(screen.getAllByText("From the PR Brief")).toHaveLength(3);
+    expect(screen.getByText("About the whole file")).toBeInTheDocument();
+    // The file header counts two risks (highest: high) and one focus line.
+    expect(screen.getByLabelText("2 risks from the PR Brief")).toBeInTheDocument();
+    expect(screen.getByLabelText("1 review-focus line from the PR Brief")).toBeInTheDocument();
   });
 });

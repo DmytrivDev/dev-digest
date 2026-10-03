@@ -3,7 +3,13 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button, SEV } from "@devdigest/ui";
-import { DiffViewer, type DiffCommentApi, type DiffAnnotation, type DiffFocus } from "@/components/diff-viewer";
+import {
+  DiffViewer,
+  type DiffCommentApi,
+  type DiffAnnotation,
+  type DiffFileBadge,
+  type DiffFocus,
+} from "@/components/diff-viewer";
 import { usePrComments, useCreatePrComment, useSmartDiff, usePrReviews, useFindingAction } from "@/lib/hooks/reviews";
 import { usePrBrief } from "@/lib/hooks/brief";
 import { notify } from "@/lib/toast";
@@ -20,6 +26,7 @@ import {
   markedPaths,
   sortFindingsForDiff,
   briefLineNotes,
+  briefFileCounts,
   resolveDiffFocus,
   bucketHasFocus,
 } from "./helpers";
@@ -55,7 +62,7 @@ export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabP
   const latestReview = selectLatestReview(reviews ?? []);
   const findingsCount = latestReview?.findings.length ?? 0;
   // The PR Brief's risk areas and review-focus lines, marked on their rows like findings.
-  const briefNotes = briefLineNotes(briefEnvelope?.brief);
+  const briefNotes = briefLineNotes(briefEnvelope?.brief, files);
   const noteCount = commentCount + findingsCount + briefNotes.length;
 
   const commenting: DiffCommentApi = {
@@ -117,6 +124,32 @@ export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabP
       content: <BriefNote note={n} color={color} icon={icon} />,
     };
   });
+
+  // The file header counts what the brief pins in that file: risks (in the colour of the
+  // highest severity) and review-focus items.
+  const badges = new Map<string, DiffFileBadge[]>();
+  for (const [path, c] of briefFileCounts(briefNotes)) {
+    const list: DiffFileBadge[] = [];
+    if (c.risks > 0) {
+      list.push({
+        id: "brief-risks",
+        icon: "AlertTriangle",
+        color: riskColor(c.severity ?? ""),
+        count: c.risks,
+        label: tb("diff.riskBadge", { count: c.risks }),
+      });
+    }
+    if (c.focus > 0) {
+      list.push({
+        id: "brief-focus",
+        icon: "ListChecks",
+        color: "var(--accent)",
+        count: c.focus,
+        label: tb("diff.focusBadge", { count: c.focus }),
+      });
+    }
+    badges.set(path, list);
+  }
 
   const marks = smartDiff
     ? { paths: markedPaths(smartDiff), label: t("smartDiff.fileHasFindings") }
@@ -191,6 +224,7 @@ export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabP
                   commenting={commenting}
                   annotations={annotations}
                   marks={marks}
+                  badges={badges}
                   focus={effectiveFocus}
                 />
               </SmartDiffGroup>
@@ -198,7 +232,7 @@ export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabP
           })}
         </div>
       ) : (
-        <DiffViewer files={files} commenting={commenting} annotations={annotations} marks={marks} focus={effectiveFocus} />
+        <DiffViewer files={files} commenting={commenting} annotations={annotations} marks={marks} badges={badges} focus={effectiveFocus} />
       )}
     </section>
   );

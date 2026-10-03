@@ -81,6 +81,16 @@ export const s = {
     background: "var(--accent)",
     flexShrink: 0,
   } satisfies CSSProperties,
+  /** A header counter (icon + count) in the caller's colour. */
+  fileBadge: (color: string): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    fontSize: 12,
+    fontWeight: 600,
+    color,
+    flexShrink: 0,
+  }),
 } as const;
 
 /** Chevron rotates 90deg when the file card is open. */

@@ -21,6 +21,7 @@ import {
   normalizeAnnotationPath,
   type DiffAnnotation,
   type DiffAnnotationApi,
+  type DiffFileBadges,
 } from "../annotations";
 import { focusRowIndex, isFocusedFile, type DiffFocus } from "../focus";
 import { s, chevronFor } from "../styles";
@@ -51,6 +52,7 @@ export function FileCard({
   commenting,
   annotations,
   marks,
+  badges,
   focus,
 }: {
   file: PrFile;
@@ -59,6 +61,8 @@ export function FileCard({
   annotations?: DiffAnnotationApi;
   /** Files to mark with a small dot next to the path (e.g. "has findings"). */
   marks?: { paths: ReadonlySet<string>; label: string };
+  /** Header counters for this file, looked up by its normalised path. */
+  badges?: DiffFileBadges;
   /** Deep-link target. When it names this file the card starts open (even past
       the large-file collapse), is outlined, and scrolls the target into view. */
   focus?: DiffFocus | null;
@@ -122,6 +126,7 @@ export function FileCard({
     ? commenting.comments.filter((c) => c.path === file.path).length
     : 0;
   const hasMark = marks?.paths.has(file.path) ?? false;
+  const fileBadges = badges?.get(filePathNormalized) ?? [];
 
   return (
     <div style={focused ? s.fileCardFocused : s.fileCard}>
@@ -134,6 +139,15 @@ export function FileCard({
         {hasMark && marks && (
           <span aria-label={marks.label} title={marks.label} style={s.markDot} />
         )}
+        {fileBadges.map((b) => {
+          const BadgeIcon = Icon[b.icon];
+          return (
+            <span key={b.id} aria-label={b.label} title={b.label} style={s.fileBadge(b.color)}>
+              {BadgeIcon && <BadgeIcon size={12} />}
+              <span className="tnum">{b.count}</span>
+            </span>
+          );
+        })}
         <span className="mono tnum" style={s.fileStat}>
           <span style={s.addText}>+{file.additions}</span>{" "}
           <span style={s.delText}>−{file.deletions}</span>
