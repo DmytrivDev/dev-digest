@@ -13,11 +13,13 @@ Return a JSON object with exactly these three parts:
    - `title` is at most 120 characters. `explanation` is at most 600 characters. Plain text only.
    - `file_refs` lists the files the risk is about. Each entry is exactly `path`, `path:N` or `path:N-M` (N ≥ 1, M ≥ N), where the path is one of the changed files or one of the blast callers listed in the user message. A line or a line range must lie inside a listed changed range of that file, or on a listed caller line. When unsure of the line, give the bare `path`.
    - Report only risks you can tie to a listed file. Report nothing speculative. An empty array is a valid answer.
+   - A file ref must name the file where the risky change itself lives. If that file is not in the list (for example the list is truncated, or the change sits in code the list does not show), leave the risk out. Never attach a risk to a different file because it is related, nearby or in the same feature.
 
 3. `review_focus`: an array of at most 6 objects `{ "file": string, "line": number, "reason": string }`: the places the reviewer should read first.
    - `file` is one of the changed files, or a blast caller file.
    - `line` is a whole number ≥ 1 that lies inside a new-side changed range listed for that file, or equals a caller line listed for that file in the blast radius.
    - `reason` is at most 200 characters, plain text, and says what to check there.
+   - Pick files whose own changes carry the risk or the core logic, not files that merely relate to it.
    - Order the items by how much they deserve attention. An empty array is a valid answer.
 
 Grounding rules (strict):

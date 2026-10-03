@@ -268,6 +268,7 @@ export class BriefService {
     });
     const usage: BriefUsage = {
       llm_calls: res.attempts,
+      prompt_tokens: fitted.tokens,
       tokens_in: res.tokensIn ?? null,
       tokens_out: res.tokensOut ?? null,
       cost_usd: res.costUsd ?? null,

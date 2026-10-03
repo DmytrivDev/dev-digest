@@ -50,6 +50,12 @@ export const ITEM_MAX_BYTES = 300;
  * ones are dropped first, as tier 5 would, before any row is counted.
  */
 export const MAX_FILE_ROWS = 300;
+/**
+ * Tier 5 cuts file rows only down to this many (fewer when the PR has fewer files); the rest
+ * go in tier 7, after the blast / intent / title texts of tier 6. The rows are what risks and
+ * focus lines are grounded in, so they outrank the blast text.
+ */
+export const MIN_FILE_ROWS = 40;
 /** The same for blast callers (a line is ~15 tokens); lowest rank first, as tier 4 cuts them. */
 export const MAX_BLAST_CALLERS = 400;
 /**

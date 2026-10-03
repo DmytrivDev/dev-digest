@@ -8,6 +8,7 @@ import {
   ITEM_MAX_BYTES,
   MAX_BLAST_CALLERS,
   MAX_FILE_ROWS,
+  MIN_FILE_ROWS,
   REASON,
   SPEC_DOC_MAX_BYTES,
   SPEC_TOTAL_MAX_BYTES,
@@ -31,9 +32,10 @@ import { blastText, clip, intentText } from './prompt.js';
  * Token budget for the brief prompt (AC-61 … AC-63) — pure, ring 1.
  *
  * The token counter is INJECTED (precedent `intent/helpers.ts:304`); this file never imports
- * `adapters/tokenizer`. The prompt is cut in six tiers, strictly in order: a later tier is
- * touched only when every earlier one is exhausted and the prompt still does not fit. It never
- * throws for size.
+ * `adapters/tokenizer`. The prompt is cut in seven tiers, strictly in order: a later tier is
+ * touched only when every earlier one is exhausted and the prompt still does not fit. Tier 5
+ * stops at MIN_FILE_ROWS file rows; tier 7 removes the rest after the texts of tier 6. It
+ * never throws for size.
  *
  * Cost (F9): the inputs are attacker-controlled and tokenizing is not cheap on hostile text,
  * so (1) every free text is capped in characters BEFORE the first count (the pre-cap), (2) a
@@ -260,20 +262,26 @@ export function fitBudget({ facts, render, countTokens, budget }: FitBudgetInput
     cut({ source: 'blast', status: 'truncated' });
   }
 
-  // Tier 5 — file rows: remove, lowest churn first, down to zero.
-  if (work.files.length > 0 && !fits()) {
+  // Tier 5 — file rows: remove, lowest churn first, but only down to a floor. The file rows
+  // are what the model grounds every risk and focus line in; on a large PR, cutting them to
+  // zero before the blast text left a brief with nothing to say (PR of 372 files, 2026-10-03).
+  // Rows below the floor go only in tier 7, after the texts of tier 6.
+  let rowsRemoved = 0;
+  const cutRows = (keep: number): void => {
+    if (work.files.length <= keep || fits()) return;
     const all = work.files;
     const order = removalOrder(all, churn);
-    const removed = smallestFitting(
-      all.length,
+    rowsRemoved += smallestFitting(
+      all.length - keep,
       (k) => {
         const gone = new Set(order.slice(0, k));
         work.files = all.filter((_, i) => !gone.has(i));
       },
       fits,
     );
-    cut({ source: 'diff_stats', status: 'truncated', omitted: preOmitted + removed });
-  }
+    cut({ source: 'diff_stats', status: 'truncated', omitted: preOmitted + rowsRemoved });
+  };
+  cutRows(Math.min(MIN_FILE_ROWS, work.files.length));
 
   // Tier 6 — text: the blast block's text, then the intent text, then the PR title.
   const shrink = (key: keyof TextLimits, fullLength: number): void => {
@@ -307,6 +315,9 @@ export function fitBudget({ facts, render, countTokens, budget }: FitBudgetInput
     // The title is part of the `description` input (AC-63).
     cut({ source: 'description', status: 'truncated' });
   }
+
+  // Tier 7 — the file rows left at the floor: remove, down to zero, so the prompt always fits.
+  cutRows(0);
 
   const prompt = render(work);
   const ordered = INPUT_SOURCES.flatMap((s) => (cuts.has(s) ? [cuts.get(s)!] : []));

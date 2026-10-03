@@ -136,6 +136,7 @@ export function logLine(i: LogLineInput): string {
   const num = (n: number | null): string => (n === null ? 'unknown' : String(n));
   return (
     `brief: pr=${i.prId} llm_calls=${i.usage.llm_calls} model=${i.model || 'none'}` +
+    ` prompt_tokens=${num(i.usage.prompt_tokens ?? null)}` +
     ` tokens_in=${num(i.usage.tokens_in)} tokens_out=${num(i.usage.tokens_out)}` +
     ` cost_usd=${num(i.usage.cost_usd)} duration_ms=${i.usage.duration_ms}` +
     ` status=${i.status} reason=${i.reason ?? 'none'}` +

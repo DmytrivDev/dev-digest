@@ -4,13 +4,19 @@ import { INPUTS_SEPARATOR } from "./constants";
 
 /**
  * `$<cost> <in>K→<out>K` — the cost goes through `formatCost` (unknown → "—"); the
- * token part appears only when both counts are known.
+ * token part appears only when both counts are known. `<in>` is the prompt as the budget
+ * measured it (cl100k, AC-61) when the brief carries it, else the provider's count — the
+ * provider tokenizes differently and adds its chat template, so its number runs higher.
  */
 export function costText(usage: BriefUsage): string {
   const cost = formatCost(usage.cost_usd);
-  if (usage.tokens_in == null || usage.tokens_out == null) return cost;
-  return `${cost} ${(usage.tokens_in / 1000).toFixed(1)}K→${(usage.tokens_out / 1000).toFixed(1)}K`;
+  const tokensIn = usage.prompt_tokens ?? usage.tokens_in;
+  if (tokensIn == null || usage.tokens_out == null) return cost;
+  return `${cost} ${kilo(tokensIn)}→${kilo(usage.tokens_out)}`;
 }
+
+/** `8.6K` — one decimal, the unit the banner uses. */
+export const kilo = (n: number): string => `${(n / 1000).toFixed(1)}K`;
 
 /**
  * Stale when the server says so (`stale` of the GET envelope) or when the brief's

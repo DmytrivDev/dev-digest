@@ -233,6 +233,10 @@ export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
 
 export const BriefUsage = z.object({
   llm_calls: z.number().int().nonnegative(),
+  /** The prompt as the budget measured it: cl100k tokens of system + user (AC-61). The
+   *  provider's own `tokens_in` differs (its tokenizer, chat template). Absent on briefs
+   *  stored before 2026-10-03. */
+  prompt_tokens: z.number().int().nonnegative().optional(),
   tokens_in: z.number().int().nonnegative().nullable(),
   tokens_out: z.number().int().nonnegative().nullable(),
   cost_usd: z.number().nonnegative().nullable(),

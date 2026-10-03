@@ -119,7 +119,7 @@ describe('logLine (AC-94)', () => {
         truncated: ['specs', 'diff_stats'],
       }),
     ).toBe(
-      'brief: pr=pr-1 llm_calls=1 model=openrouter/openai/gpt-4.1 tokens_in=7200 tokens_out=900' +
+      'brief: pr=pr-1 llm_calls=1 model=openrouter/openai/gpt-4.1 prompt_tokens=unknown tokens_in=7200 tokens_out=900' +
         ' cost_usd=0.0123 duration_ms=4321 status=ok reason=none dropped_risks=1 dropped_focus=2' +
         ' truncated=specs,diff_stats',
     );
@@ -137,10 +137,26 @@ describe('logLine (AC-94)', () => {
         truncated: [],
       }),
     ).toBe(
-      'brief: pr=pr-2 llm_calls=1 model=openrouter/openai/gpt-4.1 tokens_in=unknown tokens_out=unknown' +
+      'brief: pr=pr-2 llm_calls=1 model=openrouter/openai/gpt-4.1 prompt_tokens=unknown tokens_in=unknown tokens_out=unknown' +
         ' cost_usd=unknown duration_ms=120004 status=failed reason=llm_timeout dropped_risks=0 dropped_focus=0' +
         ' truncated=none',
     );
+  });
+});
+
+describe('logLine prompt_tokens', () => {
+  it('logs the budget-measured prompt next to the provider count', () => {
+    expect(
+      logLine({
+        prId: 'pr-3',
+        usage: { llm_calls: 1, prompt_tokens: 7_900, tokens_in: 8_600, tokens_out: 1_000, cost_usd: 0.0003, duration_ms: 12_000 },
+        model: 'openrouter/deepseek/deepseek-v4-flash',
+        status: 'ok',
+        reason: null,
+        dropped: { risks: 0, review_focus: 0 },
+        truncated: [],
+      }),
+    ).toContain('prompt_tokens=7900 tokens_in=8600 tokens_out=1000');
   });
 });
 

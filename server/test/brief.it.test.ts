@@ -204,6 +204,8 @@ d('PR brief — routes', () => {
     expect(post.stale).toBe(false);
     expect(post.brief?.usage).toEqual({
       llm_calls: 1,
+      // The budget's own cl100k count of what was sent (AC-61), next to the provider's.
+      prompt_tokens: expect.any(Number),
       tokens_in: FAKE_USAGE.tokensIn,
       tokens_out: FAKE_USAGE.tokensOut,
       cost_usd: FAKE_USAGE.costUsd,

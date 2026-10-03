@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import { Button, Icon, Skeleton } from "@devdigest/ui";
 import type { BriefInput, PrBrief, ReviewRecord } from "@devdigest/shared";
 import { VerdictBanner } from "../VerdictBanner";
-import { SHORT_SHA, SKELETON_ROWS } from "./constants";
-import { blockersOf, costText, droppedCount, inputsLine, isBriefStale } from "./helpers";
+import { INPUT_TOKEN_BUDGET, SHORT_SHA, SKELETON_ROWS } from "./constants";
+import { blockersOf, costText, droppedCount, inputsLine, isBriefStale, kilo } from "./helpers";
 import { s } from "./styles";
 
 type Translate = ReturnType<typeof useTranslations>;
@@ -140,7 +140,17 @@ function FilledBanner({
       score={review?.score ?? null}
       findingsCount={review?.findings.length ?? 0}
       blockers={review ? blockersOf(review) : 0}
-      cost={{ text: costText(brief.usage), title: brief.model }}
+      cost={{
+        text: costText(brief.usage),
+        title:
+          brief.usage.prompt_tokens != null && brief.usage.tokens_in != null
+            ? `${brief.model} · ${t("banner.tokensTitle", {
+                prompt: kilo(brief.usage.prompt_tokens),
+                budget: kilo(INPUT_TOKEN_BUDGET),
+                provider: kilo(brief.usage.tokens_in),
+              })}`
+            : brief.model,
+      }}
       actions={
         <button
           type="button"

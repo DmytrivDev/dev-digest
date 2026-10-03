@@ -19,6 +19,7 @@
     "regenerate": "Regenerate",
     "stale": "Generated for {sha} — the PR has new commits",
     "error": "Could not generate the brief.",
+    "tokensTitle": "prompt {prompt} of the {budget} cl100k budget · the provider counted {provider} input tokens",
     "builtWithout": "Built without:",
     "truncated": "Truncated:",
     "dropped": "{count, plural, one {# item referencing an unknown file was removed} other {# items referencing unknown files were removed}}"

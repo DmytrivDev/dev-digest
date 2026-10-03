@@ -231,7 +231,7 @@ describe('fitBudget — the pre-cap and the cost of a count (F9)', () => {
     expect(diff.omitted).toBe(files.length - out.facts.files.length);
   });
 
-  it('tiers 4 and 5 are a search, not a count per removed row', () => {
+  it('tiers 4, 5 and 7 are a search, not a count per removed row', () => {
     const files = Array.from({ length: 100 }, (_, i) => row(i));
     const callers = Array.from({ length: 100 }, (_, i) => ({
       file: `src/c${i}.ts`,
@@ -247,9 +247,11 @@ describe('fitBudget — the pre-cap and the cost of a count (F9)', () => {
       budget: 300,
     });
     expect(out.tokens).toBeLessThanOrEqual(300);
-    // up to ~100 whole-prompt counts each before; now 2 x (log2 100 + 2) plus a handful
-    expect(c.seen.length).toBeLessThanOrEqual(40);
-    expect(out.cuts.map((x) => x.source)).toEqual(['blast', 'diff_stats']);
+    // up to ~100 whole-prompt counts each before; now three searches (callers, rows down to the
+    // floor, the rows below it: each ~2 x (log2 100 + 2)) plus the text shrink, still a handful
+    expect(c.seen.length).toBeLessThanOrEqual(80);
+    // 300 tokens is below 40 rows: the texts (the title included) went to zero first
+    expect(out.cuts.map((x) => x.source)).toEqual(['blast', 'diff_stats', 'description']);
   });
 });
 

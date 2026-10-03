@@ -25,6 +25,10 @@ describe("costText", () => {
     expect(costText(usage({ tokens_in: null }))).toBe("$0.014");
   });
 
+  it("shows the budget-measured prompt (cl100k) over the provider's own count when it has one", () => {
+    expect(costText(usage({ prompt_tokens: 7900, tokens_in: 8600, tokens_out: 1000 }))).toBe("$0.014 7.9K→1.0K");
+  });
+
   it("keeps a genuine zero distinct from missing", () => {
     expect(costText(usage({ cost_usd: 0, tokens_in: null, tokens_out: null }))).toBe("$0.00");
   });
