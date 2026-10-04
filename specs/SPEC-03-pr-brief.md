@@ -1,6 +1,6 @@
 # Spec: PR Brief — why, risk areas and review focus on the PR Overview
 Spec ID: SPEC-03
-Status: approved
+Status: implemented
 Supersedes: none
 
 ## Problem and user

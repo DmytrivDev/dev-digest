@@ -120,4 +120,4 @@ node scripts/extract-design.mjs
 |---|---|---|---|---|
 | [SPEC-01](SPEC-01-project-context.md) | Project Context — repo markdown docs attached to agents and skills, injected into runs | approved | server, client, reviewer-core | none (reverses `client/specs/L02-skills.md` R3 tab order) |
 | [SPEC-02](SPEC-02-onboarding-tour.md) | Onboarding Tour — five-section repo tour from repo-intel facts, one narrative LLM call, deterministic skeleton with honest status | approved | server, client | none |
-| [SPEC-03](SPEC-03-pr-brief.md) | PR Brief — Overview card composing Intent + Blast radius with one-call LLM summary, Risk areas and Review focus; path/line-validated, SHA-bound cache, deep link to Files changed | approved | server, client | none |
+| [SPEC-03](SPEC-03-pr-brief.md) | PR Brief — Overview card composing Intent + Blast radius with one-call LLM summary, Risk areas and Review focus; path/line-validated, SHA-bound cache, deep link to Files changed | implemented | server, client | none |
