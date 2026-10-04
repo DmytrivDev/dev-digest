@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Providers } from "./providers";
 import { ApiError } from "./api";
@@ -67,7 +67,9 @@ describe("Providers — global error toast", () => {
   it("does not toast a failing mutation with meta.quietError", async () => {
     renderInProviders(<FailingMutation quiet />);
     fireEvent.click(screen.getByRole("button", { name: "run mutation" }));
-    await waitFor(() => expect(screen.getByRole("button")).toHaveTextContent("mutation settled"));
+    // By name: toasts raised meanwhile (e.g. an earlier test's failing query refetching) carry
+    // their own "Dismiss" buttons, so an unnamed role query finds several (seen on CI).
+    expect(await screen.findByRole("button", { name: "mutation settled" })).toBeInTheDocument();
     expect(screen.queryByText("mutation failed")).not.toBeInTheDocument();
   });
 });
