@@ -1,0 +1,29 @@
+{
+  "name": "PR brief renders from the stored brief and deep-links into the diff",
+  "description": "PR #482 ships a stored brief (SEED_PR_482_BRIEF in server/src/db/seed-pulls.ts). The Overview must render its summary from GET /pulls/:id/brief with no model call (AC-47, AC-96), still render it after a fresh page load, and a Review-focus item (src/api/users.ts:45) must open Files changed via ?tab=diff&file=&line= (AC-31). The summary text below must stay in lock-step with the seed. No reload command: a fresh `open` is an equivalent new document load. Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    {
+      "cmd": ["wait", "--text", "Adds a token-bucket rate limiter in front of the public API; a live-looking Stripe key is committed in config and the user list now queries once per user."],
+      "label": "the seeded brief summary renders from the stored brief (no POST, no model call)"
+    },
+    { "cmd": ["open", "{BASE}/"], "label": "fresh page load: reload the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list again" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row again" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route again" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles again" },
+    {
+      "cmd": ["wait", "--text", "Adds a token-bucket rate limiter in front of the public API; a live-looking Stripe key is committed in config and the user list now queries once per user."],
+      "label": "the brief summary survives a fresh page load"
+    },
+    { "cmd": ["scroll", "down", "3000", "--selector", "main"], "label": "scroll the Overview's main scroll container down so the Review focus card is in view" },
+    { "cmd": ["find", "role", "button", "click", "--name", "src/api/users.ts:45"], "label": "click the Review-focus pointer src/api/users.ts:45" },
+    { "cmd": ["wait", "--url", "line=45"], "label": "the Files changed tab opened via the deep link ends in line=45" },
+    { "cmd": ["wait", "--text", "src/api/users.ts"], "label": "the targeted file renders in the diff viewer" },
+    { "cmd": ["wait", "--text", "users.push(await db.getUserDetail(row.id));"], "label": "an added line of the targeted file (USERS_PATCH) renders in the diff viewer, a string absent from the Overview" }
+  ]
+}

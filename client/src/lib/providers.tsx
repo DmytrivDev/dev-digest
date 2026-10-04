@@ -27,8 +27,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // Global error surfacing (errors anywhere → toast). Mutations always
         // toast (they are user actions). Queries only toast on network/5xx —
         // expected 4xx like a 404 "no tour yet" stay silent for inline empty states.
+        // `meta: { quietError: true }` on a query silences even those (the PR Brief
+        // shows its own inline error), mirroring the mutation opt-out below.
         queryCache: new QueryCache({
-          onError: (err) => {
+          onError: (err, query) => {
+            if (query.meta?.quietError) return;
             const status = err instanceof ApiError ? err.status : 500;
             if (status === 0 || status >= 500) notify.error(describeApiError(err));
           },

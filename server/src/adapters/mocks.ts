@@ -23,6 +23,7 @@ import type {
   UnifiedDiff,
   BlameLine,
   GitCommit,
+  CommitTouch,
   CodeIndex,
   CodeMatch,
   CodeSymbol,
@@ -260,12 +261,36 @@ export interface MockGitOptions {
   head?: string;
   /** Head `currentHead()` returns AFTER `sync()` runs — simulates fetch+reset advancing HEAD. */
   syncedHead?: string;
+  /**
+   * Working-tree documents keyed by repo-relative path (text or raw bytes).
+   * Drives `listFiles` (its keys) and `readFileBytes`; mutate-by-reassign via
+   * `setDoc`/`removeDoc` to simulate the clone changing between runs.
+   */
+  docs?: Record<string, string | Uint8Array>;
+  /** Paths in `docs` whose real location is outside the clone: hidden from `listFiles`, `readFileBytes` throws `EOUTSIDECLONE`. */
+  outside?: string[];
+  /** What `currentBranch()` returns (default `main`). */
+  branch?: string;
+  /** The repository has no local clone: `listFiles`/`readFileBytes`/`currentBranch` throw `ENOENT`. */
+  notCloned?: boolean;
+  /** Committer date (ISO 8601) per sha for `commitDate`; an unknown sha rejects. */
+  commitDates?: Record<string, string>;
+  /** What `commitTouches` returns until a successful `fetchHistorySince`. */
+  touches?: CommitTouch[];
+  /** What `commitTouches` returns after a successful `fetchHistorySince` (default: `touches`). */
+  touchesAfterFetch?: CommitTouch[];
+  /** `fetchHistorySince` outcome: `ok` (default) · `fail` (rejects) · `hang` (never settles). */
+  historyFetch?: 'ok' | 'fail' | 'hang';
 }
 
 export class MockGitClient implements GitClient {
   public cloned: { repo: RepoRef; url: string }[] = [];
   public syncs: { repo: RepoRef; branch: string }[] = [];
+  public fetchPullHeads: { repo: RepoRef; n: number }[] = [];
+  /** Every `fetchHistorySince` call, in order (recorded before the outcome applies). */
+  public historyFetches: { since: string; ref: string }[] = [];
   private syncedHead?: string;
+  private historyFetched = false;
 
   constructor(private opts: MockGitOptions = {}) {}
 
@@ -276,7 +301,9 @@ export class MockGitClient implements GitClient {
     this.cloned.push({ repo, url });
     return { path: this.clonePathFor(repo) };
   }
-  async fetchPullHead(): Promise<void> {}
+  async fetchPullHead(repo: RepoRef, n: number): Promise<void> {
+    this.fetchPullHeads.push({ repo, n });
+  }
   async sync(repo: RepoRef, branch: string): Promise<{ head: string }> {
     this.syncs.push({ repo, branch });
     // After a sync, HEAD advances to syncedHead (or stays at head if unset).
@@ -303,6 +330,75 @@ export class MockGitClient implements GitClient {
   }
   async readFile(_repo: RepoRef, path: string): Promise<string> {
     return this.opts.files?.[path] ?? '';
+  }
+  async listFiles(
+    _repo: RepoRef,
+    _opts?: { excludeDirs?: readonly string[] },
+  ): Promise<string[]> {
+    this.assertCloned();
+    const hidden = new Set(this.opts.outside ?? []);
+    return Object.keys(this.opts.docs ?? {}).filter((p) => !hidden.has(p));
+  }
+  async readFileBytes(_repo: RepoRef, path: string): Promise<Uint8Array> {
+    this.assertCloned();
+    if (this.opts.outside?.includes(path)) {
+      throw Object.assign(new Error('path resolves outside the repository clone'), {
+        code: 'EOUTSIDECLONE',
+      });
+    }
+    const doc = this.opts.docs?.[path];
+    if (doc === undefined) {
+      throw Object.assign(new Error(`ENOENT: no such file ${path}`), { code: 'ENOENT' });
+    }
+    return typeof doc === 'string' ? new TextEncoder().encode(doc) : doc;
+  }
+  async currentBranch(): Promise<string> {
+    this.assertCloned();
+    return this.opts.branch ?? 'main';
+  }
+  async commitDate(_repo: RepoRef, sha: string): Promise<string> {
+    const date = this.opts.commitDates?.[sha];
+    if (date === undefined) {
+      throw Object.assign(new Error(`unknown revision ${sha}`), { code: 'ENOENT' });
+    }
+    return date;
+  }
+  async commitTouches(
+    _repo: RepoRef,
+    _sha: string,
+    opts: { maxCount: number },
+  ): Promise<CommitTouch[]> {
+    const list =
+      this.historyFetched && this.opts.touchesAfterFetch
+        ? this.opts.touchesAfterFetch
+        : (this.opts.touches ?? []);
+    return list.slice(0, opts.maxCount);
+  }
+  async fetchHistorySince(
+    _repo: RepoRef,
+    since: string,
+    ref: string,
+    _opts: { timeoutMs: number },
+  ): Promise<void> {
+    this.historyFetches.push({ since, ref });
+    const mode = this.opts.historyFetch ?? 'ok';
+    if (mode === 'hang') return new Promise<void>(() => {});
+    if (mode === 'fail') throw new Error('mock history fetch failed');
+    this.historyFetched = true;
+  }
+  /** Test helper: add or replace a document, as if the clone's checkout changed. */
+  setDoc(path: string, content: string | Uint8Array): void {
+    this.opts.docs = { ...(this.opts.docs ?? {}), [path]: content };
+  }
+  /** Test helper: delete a document from the simulated checkout. */
+  removeDoc(path: string): void {
+    const { [path]: _gone, ...rest } = this.opts.docs ?? {};
+    this.opts.docs = rest;
+  }
+  private assertCloned(): void {
+    if (this.opts.notCloned) {
+      throw Object.assign(new Error('ENOENT: repository is not cloned'), { code: 'ENOENT' });
+    }
   }
 }
 

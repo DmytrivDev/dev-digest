@@ -3,6 +3,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Skill } from "@devdigest/shared";
 import messages from "../../../../../../messages/en/skills.json";
+import contextMessages from "../../../../../../messages/en/context.json";
 import { ToastProvider } from "../../../../../lib/toast";
 
 const mutate = vi.fn();
@@ -11,11 +12,27 @@ const mutate = vi.fn();
 vi.mock("../../../../../lib/hooks/skills", () => ({
   useUpdateSkill: () => ({ mutate, isPending: false }),
   useDeleteSkill: () => ({ mutate: vi.fn(), isPending: false }),
+  useSkillContextDocs: () => ({
+    data: { repo_id: "r1", attached: [] },
+    isError: false,
+  }),
+  useSetSkillContextDocs: () => ({ mutate: vi.fn(), isError: false }),
+}));
+vi.mock("../../../../../lib/hooks/core", () => ({
+  useContextFiles: () => ({
+    data: { repo_id: "r1", branch: "main", total: 0, truncated: false, docs: [] },
+    isError: false,
+  }),
+  useContextDoc: () => ({ data: undefined, isLoading: true, isError: false }),
+}));
+vi.mock("../../../../../lib/repo-context", () => ({
+  useActiveRepo: () => ({ repoId: "r1", reposLoaded: true }),
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import { SkillEditor } from "./SkillEditor";
+import { DEFAULT_TAB, VALID_TABS } from "./constants";
 
 afterEach(() => {
   cleanup();
@@ -36,7 +53,7 @@ const SKILL: Skill = {
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
+    <NextIntlClientProvider locale="en" messages={{ skills: messages, context: contextMessages }}>
       <ToastProvider>{ui}</ToastProvider>
     </NextIntlClientProvider>,
   );
@@ -54,21 +71,34 @@ const bodyField = (): HTMLTextAreaElement =>
   screen.getAllByRole("textbox").find((el) => el.tagName === "TEXTAREA") as HTMLTextAreaElement;
 
 describe("SkillEditor — tab strip", () => {
-  // Preview is both the first tab and the landing tab (`DEFAULT_TAB` is
-  // `TABS[0].key`). Opening a skill from the list is a request to READ it, and
-  // a strip whose first tab is not the one that opened reads as a wrong turn.
-  it("puts Preview first, ahead of Config", () => {
-    renderWithIntl(<SkillEditor skill={SKILL} tab="preview" onTab={() => {}} />);
+  // Config is both the first tab and the landing tab (`DEFAULT_TAB` is
+  // `TABS[0].key`) — SPEC-01 D-18 / AC-23, reversing the earlier Preview-first
+  // order of L02 R3. A strip whose first tab is not the one that opened reads
+  // as a wrong turn.
+  it("orders the tabs Config · Context · Preview · Stats · Versions (AC-23)", () => {
+    renderWithIntl(<SkillEditor skill={SKILL} tab="config" onTab={() => {}} />);
     // Compare DOM order rather than indices into a container, so the assertion
     // survives however the Tabs primitive wraps its items.
-    // By role: the Preview TAB and the Preview tab's own <h2> share their text.
-    const order = ["Preview", "Config", "Stats", "Versioning"].map((name) =>
+    // By role: a TAB and its own <h2> can share their text.
+    const order = ["Config", "Context", "Preview", "Stats", "Versioning"].map((name) =>
       screen.getByRole("button", { name }),
     );
     for (let i = 1; i < order.length; i++) {
       const rel = order[i - 1]!.compareDocumentPosition(order[i]!);
       expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
+  });
+
+  it("lands on Config when no ?tab is given, and accepts ?tab=context (AC-24)", () => {
+    // The page falls back to DEFAULT_TAB for an absent or unknown `?tab`.
+    expect(DEFAULT_TAB).toBe("config");
+    expect(VALID_TABS).toContain("context");
+  });
+
+  it("renders the Context tab for tab=context (AC-23)", () => {
+    renderWithIntl(<SkillEditor skill={SKILL} tab="context" onTab={() => {}} />);
+    expect(screen.getByRole("heading", { name: "Project context" })).toBeInTheDocument();
+    expect(screen.queryByText("Save skill")).not.toBeInTheDocument();
   });
 });
 

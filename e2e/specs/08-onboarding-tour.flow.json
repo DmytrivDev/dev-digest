@@ -1,0 +1,12 @@
+{
+  "name": "Onboarding Tour opens from the sidebar and shows the not-cloned state",
+  "description": "From the app root (redirects to the seeded demo repo acme/payments-api), click the Onboarding Tour sidebar entry and confirm /repos/<id>/onboarding renders the readiness message and its Check again button. The seeded repo has no local clone, so no tour can be generated: read-only, no model call, and no Generate control is clicked. Assumes a freshly-seeded DB where the demo repo is the first repo (run via ./scripts/e2e.sh). Separate from flow 06, which covers the add-repository screen at /onboarding.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root (redirects to the demo repo)" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the repo's PR list" },
+    { "cmd": ["find", "text", "Onboarding Tour", "click"], "label": "open the Onboarding Tour from the sidebar" },
+    { "cmd": ["wait", "--url", "/onboarding"], "label": "the repo-scoped onboarding route is reached" },
+    { "cmd": ["wait", "--text", "This repository has no local clone yet"], "label": "the not-cloned message renders" },
+    { "cmd": ["wait", "--text", "Check again"], "label": "the Check again button renders" }
+  ]
+}

@@ -10,6 +10,8 @@
  * `.dependency-cruiser.cjs`), so this file is plain data — no classifier
  * import, no logic.
  */
+import type { PrBrief } from '@devdigest/shared';
+
 export interface SeedPrFile {
   path: string;
   additions: number;
@@ -61,3 +63,68 @@ export const SEED_PR_482_FILES: SeedPrFile[] = [
   { path: 'README.md', additions: 3, deletions: 0, patch: null },
   { path: 'pnpm-lock.yaml', additions: 6, deletions: 0, patch: null },
 ];
+
+/**
+ * The stored PR Brief of PR #482 (SPEC-03) — what the Overview shows on a clean checkout
+ * without any provider key. `head_sha` equals the seeded PR's head, so it reads as fresh.
+ *
+ * Every `file_refs` entry is grounded in `SEED_PR_482_FILES` (the config patch's new range is
+ * 9-16, users' is 40-49; ratelimit and the lockfile carry no patch, so a path suffices), which
+ * means `validateBrief` removes nothing from it (`brief-seed.it.test.ts`). The `risks` field is
+ * the contract's `Risks` wrapper, not a bare array.
+ *
+ * Plain data on purpose (`db-not-to-modules`): the type comes in as `import type`, no logic.
+ */
+export const SEED_PR_482_BRIEF = {
+  summary:
+    'Adds a token-bucket rate limiter in front of the public API; a live-looking Stripe key is committed in config and the user list now queries once per user.',
+  risks: {
+    risks: [
+      {
+        kind: 'security',
+        severity: 'high',
+        title: 'Secret committed in config',
+        explanation: 'A Stripe-style secret key is written into src/config.ts instead of an env var.',
+        file_refs: ['src/config.ts:12'],
+      },
+      {
+        kind: 'perf',
+        severity: 'medium',
+        title: 'Per-request limiter overhead',
+        explanation: 'The limiter runs on every public request and keeps its bucket state in memory.',
+        file_refs: ['src/middleware/ratelimit.ts'],
+      },
+      {
+        kind: 'deps',
+        severity: 'low',
+        title: 'Lockfile changed',
+        explanation: 'The lockfile moved with the change; check the added dependency is intended.',
+        file_refs: ['pnpm-lock.yaml'],
+      },
+    ],
+  },
+  review_focus: [
+    { file: 'src/api/users.ts', line: 45, reason: 'one query per user inside the loop' },
+    { file: 'src/config.ts', line: 12, reason: 'hard-coded secret' },
+  ],
+  intent: {
+    intent:
+      'Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.',
+    in_scope: ['Add a token-bucket limiter middleware', 'Apply it to the public API endpoints'],
+    out_of_scope: ['Changing the authentication model'],
+  },
+  blast: null,
+  head_sha: 'a1b2c3d4e5f6',
+  generated_at: '2026-10-01T10:00:00.000Z',
+  model: 'openai/gpt-4.1',
+  usage: { llm_calls: 1, tokens_in: 8200, tokens_out: 1300, cost_usd: 0.014, duration_ms: 9400 },
+  inputs: [
+    { source: 'intent', status: 'used' },
+    { source: 'blast', status: 'missing', reason: 'no_data' },
+    { source: 'diff_stats', status: 'used' },
+    { source: 'description', status: 'used' },
+    { source: 'linked_issue', status: 'missing', reason: 'no_linked_issue' },
+    { source: 'specs', status: 'missing', reason: 'none_attached' },
+  ],
+  dropped: { risks: 0, review_focus: 0 },
+} satisfies PrBrief;

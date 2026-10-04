@@ -21,7 +21,9 @@ import {
   normalizeAnnotationPath,
   type DiffAnnotation,
   type DiffAnnotationApi,
+  type DiffFileBadges,
 } from "../annotations";
+import { focusRowIndex, isFocusedFile, type DiffFocus } from "../focus";
 import { s, chevronFor } from "../styles";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
@@ -50,6 +52,8 @@ export function FileCard({
   commenting,
   annotations,
   marks,
+  badges,
+  focus,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -57,12 +61,32 @@ export function FileCard({
   annotations?: DiffAnnotationApi;
   /** Files to mark with a small dot next to the path (e.g. "has findings"). */
   marks?: { paths: ReadonlySet<string>; label: string };
+  /** Header counters for this file, looked up by its normalised path. */
+  badges?: DiffFileBadges;
+  /** Deep-link target. When it names this file the card starts open (even past
+      the large-file collapse), is outlined, and scrolls the target into view. */
+  focus?: DiffFocus | null;
 }) {
   const t = useTranslations("shell");
+  const focused = isFocusedFile(file, focus);
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    focused || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
+  const targetIndex = focused ? focusRowIndex(lines, focus?.line) : -1;
+
+  // Scroll the target row (new side only) into view, else the card header. This
+  // syncs with the DOM after the card has rendered open, which is what an effect
+  // is for. A card the reader collapses afterwards is not scrolled again.
+  const headerRef = React.useRef<HTMLDivElement>(null);
+  const targetRef = React.useRef<HTMLDivElement>(null);
+  const focusLine = focus?.line;
+  React.useEffect(() => {
+    if (!focused || !open) return;
+    const el = (targetIndex >= 0 ? targetRef.current : null) ?? headerRef.current;
+    el?.scrollIntoView({ block: "center" });
+    // `open` is deliberately not a dependency: re-opening by hand must not re-scroll.
+  }, [focused, focusLine, lines]);
 
   // Group this file's comments into threads, then split into ones we can anchor
   // to a rendered line vs. "outdated" (GitHub dropped the line / it's not here).
@@ -102,10 +126,11 @@ export function FileCard({
     ? commenting.comments.filter((c) => c.path === file.path).length
     : 0;
   const hasMark = marks?.paths.has(file.path) ?? false;
+  const fileBadges = badges?.get(filePathNormalized) ?? [];
 
   return (
-    <div style={s.fileCard}>
-      <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
+    <div style={focused ? s.fileCardFocused : s.fileCard}>
+      <div ref={headerRef} onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />
         <span className="mono" style={s.filePath}>
@@ -114,6 +139,15 @@ export function FileCard({
         {hasMark && marks && (
           <span aria-label={marks.label} title={marks.label} style={s.markDot} />
         )}
+        {fileBadges.map((b) => {
+          const BadgeIcon = Icon[b.icon];
+          return (
+            <span key={b.id} aria-label={b.label} title={b.label} style={s.fileBadge(b.color)}>
+              {BadgeIcon && <BadgeIcon size={12} />}
+              <span className="tnum">{b.count}</span>
+            </span>
+          );
+        })}
         <span className="mono tnum" style={s.fileStat}>
           <span style={s.addText}>+{file.additions}</span>{" "}
           <span style={s.delText}>−{file.deletions}</span>
@@ -140,6 +174,8 @@ export function FileCard({
                 threads={threadsForLine(ln, matched)}
                 commenting={commenting}
                 annotations={annotationsForLine(ln, matchedAnnotations)}
+                highlighted={i === targetIndex}
+                rowRef={i === targetIndex ? targetRef : undefined}
               />
             ))
           )}

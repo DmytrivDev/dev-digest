@@ -17,6 +17,19 @@ export interface DiffAnnotation {
   content: ReactNode;
 }
 
+/** A caller-built counter in a file card's header (icon + count), e.g. "2 risks". */
+export interface DiffFileBadge {
+  id: string;
+  icon: IconName;
+  color: string;
+  count: number;
+  /** Accessible name and tooltip. */
+  label: string;
+}
+
+/** File badges keyed by `normalizeAnnotationPath(path)`. */
+export type DiffFileBadges = ReadonlyMap<string, DiffFileBadge[]>;
+
 export interface DiffAnnotationApi {
   items: DiffAnnotation[];
   visible: boolean;

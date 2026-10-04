@@ -1,6 +1,12 @@
 import type { CSSProperties } from "react";
 
 export const s = {
+  // Label, banner, Intent, Blast radius and Review focus stacked, 16 px apart.
+  brief: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  } satisfies CSSProperties,
   descriptionBox: {
     border: "1px solid var(--border)",
     borderRadius: 8,

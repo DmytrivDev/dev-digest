@@ -23,6 +23,16 @@ export const NAV: NavGroup[] = [
     section: "WORKSPACE",
     items: [
       { key: "pulls", label: "Pull Requests", icon: "GitPullRequest", href: "/repos/:repoId/pulls", gKey: "p" },
+      // Repo-scoped like Pull Requests: the tour is read off the active repo's index.
+      {
+        key: "onboarding-tour",
+        label: "Onboarding Tour",
+        icon: "Workflow",
+        href: "/repos/:repoId/onboarding",
+        gKey: "o",
+      },
+      // Repo-scoped like Pull Requests: the documents are the active repo's clone.
+      { key: "context", label: "Project Context", icon: "FileText", href: "/repos/:repoId/context" },
     ],
   },
   {
@@ -74,6 +84,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "g p", label: "Go to Pull Requests", group: "Navigation" },
   { keys: "g a", label: "Go to Agents", group: "Navigation" },
   { keys: "g s", label: "Go to Skills", group: "Navigation" },
+  { keys: "g o", label: "Go to Onboarding Tour", group: "Navigation" },
   { keys: "g c", label: "Go to Conventions", group: "Navigation" },
   { keys: "j / k", label: "Next / previous finding", group: "Findings" },
   { keys: "a", label: "Accept finding", group: "Findings" },

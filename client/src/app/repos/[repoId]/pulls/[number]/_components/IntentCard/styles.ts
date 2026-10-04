@@ -17,6 +17,12 @@ export const s = {
     fontSize: 12,
     color: "var(--text-muted)",
   } satisfies CSSProperties,
+  // 1 px rule between the intent and the Risk areas block (mock BriefCard).
+  divider: {
+    height: 1,
+    background: "var(--border)",
+    margin: "16px 0",
+  } satisfies CSSProperties,
   skeletonStack: {
     display: "flex",
     flexDirection: "column",

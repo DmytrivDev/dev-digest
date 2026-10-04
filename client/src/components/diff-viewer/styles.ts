@@ -1,16 +1,24 @@
 import type { CSSProperties } from "react";
 import type { Line } from "./helpers";
 
+/* All-longhand border so the focused variant can override just the colour
+   without mixing a shorthand with a longhand (React warns and flickers). */
+const fileCard = {
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "var(--border)",
+  borderRadius: 7,
+  overflow: "hidden",
+  background: "var(--bg-elevated)",
+} satisfies CSSProperties;
+
 /** Co-located styles for the DiffViewer (extracted from inline styles). */
 export const s = {
   list: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
   empty: { padding: "24px", fontSize: 14, color: "var(--text-muted)", textAlign: "center" } satisfies CSSProperties,
-  fileCard: {
-    border: "1px solid var(--border)",
-    borderRadius: 7,
-    overflow: "hidden",
-    background: "var(--bg-elevated)",
-  } satisfies CSSProperties,
+  fileCard,
+  /** The file a deep link (e.g. a PR Brief review-focus row) points at. */
+  fileCardFocused: { ...fileCard, borderColor: "var(--accent)" } satisfies CSSProperties,
   fileHeader: {
     display: "flex",
     alignItems: "center",
@@ -73,6 +81,16 @@ export const s = {
     background: "var(--accent)",
     flexShrink: 0,
   } satisfies CSSProperties,
+  /** A header counter (icon + count) in the caller's colour. */
+  fileBadge: (color: string): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    fontSize: 12,
+    fontWeight: 600,
+    color,
+    flexShrink: 0,
+  }),
 } as const;
 
 /** Chevron rotates 90deg when the file card is open. */

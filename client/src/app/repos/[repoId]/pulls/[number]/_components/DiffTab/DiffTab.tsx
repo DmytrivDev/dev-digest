@@ -3,14 +3,33 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button, SEV } from "@devdigest/ui";
-import { DiffViewer, type DiffCommentApi, type DiffAnnotation } from "@/components/diff-viewer";
+import {
+  DiffViewer,
+  type DiffCommentApi,
+  type DiffAnnotation,
+  type DiffFileBadge,
+  type DiffFocus,
+} from "@/components/diff-viewer";
 import { usePrComments, useCreatePrComment, useSmartDiff, usePrReviews, useFindingAction } from "@/lib/hooks/reviews";
+import { usePrBrief } from "@/lib/hooks/brief";
 import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
 import { FindingCard } from "../FindingCard";
+import { riskColor, riskIconName } from "../RiskAreas";
 import { SmartDiffGroup } from "./_components/SmartDiffGroup";
+import { BriefNote } from "./_components/BriefNote";
 import { ROLE_META, FINDING_LABEL_KEY, COLLAPSED_BY_DEFAULT } from "./constants";
-import { selectLatestReview, groupFilesByRole, filesWithFindings, markedPaths, sortFindingsForDiff } from "./helpers";
+import {
+  selectLatestReview,
+  groupFilesByRole,
+  filesWithFindings,
+  markedPaths,
+  sortFindingsForDiff,
+  briefLineNotes,
+  briefFileCounts,
+  resolveDiffFocus,
+  bucketHasFocus,
+} from "./helpers";
 import { s } from "./styles";
 
 interface DiffTabProps {
@@ -19,14 +38,19 @@ interface DiffTabProps {
   files: PrFile[];
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
+  /** Deep-link target from `?file=&line=` (see `parseDiffTarget`). A target that
+      names no file of this PR is ignored, so the tab renders as without one. */
+  focus?: DiffFocus | null;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabProps) {
   const t = useTranslations("prReview");
+  const tb = useTranslations("brief");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   const { data: smartDiff } = useSmartDiff(prId);
   const { data: reviews } = usePrReviews(prId);
+  const { data: briefEnvelope } = usePrBrief(prId);
   const action = useFindingAction();
 
   // Findings in the diff are the point of Smart Diff, so comments AND
@@ -37,7 +61,9 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   const commentCount = comments?.length ?? 0;
   const latestReview = selectLatestReview(reviews ?? []);
   const findingsCount = latestReview?.findings.length ?? 0;
-  const noteCount = commentCount + findingsCount;
+  // The PR Brief's risk areas and review-focus lines, marked on their rows like findings.
+  const briefNotes = briefLineNotes(briefEnvelope?.brief, files);
+  const noteCount = commentCount + findingsCount + briefNotes.length;
 
   const commenting: DiffCommentApi = {
     comments: comments ?? [],
@@ -84,12 +110,54 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
       })
     : [];
 
+  // After the findings: a finding at the same line keeps the row's stripe and label.
+  const briefItems: DiffAnnotation[] = briefNotes.map((n) => {
+    const color = n.kind === "risk" ? riskColor(n.severity ?? "") : "var(--accent)";
+    const icon = n.kind === "risk" ? riskIconName(n.riskKind ?? "") : "ListChecks";
+    return {
+      id: n.id,
+      path: n.path,
+      line: n.line,
+      color,
+      icon,
+      label: tb(n.kind === "risk" ? "diff.riskLabel" : "diff.focusLabel"),
+      content: <BriefNote note={n} color={color} icon={icon} />,
+    };
+  });
+
+  // The file header counts what the brief pins in that file: risks (in the colour of the
+  // highest severity) and review-focus items.
+  const badges = new Map<string, DiffFileBadge[]>();
+  for (const [path, c] of briefFileCounts(briefNotes)) {
+    const list: DiffFileBadge[] = [];
+    if (c.risks > 0) {
+      list.push({
+        id: "brief-risks",
+        icon: "AlertTriangle",
+        color: riskColor(c.severity ?? ""),
+        count: c.risks,
+        label: tb("diff.riskBadge", { count: c.risks }),
+      });
+    }
+    if (c.focus > 0) {
+      list.push({
+        id: "brief-focus",
+        icon: "ListChecks",
+        color: "var(--accent)",
+        count: c.focus,
+        label: tb("diff.focusBadge", { count: c.focus }),
+      });
+    }
+    badges.set(path, list);
+  }
+
   const marks = smartDiff
     ? { paths: markedPaths(smartDiff), label: t("smartDiff.fileHasFindings") }
     : undefined;
-  const annotations = { items: annotationItems, visible: showNotes };
+  const annotations = { items: [...annotationItems, ...briefItems], visible: showNotes };
 
   const buckets = order === "smart" && smartDiff ? groupFilesByRole(smartDiff, files) : null;
+  const effectiveFocus = resolveDiffFocus(focus, files);
 
   return (
     <section>
@@ -137,24 +205,34 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
         <div style={s.groupWrap}>
           {buckets.map((bucket, i) => {
             const meta = ROLE_META[bucket.role];
+            const hasTarget = bucketHasFocus(bucket, effectiveFocus);
             return (
               <SmartDiffGroup
-                key={bucket.role}
+                // The target's group must open even when its role collapses by
+                // default; the key remounts the group if the target changes.
+                key={`${bucket.role}:${hasTarget ? effectiveFocus?.path : ""}`}
                 label={t(`smartDiff.${meta.labelKey}`)}
                 hint={t(`smartDiff.${meta.hintKey}`)}
                 color={meta.color}
                 filesCount={bucket.files.length}
                 filesWithFindings={latestReview ? filesWithFindings(bucket, smartDiff!) : null}
-                defaultOpen={!COLLAPSED_BY_DEFAULT.includes(bucket.role)}
+                defaultOpen={hasTarget || !COLLAPSED_BY_DEFAULT.includes(bucket.role)}
                 showReviewNotRun={i === 0}
               >
-                <DiffViewer files={bucket.files} commenting={commenting} annotations={annotations} marks={marks} />
+                <DiffViewer
+                  files={bucket.files}
+                  commenting={commenting}
+                  annotations={annotations}
+                  marks={marks}
+                  badges={badges}
+                  focus={effectiveFocus}
+                />
               </SmartDiffGroup>
             );
           })}
         </div>
       ) : (
-        <DiffViewer files={files} commenting={commenting} annotations={annotations} marks={marks} />
+        <DiffViewer files={files} commenting={commenting} annotations={annotations} marks={marks} badges={badges} focus={effectiveFocus} />
       )}
     </section>
   );

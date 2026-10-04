@@ -1,9 +1,17 @@
 /* hooks/skills.ts — React Query hooks for the Skills page + Skill Editor. */
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { Skill, SkillSource, SkillStats, SkillType, SkillVersion } from "@devdigest/shared";
+import { optimisticContextDocsSave } from "./context-docs-save";
+import type {
+  Skill,
+  SkillContextDocs,
+  SkillSource,
+  SkillStats,
+  SkillType,
+  SkillVersion,
+} from "@devdigest/shared";
 
 export function useSkills() {
   return useQuery({
@@ -56,8 +64,20 @@ export function useUpdateSkill() {
       // short list nobody is looking at costs less than showing a version list
       // that is missing the version you just created.
       qc.invalidateQueries({ queryKey: ["skill-versions", data.id] });
+      invalidateInheritedContext(qc);
     },
   });
+}
+
+/**
+ * A skill's `enabled` flag and name decide which documents agents inherit and
+ * the "via <skill>" badge on their Context tab; "Used by N agents" follows. The
+ * mutation cannot see which fields changed, so these are dropped unconditionally
+ * (cheap: only mounted queries refetch).
+ */
+function invalidateInheritedContext(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["agent-context-docs"] });
+  qc.invalidateQueries({ queryKey: ["context-doc"] });
 }
 
 /**
@@ -135,6 +155,7 @@ export function useDeleteSkill() {
       // A deleted skill disappears from every agent's link list, so any cached
       // one is now wrong.
       qc.invalidateQueries({ queryKey: ["agent-skills"] });
+      invalidateInheritedContext(qc);
     },
   });
 }
@@ -162,5 +183,52 @@ export function useImportSkillPreview() {
   return useMutation({
     mutationFn: (input: { filename: string; content_base64: string }) =>
       api.post<SkillImportPreview>("/skills/import/preview", input),
+  });
+}
+
+/** The project-context documents attached to a skill for one repository, in attachment order. */
+export function useSkillContextDocs(
+  skillId: string | null | undefined,
+  repoId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ["skill-context-docs", skillId, repoId],
+    queryFn: () =>
+      api.get<SkillContextDocs>(
+        `/skills/${skillId}/context-docs?repo_id=${encodeURIComponent(repoId as string)}`,
+      ),
+    enabled: !!skillId && !!repoId,
+  });
+}
+
+/**
+ * Replace a skill's attached documents for one repository with this exact
+ * ordered list. `quietError` for the same reason as `useSetAgentContextDocs`:
+ * the tab shows its own save error.
+ */
+export function useSetSkillContextDocs() {
+  const qc = useQueryClient();
+  // Optimistic: two quick ticks must both survive (see context-docs-save.ts).
+  const optimistic = optimisticContextDocsSave<
+    SkillContextDocs,
+    { skillId: string; repoId: string; paths: string[] }
+  >(qc, {
+    mutationKey: "set-skill-context-docs",
+    queryKey: ({ skillId, repoId }) => ["skill-context-docs", skillId, repoId],
+  });
+  return useMutation({
+    meta: { quietError: true },
+    mutationKey: optimistic.mutationKey,
+    onMutate: optimistic.onMutate,
+    onError: optimistic.onError,
+    mutationFn: ({ skillId, repoId, paths }: { skillId: string; repoId: string; paths: string[] }) =>
+      api.post<SkillContextDocs>(`/skills/${skillId}/context-docs`, { repo_id: repoId, paths }),
+    onSuccess: (data, vars) => {
+      optimistic.onAnswer(data, vars);
+      // Every agent carrying this skill inherits the documents, so any cached
+      // agent tab is now stale — as is the page's "Used by N agents".
+      qc.invalidateQueries({ queryKey: ["agent-context-docs"] });
+      qc.invalidateQueries({ queryKey: ["context-doc"] });
+    },
   });
 }

@@ -53,6 +53,7 @@
     "notFoundBody": "It may have been deleted.",
     "tabs": {
       "config": "Config",
+      "context": "Context",
       "preview": "Preview",
       "versions": "Versioning",
       "stats": "Stats"
@@ -86,6 +87,13 @@
     "subtitle": "Preview — rendered as the reviewing agent receives it",
     "bodyLabel": "BODY",
     "openEditor": "Open editor"
+  },
+  "context": {
+    "title": "Project context",
+    "attached": "{n} attached",
+    "tokens": "≈ {count} tokens",
+    "note": "Any agent using this skill inherits these documents.",
+    "serializesAs": "Serializes as"
   },
   "preview": {
     "title": "Preview",

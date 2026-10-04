@@ -42,8 +42,11 @@ const TRACE: RunTrace = {
   ],
 };
 
+// A case that needs a different trace sets this; afterEach puts it back.
+let currentTrace: RunTrace = TRACE;
+
 vi.mock("../../../../../../../lib/hooks/trace", () => ({
-  useRunTrace: () => ({ data: TRACE, isLoading: false }),
+  useRunTrace: () => ({ data: currentTrace, isLoading: false }),
 }));
 vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
@@ -51,7 +54,10 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
 
 import RunTraceDrawer from "./RunTraceDrawer";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  currentTrace = TRACE;
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -87,6 +93,42 @@ describe("A5 Run Trace drawer (smoke)", () => {
     expect(screen.getByText("Skills used")).toBeInTheDocument();
     expect(screen.getByText("api-contract-guard")).toBeInTheDocument();
     expect(screen.getByText("890 tokens")).toBeInTheDocument();
+  });
+
+  describe("project context (SPEC-01)", () => {
+    const SPECS = "## Project context\n\n### docs/a.md\nFirst doc\n\n### specs/b.md\nSecond doc";
+    const withContext = (): RunTrace => ({
+      ...TRACE,
+      prompt_assembly: { ...TRACE.prompt_assembly, specs: SPECS },
+      specs_read: ["docs/a.md", "specs/b.md"],
+    });
+
+    it("labels the injected block as untrusted project context", () => {
+      currentTrace = withContext();
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      fireEvent.click(screen.getByText("Prompt assembly"));
+      expect(screen.getByText("Project context — attached specs (untrusted)")).toBeInTheDocument();
+      expect(screen.queryByText("Project context (dynamic)")).not.toBeInTheDocument();
+    });
+
+    it("shows the full injected text once the block is expanded", () => {
+      currentTrace = withContext();
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      fireEvent.click(screen.getByText("Prompt assembly"));
+      expect(screen.queryByText(/First doc/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText("Project context — attached specs (untrusted)"));
+      const pre = screen.getByText(/First doc/);
+      expect(pre).toHaveTextContent("### docs/a.md");
+      expect(pre).toHaveTextContent("### specs/b.md");
+      expect(pre).toHaveTextContent("Second doc");
+    });
+
+    it("lists every path under Specs read", () => {
+      currentTrace = withContext();
+      renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+      expect(screen.getByText("docs/a.md")).toBeInTheDocument();
+      expect(screen.getByText("specs/b.md")).toBeInTheDocument();
+    });
   });
 
   it("switches to the live log tab", () => {

@@ -12,18 +12,27 @@ import { s } from "./styles";
 
 interface IntentCardProps {
   prId: string | null | undefined;
+  /** The brief's "Risk areas" block. Rendered under a divider at the bottom of the
+   *  card in every state — risks come from the brief, not from the intent endpoint. */
+  riskAreas?: React.ReactNode;
 }
 
 /**
  * The Overview tab's Intent section: why this PR exists, in scope, out of
  * scope, a confidence tier, and where each source came from. Mirrors the
- * mock's `BriefCard`'s Intent section (screen_pr_detail.jsx) — the "Risk
- * areas" half of that card is a later lesson, so this renders Intent only.
+ * mock's `BriefCard` Intent card (screen_pr_detail.jsx): when the Overview
+ * passes `riskAreas`, they follow the intent below a divider.
  */
-export function IntentCard({ prId }: IntentCardProps) {
+export function IntentCard({ prId, riskAreas }: IntentCardProps) {
   const t = useTranslations("brief");
   const { data, isLoading, isError } = usePrIntent(prId);
   const derive = useDerivePrIntent(prId);
+  const risks = riskAreas ? (
+    <>
+      <div role="separator" style={s.divider} />
+      {riskAreas}
+    </>
+  ) : null;
 
   if (isLoading) {
     return (
@@ -34,6 +43,7 @@ export function IntentCard({ prId }: IntentCardProps) {
             <Skeleton key={i} height={14} />
           ))}
         </div>
+        {risks}
       </Card>
     );
   }
@@ -43,6 +53,7 @@ export function IntentCard({ prId }: IntentCardProps) {
       <Card>
         <SectionLabel icon="Target">{t("block.intent")}</SectionLabel>
         <ErrorState title={t("intent.error")} onRetry={() => derive.mutate(undefined)} />
+        {risks}
       </Card>
     );
   }
@@ -61,6 +72,7 @@ export function IntentCard({ prId }: IntentCardProps) {
           ctaLoading={derive.isPending}
           onCta={() => derive.mutate(undefined)}
         />
+        {risks}
       </Card>
     );
   }
@@ -104,6 +116,7 @@ export function IntentCard({ prId }: IntentCardProps) {
       <div style={s.footer}>
         {t("intent.derivedAt", { when: formatWhen(intent.derived_at), model: intent.model ?? "—" })}
       </div>
+      {risks}
     </Card>
   );
 }

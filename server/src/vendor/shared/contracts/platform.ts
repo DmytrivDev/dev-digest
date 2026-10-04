@@ -252,13 +252,82 @@ export const PrCommentInput = z.object({
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
 // ---- Project Context ----
-export const SpecFile = z.object({
+/** How a document is bucketed in the list (AC-4): specs > insights > docs. */
+export const ContextDocCategory = z.enum(['specs', 'docs', 'insights']);
+export type ContextDocCategory = z.infer<typeof ContextDocCategory>;
+
+/** One markdown document of the repository's local clone. */
+export const ContextDoc = z.object({
+  /** Repository-relative, `/`-separated. */
   path: z.string(),
-  content: z.string().nullish(),
-  size: z.number().int().nullish(),
-  updated_at: z.string().nullish(),
+  name: z.string(),
+  /** `""` at the repository root. */
+  folder: z.string(),
+  category: ContextDocCategory,
+  approx_tokens: z.number().int(),
 });
-export type SpecFile = z.infer<typeof SpecFile>;
+export type ContextDoc = z.infer<typeof ContextDoc>;
+
+/** GET /repos/:id/context — the document list envelope (capped; see `truncated`). */
+export const ContextDocList = z.object({
+  repo_id: z.string().uuid(),
+  /** Branch the local clone has checked out (NOT `repos.default_branch`). */
+  branch: z.string(),
+  total: z.number().int(),
+  truncated: z.boolean(),
+  docs: z.array(ContextDoc),
+});
+export type ContextDocList = z.infer<typeof ContextDocList>;
+
+/** GET /repos/:id/context/doc?path= — one document, full text. */
+export const ContextDocContent = z.object({
+  path: z.string(),
+  content: z.string(),
+  used_by_agents: z.number().int(),
+});
+export type ContextDocContent = z.infer<typeof ContextDocContent>;
+
+/** An attached path. `approx_tokens` is null when the file is not present (or not decodable). */
+export const ContextAttachment = z.object({
+  path: z.string(),
+  present: z.boolean(),
+  approx_tokens: z.number().int().nullable(),
+});
+export type ContextAttachment = z.infer<typeof ContextAttachment>;
+
+/** A path an agent inherits from one of its enabled linked skills (read-only). */
+export const InheritedContextAttachment = ContextAttachment.extend({
+  skill_id: z.string().uuid(),
+  skill_name: z.string(),
+});
+export type InheritedContextAttachment = z.infer<typeof InheritedContextAttachment>;
+
+/** GET|POST /agents/:id/context-docs. */
+export const AgentContextDocs = z.object({
+  repo_id: z.string().uuid(),
+  attached: z.array(ContextAttachment),
+  inherited: z.array(InheritedContextAttachment),
+});
+export type AgentContextDocs = z.infer<typeof AgentContextDocs>;
+
+/** GET|POST /skills/:id/context-docs. */
+export const SkillContextDocs = z.object({
+  repo_id: z.string().uuid(),
+  attached: z.array(ContextAttachment),
+});
+export type SkillContextDocs = z.infer<typeof SkillContextDocs>;
+
+/** Body of POST /agents|skills/:id/context-docs — replaces the whole ordered set for one repo. */
+export const SaveContextDocsInput = z.object({
+  repo_id: z.string().uuid(),
+  paths: z
+    .array(z.string())
+    .max(500)
+    .refine((paths) => new Set(paths).size === paths.length, {
+      message: 'paths must be unique',
+    }),
+});
+export type SaveContextDocsInput = z.infer<typeof SaveContextDocsInput>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

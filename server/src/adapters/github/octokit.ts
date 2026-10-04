@@ -77,7 +77,10 @@ export class OctokitGitHubClient implements GitHubClient {
             repo: repo.name,
             pull_number: n,
           });
-          const { data: files } = await this.octokit.rest.pulls.listFiles({
+          // Every page, not just the first 100: a large PR otherwise hides most of its
+          // files from Files changed, Smart Diff and the PR Brief. GitHub itself stops
+          // listing at 3,000 files.
+          const files = await this.octokit.paginate(this.octokit.rest.pulls.listFiles, {
             owner: repo.owner,
             repo: repo.name,
             pull_number: n,

@@ -6,6 +6,8 @@ import {
   filesWithFindings,
   markedPaths,
   sortFindingsForDiff,
+  parseDiffTarget,
+  diffTargetQuery,
 } from "./helpers";
 
 function review(o: Partial<ReviewRecord> = {}): ReviewRecord {
@@ -162,5 +164,45 @@ describe("sortFindingsForDiff", () => {
     ];
     const sorted = sortFindingsForDiff(findings).map((f) => f.id);
     expect(sorted).toEqual(["crit-earlier", "crit-later", "warn", "sugg"]);
+  });
+});
+
+describe("parseDiffTarget", () => {
+  const parse = (q: string) => parseDiffTarget(new URLSearchParams(q));
+
+  it("reads file and line", () => {
+    expect(parse("tab=diff&file=src%2Fa.ts&line=12")).toEqual({ path: "src/a.ts", line: 12 });
+  });
+
+  it("a file with no line is a file-only target", () => {
+    expect(parse("tab=diff&file=src/a.ts")).toEqual({ path: "src/a.ts", line: null });
+  });
+
+  it("is null without a file, or with an empty one", () => {
+    expect(parse("tab=diff")).toBeNull();
+    expect(parse("tab=diff&file=")).toBeNull();
+    expect(parse("tab=diff&line=3")).toBeNull();
+  });
+
+  it("rejects a line that is not a positive integer", () => {
+    expect(parse("file=a.ts&line=0")).toBeNull();
+    expect(parse("file=a.ts&line=abc")).toBeNull();
+    expect(parse("file=a.ts&line=-3")).toBeNull();
+    expect(parse("file=a.ts&line=1.5")).toBeNull();
+  });
+});
+
+describe("diffTargetQuery", () => {
+  it("builds tab, encoded file and line", () => {
+    expect(diffTargetQuery("src/a b.ts", 7)).toBe("tab=diff&file=src%2Fa%20b.ts&line=7");
+  });
+
+  it("omits line when there is none", () => {
+    expect(diffTargetQuery("src/a.ts", null)).toBe("tab=diff&file=src%2Fa.ts");
+  });
+
+  it("round-trips through parseDiffTarget", () => {
+    const q = diffTargetQuery("src/[id]/x.ts", 40);
+    expect(parseDiffTarget(new URLSearchParams(q))).toEqual({ path: "src/[id]/x.ts", line: 40 });
   });
 });

@@ -1,0 +1,71 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 8,
+  } satisfies CSSProperties,
+  pill: (open: boolean, color: string): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "stretch",
+    maxWidth: "100%",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: open ? color : "var(--border)",
+    background: open ? "var(--bg-hover)" : "transparent",
+  }),
+  body: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    minWidth: 0,
+    padding: "6px 10px",
+  } satisfies CSSProperties,
+  titleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    fontSize: 13,
+    fontWeight: 500,
+    color: "var(--text-primary)",
+  } satisfies CSSProperties,
+  chevron: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0 8px",
+    background: "none",
+    border: "none",
+    borderLeftWidth: 1,
+    borderLeftStyle: "solid",
+    borderLeftColor: "var(--border)",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+  } satisfies CSSProperties,
+  chevronIcon: (open: boolean): CSSProperties => ({
+    transform: open ? "rotate(180deg)" : "none",
+    transition: "transform .15s",
+  }),
+  panel: {
+    alignSelf: "stretch",
+    padding: "10px 12px",
+    borderRadius: 7,
+    border: "1px solid var(--border)",
+    background: "var(--bg-surface)",
+    animation: "ddpop .15s ease",
+  } satisfies CSSProperties,
+  explanation: {
+    fontSize: 12.5,
+    lineHeight: 1.55,
+    color: "var(--text-secondary)",
+    margin: 0,
+  } satisfies CSSProperties,
+  refs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "4px 14px",
+    marginTop: 8,
+  } satisfies CSSProperties,
+} as const;
