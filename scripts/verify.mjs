@@ -4,12 +4,14 @@
  * with colour off and output cut to what a reader needs — one line per step on success,
  * the tail of the output on failure.
  *
- *   node scripts/verify.mjs <server|client|reviewer-core|mcp> [files...] [--it] [--no-arch]
+ *   node scripts/verify.mjs <server|client|reviewer-core|mcp|specs> [files...] [--it] [--no-arch]
  *
  * files   paths relative to the package (or repo root). Test files run as-is; source
  *         files run the tests that import them (`vitest related`). No files = full unit suite.
  * --it    server only: run the DB-backed `*.it.test.ts` lane instead (needs Docker).
  * --no-arch  skip arch:check.
+ * specs   pseudo-package (no package.json): runs the spec marker guard + its tests from the
+ *         repo root; files and flags are ignored.
  *
  * Exit code 0 only if every step passed.
  */
@@ -27,18 +29,19 @@ const PKGS = {
 
 const args = process.argv.slice(2);
 const pkg = args.shift();
-if (!PKGS[pkg]) {
-  console.error(`usage: node scripts/verify.mjs <${Object.keys(PKGS).join("|")}> [files...] [--it] [--no-arch]`);
+const SPECS = "specs";
+if (!PKGS[pkg] && pkg !== SPECS) {
+  console.error(`usage: node scripts/verify.mjs <${[...Object.keys(PKGS), SPECS].join("|")}> [files...] [--it] [--no-arch]`);
   process.exit(2);
 }
 const flags = new Set(args.filter((a) => a.startsWith("--")));
-const cwd = join(ROOT, pkg);
+const cwd = pkg === SPECS ? ROOT : join(ROOT, pkg);
 // Accept repo-root paths (`server/src/x.ts`) as well as package-relative ones.
 const files = args
   .filter((a) => a && !a.startsWith("--"))
   .map((f) => relative(cwd, resolve(existsSync(resolve(ROOT, f)) ? ROOT : cwd, f)).replaceAll("\\", "/"));
 
-const { pm, arch } = PKGS[pkg];
+const { pm, arch } = PKGS[pkg] ?? { pm: "npm", arch: false };
 const exec = pm === "npm" ? "npx" : "pnpm exec";
 const run = (script) => (pm === "npm" ? `npm run ${script}` : `pnpm ${script}`);
 const q = (s) => `"${s}"`;
@@ -48,8 +51,11 @@ const testFiles = files.filter(isTest);
 const sourceFiles = files.filter((f) => !isTest(f));
 const unitOnly = pkg === "server" && !flags.has("--it") ? ` --exclude ${q("**/*.it.test.ts")}` : "";
 
-const steps = [["typecheck", run("typecheck")]];
-if (flags.has("--it")) {
+const steps = pkg === SPECS ? [] : [["typecheck", run("typecheck")]];
+if (pkg === SPECS) {
+  steps.push(["check-specs", "node scripts/check-specs.mjs"]);
+  steps.push(["check-specs tests", "node --test scripts/check-specs.test.mjs"]);
+} else if (flags.has("--it")) {
   steps.push(["integration", `${exec} vitest run .it.test`]);
 } else {
   if (testFiles.length) steps.push(["tests", `${exec} vitest run ${testFiles.map(q).join(" ")}`]);
@@ -57,7 +63,7 @@ if (flags.has("--it")) {
     steps.push(["related tests", `${exec} vitest related ${sourceFiles.map(q).join(" ")} --run --passWithNoTests${unitOnly}`]);
   if (!files.length) steps.push(["unit tests", `${exec} vitest run${unitOnly}`]);
 }
-if (arch && !flags.has("--no-arch")) steps.push(["arch:check", run("arch:check")]);
+if (pkg !== SPECS && arch && !flags.has("--no-arch")) steps.push(["arch:check", run("arch:check")]);
 
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const summary = (out) =>

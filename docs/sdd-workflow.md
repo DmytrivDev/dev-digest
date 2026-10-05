@@ -34,6 +34,15 @@ Dispatch `spec-creator` with the request, the design artboards or screenshots an
 Pass 1 returns questions and proposals; answer them and re-dispatch for Pass 2. Review the
 spec; when you approve it, re-dispatch with "user approved" so it sets `Status: approved`.
 
+A point you did not decide travels through the pipeline as a marker. `spec-creator` writes it
+inline as
+`[NEEDS CLARIFICATION: OQ-<n> — <question>]` (at most 3 per spec, each mirrored under `Open
+questions` as `OQ-<n> → <AC id> — …`), keeps the spec `draft` and states the count in its Pass 2
+report. You answer, re-dispatch `spec-creator`, and once the markers reach 0 you may approve.
+`implementation-planner` refuses any spec that still holds one and lists them, `/implement`
+stops in its preflight on the plan's spec, and `node scripts/verify.mjs specs` (also the `specs`
+CI workflow) fails an `approved` or `implemented` spec that still has one.
+
 ## 2. Plan — `implementation-planner`, by hand
 
 Dispatch with the spec path **and the execution mode already chosen** (single-agent /

@@ -27,6 +27,9 @@ then flips the status. Once
 `approved`, its substance is not edited: a changed decision is a **new** spec whose
 `Supersedes:` names the old one, and the old one gains only a `Superseded by:` header line.
 
+A spec with any `[NEEDS CLARIFICATION]` marker stays `draft`; no markers → may be approved
+(see *Unresolved points* below).
+
 ## Template
 
 ```markdown
@@ -104,6 +107,35 @@ Vague wording is rewritten until it is checkable:
 | "Should work fine on large repositories" | WHEN a repository exceeds the indexing threshold, the system shall build the overview from deterministic facts only, without reading every file in full. |
 | "Should not crash if the model is unavailable" | IF the structured model call fails, THEN the system shall show the deterministic overview together with the reason for the degradation. |
 | "Should suggest where to start reading" | The system shall order the reading path by file rank in the import graph. |
+
+## Unresolved points — [NEEDS CLARIFICATION]
+
+A point the user has not decided is marked, never assumed. `spec-creator` writes an inline
+marker exactly where the assumption would have gone — an acceptance criterion, an NFR, a
+contract field, a provenance row, an edge case. The grammar (case-sensitive):
+
+```text
+[NEEDS CLARIFICATION: OQ-<n> — <specific question>]
+```
+
+The id is `OQ-` plus digits, followed by a separator (`—`, `-` or `:`), then the question.
+This is the GitHub Spec Kit convention, extended with an `OQ-N` id.
+
+- **Mirror.** Every marker has a line under `## Open questions`:
+  `OQ-<n> → <AC-/NFR-/EC- id(s)> — <question>`. The mirror never repeats the bracketed
+  marker.
+- **Two kinds of Open questions.** Marker mirrors block approval and count toward the cap.
+  Questions the user explicitly deferred, which block no criterion, carry no marker, do not
+  block approval and do not count.
+- **Cap.** At most 3 marker occurrences per spec. More → `spec-creator` writes no file and
+  returns to Pass 1.
+- **Status.** Any marker keeps the spec `draft`; it cannot be approved until the markers are
+  answered and removed.
+- **Guard.** `node scripts/check-specs.mjs` (or `node scripts/verify.mjs specs`; also the
+  `specs` CI workflow) scans the top-level `specs/SPEC-*.md`, skipping fenced code blocks and
+  this README. It fails (exit 1, `file:line`) on a marker in an `approved` or `implemented`
+  spec, a marker with no `OQ-` id, an `OQ-N` not mirrored under `## Open questions`, more
+  than 3 markers, and a missing or unknown `Status:`.
 
 ## Design source
 

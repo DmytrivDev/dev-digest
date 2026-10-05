@@ -46,6 +46,7 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
   touched (typecheck + unit tests + arch:check, compact output; add file paths to run only
   the related tests); DB-backed suites separately (`node scripts/verify.mjs server --it`,
   needs Docker). There is NO linter configured in this repo — don't look for one.
+- Specs guard: `node scripts/verify.mjs specs` (or `node scripts/check-specs.mjs`) when you touch `specs/` — fails an approved/implemented spec that still has a `[NEEDS CLARIFICATION]` marker, an unmirrored marker, or more than 3.
 
 ## Map
 | Folder | Package | Role |

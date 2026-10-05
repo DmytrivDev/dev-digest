@@ -30,12 +30,18 @@ Input: `$ARGUMENTS`
 2. **Read only what you orchestrate by:** the plan's header, `Execution`, `Contract
    changes`, the work-item ids and titles (`Grep -n "^### W\|^## "` then targeted `Read`s).
    Leave the design sections for the implementers.
-3. **Notes are context, not scope.** A note that adds behaviour the plan does not have is a
+3. **Spec marker check.** When the plan's `Requirements source` names a `specs/SPEC-*.md`,
+   run `grep -n "\[NEEDS CLARIFICATION" <that spec>` (Bash). Any hit → **stop**, write
+   nothing to the ledger beyond the step line, and tell the user: "`<spec>` has N
+   unresolved markers (list `OQ-N` + `file:line`) — answer them, re-run `spec-creator`,
+   then `implementation-planner`". No hit → continue. The grep deliberately also counts a
+   fenced marker: a false stop is cheaper than a missed one.
+4. **Notes are context, not scope.** A note that adds behaviour the plan does not have is a
    plan change: stop and ask — re-run `implementation-planner`, or drop the note. A note that
    constrains *how* ("reuse the Drawer from kit/", "keep the old endpoint") is passed on.
-4. **Branch.** On `main` → warn: `docs/git-workflow.md` wants a `feat/<slug>` branch per
+5. **Branch.** On `main` → warn: `docs/git-workflow.md` wants a `feat/<slug>` branch per
    homework. Ask whether to create it (`git switch -c feat/<slug>`); never commit.
-5. **Ledger** — `.devdigest/cache/implement/<slug>.md` (gitignored). If it exists, ask:
+6. **Ledger** — `.devdigest/cache/implement/<slug>.md` (gitignored). If it exists, ask:
    resume from its last completed step, or start over. Otherwise create it:
 
    ```markdown

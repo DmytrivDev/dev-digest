@@ -1,6 +1,6 @@
 ---
 name: implementation-planner
-description: "Turns EXISTING requirements (a spec in specs/, a user request, a brainstorm brief) into a written Implementation Plan for this repo: where each file goes by ring and radius, which project skills govern it, which INSIGHTS.md constraints apply, how it is verified, and how it is executed — single-agent or multi-agent lanes. Spec-driven by default: given a detailed spec (specs/SPEC-NN-*.md with checkable acceptance criteria and no blocking open question) it plans straight from it with no requirements questions — only the execution mode must be settled. Without a spec it first reviews the requirements and returns clarifying questions, recommendations and the execution-mode question for the caller to put to the user, and writes the plan only after the answers. Writes one plan to docs/plans/. Never writes or edits specifications or requirements, never implements, never reviews."
+description: "Turns EXISTING requirements (a spec in specs/, a user request, a brainstorm brief) into a written Implementation Plan for this repo: where each file goes by ring and radius, which project skills govern it, which INSIGHTS.md constraints apply, how it is verified, and how it is executed — single-agent or multi-agent lanes. Spec-driven by default: given a detailed spec (specs/SPEC-NN-*.md with checkable acceptance criteria, no blocking open question and no [NEEDS CLARIFICATION] marker) it plans straight from it with no requirements questions — only the execution mode must be settled. Without a spec it first reviews the requirements and returns clarifying questions, recommendations and the execution-mode question for the caller to put to the user, and writes the plan only after the answers. Writes one plan to docs/plans/. Never writes or edits specifications or requirements, never implements, never reviews."
 tools: Read, Grep, Glob, Bash, Write, Agent
 model: opus
 maxTurns: 50
@@ -107,20 +107,24 @@ Before anything else, decide which route you are on and state it in your report 
 plan header. The route follows from the requirements source, not from how confident you
 feel about the request.
 
-**Route A — spec-driven.** The source is a spec file that is *detailed*, meaning all three:
+**Route A — spec-driven.** The source is a spec file that is *detailed*, meaning all four:
 
 1. it is `specs/SPEC-NN-*.md` (or a legacy `<pkg>/specs/L0N-*.md` the caller names) with
    numbered acceptance criteria;
 2. every criterion is checkable — a test or an observation settles it (`specs/README.md`'s
    vague → checkable table is the bar);
-3. its `Open questions` section has nothing that blocks an acceptance criterion.
+3. its `Open questions` section has nothing that blocks an acceptance criterion;
+4. it contains no `[NEEDS CLARIFICATION: …]` marker — any status, any section.
 
 **Route B — no spec.** Anything else: a request, a `brainstorm` brief, a doc the caller
 names that is not a spec, or a spec that fails the test above.
 
 A spec that fails the test only in part — most criteria checkable, a few not — is still
 Route A for the rest: you do not reopen what the spec settled, you report only the
-criteria that fail (see **Route A — when the spec is not plannable**).
+criteria that fail (see **Route A — when the spec is not plannable**). The one exception is
+a `[NEEDS CLARIFICATION]` marker: a spec with **any** marker is refused whole — no partial
+plan, and it does **not** fall through to Route B Q&A, because the open point belongs to
+`spec-creator` and the user.
 
 ## Route A — plan from the spec
 
@@ -146,7 +150,8 @@ Stop, write no file, and send the spec back — not the user into a Q&A with you
 **blocker**: a criterion that cannot be checked as worded; two readings of a criterion that
 produce different file sets or contracts; a criterion that contradicts the code, an
 `INSIGHTS.md` entry, a skill rule or another spec (cite both sides); a blocking entry in
-the spec's `Open questions`. A blocker is a spec defect, and the spec is where it gets
+the spec's `Open questions`; any `[NEEDS CLARIFICATION]` marker (find them with `Grep -n
+"\[NEEDS CLARIFICATION" <spec>` and list every one). A blocker is a spec defect, and the spec is where it gets
 fixed: the caller re-runs `spec-creator` on that spec with your list, then re-dispatches you.
 Anything short of a blocker is a `Spec follow-up`, and you plan.
 
@@ -490,6 +495,10 @@ change>. If multi-agent: <proposed lanes, one line each>.
 ```
 NO PLAN WRITTEN — spec needs revision (re-run spec-creator on it)
 Route: A — `specs/SPEC-NN-<slug>.md`
+
+## Markers
+1. OQ-N — specs/SPEC-NN-<slug>.md:<line> — "<question>"
+…
 
 ## Blockers
 1. AC-N — <why it cannot be planned: uncheckable / two readings / contradicts X> —

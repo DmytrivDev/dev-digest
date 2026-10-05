@@ -1,0 +1,44 @@
+# specs guard — no unresolved [NEEDS CLARIFICATION] marker in an approved or
+# implemented spec, at most 3 markers per spec, every marker mirrored under
+# `## Open questions` (scripts/check-specs.mjs).
+#
+# No install step: the guard and its tests use Node built-ins only, and the repo
+# root has no package.json.
+name: specs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'specs/**'
+      - 'scripts/check-specs.mjs'
+      - 'scripts/check-specs.test.mjs'
+      - '.github/workflows/specs.yml'
+  pull_request:
+    paths:
+      - 'specs/**'
+      - 'scripts/check-specs.mjs'
+      - 'scripts/check-specs.test.mjs'
+      - '.github/workflows/specs.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: specs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: markers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: node scripts/check-specs.mjs
+
+      - run: node --test scripts/check-specs.test.mjs
