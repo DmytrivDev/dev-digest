@@ -1,0 +1,240 @@
+import { describe, it, expect } from "vitest";
+import type { EvalCaseOutcome, EvalExpectation } from "@devdigest/shared";
+import { ApiError } from "./api";
+import { formatCost } from "./cost";
+import {
+  CREATE_CASE_ERROR_FALLBACK,
+  CREATE_CASE_ERROR_KEY,
+  COMPARE_ERROR_KEY,
+  EVAL_ERROR_GENERIC,
+  EVAL_ERROR_RATE_LIMITED,
+  RUN_START_ERROR_KEY,
+  UPDATE_CASE_ERROR_KEY,
+  alertDropParams,
+  compareErrorKey,
+  createCaseErrorKey,
+  deltaPoints,
+  expectationText,
+  formatMetric,
+  lastRunParts,
+  parseExpectationText,
+  resultLineParts,
+  runStartErrorKey,
+  updateCaseErrorKey,
+} from "./eval";
+import evalMessages from "../../messages/en/eval.json";
+import prReviewMessages from "../../messages/en/prReview.json";
+
+const EXPECTATION: EvalExpectation = {
+  kind: "must_find",
+  file: "src/config.ts",
+  start_line: 12,
+  end_line: 14,
+};
+
+function outcome(over: Partial<EvalCaseOutcome> = {}): EvalCaseOutcome {
+  return {
+    case_id: "c1",
+    case_name: "stripe-key-leak",
+    kind: "must_find",
+    expectation: EXPECTATION,
+    status: "scored",
+    pass: true,
+    error_reason: null,
+    findings_matched: 1,
+    findings_total: 2,
+    grounding_kept: 2,
+    grounding_total: 2,
+    duration_ms: 1840,
+    cost_usd: 0.02,
+    actual: [],
+    ...over,
+  };
+}
+
+/** Resolve a dot-path ("finding.evalCase.errors.generic") in a messages tree. */
+function resolve(tree: unknown, path: string): unknown {
+  return path
+    .split(".")
+    .reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], tree);
+}
+
+describe("formatMetric / formatCost (AC-77)", () => {
+  it("shows n/a for a null metric, a dash for a null cost, a whole percent otherwise", () => {
+    expect(formatMetric(null)).toBe("n/a");
+    expect(formatMetric(undefined)).toBe("n/a");
+    expect(formatMetric(0.8249)).toBe("82%");
+    expect(formatMetric(0)).toBe("0%");
+    expect(formatMetric(1)).toBe("100%");
+    expect(formatCost(null)).toBe("—");
+  });
+});
+
+describe("deltaPoints", () => {
+  it("is the difference of the displayed percentages, in whole points", () => {
+    expect(deltaPoints(0.82, 0.78)).toBe(4);
+    expect(deltaPoints(0.91, 0.93)).toBe(-2);
+    expect(deltaPoints(0.8249, 0.78)).toBe(4);
+    expect(deltaPoints(0.5, 0.5)).toBe(0);
+  });
+
+  it("is null when either side is missing", () => {
+    expect(deltaPoints(null, 0.5)).toBeNull();
+    expect(deltaPoints(0.5, null)).toBeNull();
+    expect(deltaPoints(undefined, undefined)).toBeNull();
+  });
+});
+
+describe("resultLineParts (AC-30)", () => {
+  it("must_find → expected a finding at <loc>, got N", () => {
+    expect(resultLineParts(outcome({ findings_matched: 1 }), EXPECTATION)).toEqual({
+      variant: "mustFind",
+      loc: "src/config.ts:12–14",
+      n: 1,
+    });
+  });
+
+  it("must_not_flag → expected none at <loc>, got N", () => {
+    const exp: EvalExpectation = { ...EXPECTATION, kind: "must_not_flag" };
+    expect(resultLineParts(outcome({ findings_matched: 3, pass: false }), exp)).toEqual({
+      variant: "mustNotFlag",
+      loc: "src/config.ts:12–14",
+      n: 3,
+    });
+  });
+
+  it("an errored outcome → errored · <reason>", () => {
+    expect(
+      resultLineParts(outcome({ status: "errored", pass: null, error_reason: "timeout" }), EXPECTATION),
+    ).toEqual({ variant: "errored", reason: "timeout" });
+  });
+
+  it("no outcome → never run", () => {
+    expect(resultLineParts(null, EXPECTATION)).toEqual({ variant: "never" });
+    expect(resultLineParts(undefined, EXPECTATION)).toEqual({ variant: "never" });
+  });
+});
+
+describe("lastRunParts (AC-44)", () => {
+  it("passed / failed carry the result line, seconds and cost", () => {
+    const passed = lastRunParts(outcome(), EXPECTATION);
+    expect(passed).toEqual({
+      variant: "passed",
+      line: { variant: "mustFind", loc: "src/config.ts:12–14", n: 1 },
+      seconds: "1.8",
+      costUsd: 0.02,
+    });
+    expect(lastRunParts(outcome({ pass: false, findings_matched: 0 }), EXPECTATION).variant).toBe(
+      "failed",
+    );
+  });
+
+  it("a null cost stays null so formatCost renders the dash", () => {
+    const parts = lastRunParts(outcome({ cost_usd: null }), EXPECTATION);
+    expect(parts.variant === "passed" && formatCost(parts.costUsd)).toBe("—");
+  });
+
+  it("errored and never-run have no timing", () => {
+    expect(
+      lastRunParts(outcome({ status: "errored", pass: null, error_reason: "llm_error" }), EXPECTATION),
+    ).toEqual({ variant: "errored", reason: "llm_error" });
+    expect(lastRunParts(null, EXPECTATION)).toEqual({ variant: "never" });
+  });
+});
+
+describe("parseExpectationText (AC-39 / AC-40)", () => {
+  it("round-trips a valid expectation", () => {
+    const parsed = parseExpectationText(expectationText(EXPECTATION));
+    expect(parsed).toEqual({ ok: true, value: EXPECTATION });
+  });
+
+  it("rejects malformed JSON", () => {
+    expect(parseExpectationText("{ not json")).toEqual({ ok: false });
+    expect(parseExpectationText("")).toEqual({ ok: false });
+  });
+
+  it("rejects a missing file, a bad kind and an inverted range", () => {
+    expect(
+      parseExpectationText(JSON.stringify({ kind: "must_find", start_line: 1, end_line: 2 })),
+    ).toEqual({ ok: false });
+    expect(parseExpectationText(JSON.stringify({ ...EXPECTATION, kind: "maybe" }))).toEqual({
+      ok: false,
+    });
+    expect(
+      parseExpectationText(JSON.stringify({ ...EXPECTATION, start_line: 9, end_line: 3 })),
+    ).toEqual({ ok: false });
+  });
+});
+
+describe("alertDropParams (AC-86)", () => {
+  it("turns a drop into whole points and the two versions", () => {
+    expect(
+      alertDropParams({
+        metric: "precision",
+        old_value: 0.91,
+        new_value: 0.85,
+        old_version: 7,
+        new_version: 8,
+      }),
+    ).toEqual({ metric: "precision", pts: 6, newVersion: 8, oldVersion: 7 });
+  });
+
+  it("each metric name resolves to a label in eval.json", () => {
+    for (const metric of ["recall", "precision", "citation_accuracy"]) {
+      expect(typeof resolve(evalMessages, `common.metricName.${metric}`)).toBe("string");
+    }
+  });
+});
+
+describe("reason code → message key (AC-8, AC-64)", () => {
+  it("every create-case code maps to a prReview key that exists", () => {
+    expect(Object.keys(CREATE_CASE_ERROR_KEY)).toHaveLength(6);
+    for (const key of [...Object.values(CREATE_CASE_ERROR_KEY), CREATE_CASE_ERROR_FALLBACK]) {
+      expect(typeof resolve(prReviewMessages, key), key).toBe("string");
+    }
+  });
+
+  it("every run-start, update and compare code maps to an eval key that exists", () => {
+    const keys = [
+      ...Object.values(RUN_START_ERROR_KEY),
+      ...Object.values(UPDATE_CASE_ERROR_KEY),
+      ...Object.values(COMPARE_ERROR_KEY),
+      EVAL_ERROR_RATE_LIMITED,
+      EVAL_ERROR_GENERIC,
+    ];
+    for (const key of keys) {
+      expect(typeof resolve(evalMessages, key), key).toBe("string");
+    }
+  });
+
+  it("no mapped message is a raw code or an i18n key", () => {
+    const texts = [
+      ...Object.values(CREATE_CASE_ERROR_KEY).map((k) => resolve(prReviewMessages, k)),
+      ...[...Object.values(RUN_START_ERROR_KEY), ...Object.values(COMPARE_ERROR_KEY)].map((k) =>
+        resolve(evalMessages, k),
+      ),
+    ] as string[];
+    for (const text of texts) {
+      expect(text).toMatch(/\s/);
+      expect(text).not.toMatch(/^[a-z_]+$/);
+    }
+  });
+
+  it("picks the key from the response's code", () => {
+    const err = (status: number, code?: string) => new ApiError("x", status, code);
+    expect(createCaseErrorKey(err(422, "patch_missing"))).toBe(
+      CREATE_CASE_ERROR_KEY.patch_missing,
+    );
+    expect(createCaseErrorKey(err(422, "something_new"))).toBe(CREATE_CASE_ERROR_FALLBACK);
+    expect(createCaseErrorKey(new Error("boom"))).toBe(CREATE_CASE_ERROR_FALLBACK);
+    expect(runStartErrorKey(err(409, "run_in_progress"))).toBe(RUN_START_ERROR_KEY.run_in_progress);
+    expect(runStartErrorKey(err(422, "no_cases"))).toBe(RUN_START_ERROR_KEY.no_cases);
+    expect(runStartErrorKey(err(429))).toBe(EVAL_ERROR_RATE_LIMITED);
+    expect(runStartErrorKey(err(500))).toBe(EVAL_ERROR_GENERIC);
+    expect(updateCaseErrorKey(err(422, "file_mismatch"))).toBe(UPDATE_CASE_ERROR_KEY.file_mismatch);
+    expect(compareErrorKey(err(409, "run_not_completed"))).toBe(
+      COMPARE_ERROR_KEY.run_not_completed,
+    );
+    expect(compareErrorKey(err(422, "constructor"))).toBe(EVAL_ERROR_GENERIC);
+  });
+});

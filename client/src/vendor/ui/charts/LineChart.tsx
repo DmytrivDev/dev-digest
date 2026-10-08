@@ -21,12 +21,16 @@ export function LineChart({
   h = 200,
   yMin = 0.6,
   yMax = 1.0,
+  ticks,
 }: {
   series: ChartSeries[];
   w?: number;
   h?: number;
   yMin?: number;
   yMax?: number;
+  /** Explicit y ticks. Without them Recharts picks its own (e.g. 0.25 / 0.75 on a
+      0–1 domain), which the one-decimal labels then round to a misleading 0.3 / 0.8. */
+  ticks?: number[];
 }) {
   const n = series[0]?.data.length ?? 0;
   const rows = Array.from({ length: n }, (_, i) => {
@@ -44,6 +48,7 @@ export function LineChart({
           <XAxis dataKey="i" hide />
           <YAxis
             domain={[yMin, yMax]}
+            ticks={ticks}
             tick={{ fontSize: 12, fill: "var(--text-muted)" }}
             tickFormatter={(v: number) => v.toFixed(1)}
             axisLine={false}

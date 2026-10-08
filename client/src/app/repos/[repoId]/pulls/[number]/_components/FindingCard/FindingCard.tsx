@@ -21,6 +21,7 @@ import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "@/lib/findings";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
+import { EvalCaseAction } from "./_components/EvalCaseAction";
 import { s } from "./styles";
 
 export function FindingCard({
@@ -31,6 +32,8 @@ export function FindingCard({
   pending,
   repoFullName,
   headSha,
+  agentId,
+  prId,
 }: {
   f: FindingRecord;
   focused?: boolean;
@@ -39,6 +42,10 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** The review's agent — the target of the "In eval suite" link. */
+  agentId?: string | null;
+  /** The PR this card sits on — lets a new eval case reach the cached reviews. */
+  prId?: string;
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
@@ -109,6 +116,7 @@ export function FindingCard({
             >
               {t("finding.dismiss")}
             </Button>
+            <EvalCaseAction finding={f} agentId={agentId ?? null} prId={prId} />
           </div>
         </div>
       )}

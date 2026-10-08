@@ -134,6 +134,20 @@
       "when": 1790941551390,
       "tag": "0018_unique_eternity",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791474867915,
+      "tag": "0019_broken_butterfly",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791474879478,
+      "tag": "0020_tricky_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

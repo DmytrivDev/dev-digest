@@ -54,6 +54,10 @@ export const NAV: NavGroup[] = [
         href: "/repos/:repoId/conventions",
         gKey: "c",
       },
+      // Last in the section, as in the mock (chrome.jsx). Regression harness for
+      // the agents above; not repo-scoped (an agent's eval suite spans every
+      // repo), and `activeKeyFor` already maps /eval/… to it.
+      { key: "eval", label: "Eval Dashboard", icon: "Gauge", href: "/eval" },
     ],
   },
 ];

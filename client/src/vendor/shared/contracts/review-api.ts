@@ -12,10 +12,21 @@ import { DerivedIntent, SmartDiff } from './brief.js';
  * state and the `review_id` it belongs to.
  */
 
+/**
+ * Why a triaged-or-not finding cannot be turned into an eval case right now
+ * (SPEC-04). Declared above `FindingRecord`, which references it at load time.
+ */
+export const EvalIneligibleReason = z.enum(['not_triaged', 'not_agent_finding', 'agent_missing']);
+export type EvalIneligibleReason = z.infer<typeof EvalIneligibleReason>;
+
 export const FindingRecord = Finding.extend({
   review_id: z.string(),
   accepted_at: z.string().nullable(),
   dismissed_at: z.string().nullable(),
+  /** Id of the eval case made from this finding. Only the PR reviews response fills it. */
+  eval_case_id: z.string().nullish(),
+  /** Why no eval case can be made. Only the PR reviews response fills it. */
+  eval_ineligible_reason: EvalIneligibleReason.nullish(),
 });
 export type FindingRecord = z.infer<typeof FindingRecord>;
 

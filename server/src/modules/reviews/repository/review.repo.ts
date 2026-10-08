@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { Finding } from '@devdigest/shared';
@@ -110,6 +110,29 @@ export async function reviewForRun(
     .from(t.findings)
     .where(eq(t.findings.reviewId, review.id));
   return { review, findings };
+}
+
+/**
+ * Eval case id per finding, as findingId -> caseId, for the PR reviews response
+ * (SPEC-04 AC-25). `findingIds` must come from an already workspace-scoped read
+ * (`reviewsForPull` after `getPull`): the lookup carries no tenancy of its own
+ * beyond the finding it points to (`server/INSIGHTS.md:45`).
+ */
+export async function evalCaseIdsForFindings(
+  db: Db,
+  findingIds: string[],
+): Promise<Map<string, string>> {
+  if (findingIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: t.evalCases.id, findingId: t.evalCases.sourceFindingId })
+    .from(t.evalCases)
+    .where(inArray(t.evalCases.sourceFindingId, findingIds))
+    // A finding belongs to one review, hence one agent, hence at most one case; the
+    // order only keeps the result deterministic should that ever change.
+    .orderBy(asc(t.evalCases.createdAt), asc(t.evalCases.id));
+  const out = new Map<string, string>();
+  for (const r of rows) if (r.findingId && !out.has(r.findingId)) out.set(r.findingId, r.id);
+  return out;
 }
 
 /** Delete a whole review (one agent's run) + its findings (cascade), scoped

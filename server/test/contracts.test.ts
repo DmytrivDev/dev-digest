@@ -12,7 +12,6 @@ import {
   Conformance,
   OnboardingTour,
   OnboardingTourResponse,
-  EvalRun,
   MemoryItem,
   RunTrace,
   Settings,
@@ -268,25 +267,13 @@ describe('AI contracts parse fixtures', () => {
     expect(d.groups[1]!.role).toBe('docs');
   });
 
-  it('Conformance / EvalRun / MemoryItem', () => {
+  it('Conformance / MemoryItem', () => {
     expect(() =>
       Conformance.parse({
         spec_id: 's1',
         spec_title: 'Spec',
         items: [{ requirement: 'r', status: 'implemented' }],
         completeness_pct: 80,
-      }),
-    ).not.toThrow();
-    expect(() =>
-      EvalRun.parse({
-        recall: 0.82,
-        precision: 0.91,
-        citation_accuracy: 0.95,
-        traces_passed: 17,
-        traces_total: 20,
-        duration_ms: 12000,
-        cost_usd: 0.23,
-        per_trace: [{ name: 't01', pass: true, expected: 'x', actual: 'x' }],
       }),
     ).not.toThrow();
     expect(() =>

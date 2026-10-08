@@ -19,3 +19,6 @@ export type SkillVersionRow = typeof t.skillVersions.$inferSelect;
 export type RunSkillRow = typeof t.runSkills.$inferSelect;
 export type ConventionRow = typeof t.conventions.$inferSelect;
 export type PrIntentRow = typeof t.prIntent.$inferSelect;
+export type EvalCaseRow = typeof t.evalCases.$inferSelect;
+export type EvalSuiteRunRow = typeof t.evalSuiteRuns.$inferSelect;
+export type EvalCaseOutcomeRow = typeof t.evalCaseOutcomes.$inferSelect;

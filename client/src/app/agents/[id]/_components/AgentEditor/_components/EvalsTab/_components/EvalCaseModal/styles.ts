@@ -1,0 +1,90 @@
+import type { CSSProperties } from "react";
+import type { DiffLineKind } from "./helpers";
+
+export const s = {
+  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", height: 480 } satisfies CSSProperties,
+  left: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+    borderRightWidth: 1,
+    borderRightStyle: "solid",
+    borderRightColor: "var(--border)",
+  } satisfies CSSProperties,
+  right: { display: "flex", flexDirection: "column", minWidth: 0 } satisfies CSSProperties,
+  field: { display: "block", padding: "14px 16px 0" } satisfies CSSProperties,
+  fieldLabel: {
+    display: "block",
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    marginBottom: 7,
+  } satisfies CSSProperties,
+  inputLabel: {
+    padding: "14px 16px 0",
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    marginBottom: 7,
+  } satisfies CSSProperties,
+  inputBody: { flex: 1, overflow: "auto", padding: "12px 16px" } satisfies CSSProperties,
+  diff: {
+    margin: 0,
+    fontSize: 11.5,
+    lineHeight: 1.6,
+    whiteSpace: "pre-wrap",
+    color: "var(--text-primary)",
+  } satisfies CSSProperties,
+  diffLine: (kind: DiffLineKind): CSSProperties => ({
+    display: "block",
+    backgroundColor:
+      kind === "added" ? "var(--code-add)" : kind === "removed" ? "var(--code-del)" : "transparent",
+    color: kind === "hunk" ? "var(--accent-text)" : "inherit",
+  }),
+  metaLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    marginBottom: 4,
+  } satisfies CSSProperties,
+  metaValue: {
+    fontSize: 13,
+    color: "var(--text-primary)",
+    marginBottom: 14,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+  } satisfies CSSProperties,
+  expected: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+    flex: 1,
+    padding: "14px 16px 0",
+  } satisfies CSSProperties,
+  expectedHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } satisfies CSSProperties,
+  expectedTitle: {
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  lastRun: (tone: "ok" | "crit" | "warn" | "none"): CSSProperties => ({
+    margin: "12px 16px 0",
+    padding: "11px 13px",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: tone === "none" ? "var(--bg-surface)" : `var(--${tone}-bg)`,
+    fontSize: 12.5,
+    color: "var(--text-secondary)",
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+  }),
+  source: {
+    margin: "10px 16px 16px",
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  footer: { display: "flex", justifyContent: "flex-end", gap: 8 } satisfies CSSProperties,
+} as const;

@@ -18,11 +18,14 @@ export function FindingsPanel({
   prId,
   repoFullName,
   headSha,
+  agentId,
 }: {
   findings: FindingRecord[];
   prId: string;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** The review's agent; lets a card link to its eval case. */
+  agentId?: string | null;
 }) {
   const t = useTranslations("prReview");
   const action = useFindingAction();
@@ -87,6 +90,8 @@ export function FindingsPanel({
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}
+              agentId={agentId}
+              prId={prId}
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

@@ -16,6 +16,20 @@ vi.mock("@/lib/hooks/reviews", () => ({
   useFindingAction: () => ({ mutate, ...findingActionState }),
 }));
 
+const push = vi.fn();
+const createEvalCasePrIds: Array<string | undefined> = [];
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, replace: vi.fn() }),
+}));
+
+vi.mock("@/lib/hooks/eval", () => ({
+  useCreateEvalCase: (prId?: string) => {
+    createEvalCasePrIds.push(prId);
+    return { isPending: false, mutate: vi.fn(), data: undefined };
+  },
+}));
+
 vi.mock("@/lib/hooks/brief", () => ({
   usePrBrief: () => ({ data: briefData === null ? undefined : { brief: briefData, generating: false, stale: false } }),
 }));
@@ -26,6 +40,8 @@ import { parseDiffTarget } from "./helpers";
 afterEach(() => {
   cleanup();
   mutate.mockClear();
+  push.mockClear();
+  createEvalCasePrIds.length = 0;
   findingActionState = { isPending: false, variables: undefined };
   briefData = null;
 });
@@ -204,6 +220,30 @@ describe("DiffTab — notes toggle, review-not-run, accept action (W8)", () => {
     findingActionState = { isPending: true, variables: { findingId: "some-other-finding" } };
     renderTab();
     expect(screen.getByText("Accept").closest("button")).not.toBeDisabled();
+  });
+});
+
+describe("DiffTab — eval case action on the inline card (SPEC-04 AC-5)", () => {
+  const triaged = { accepted_at: "2026-10-08T10:00:00.000Z" };
+
+  it("a cased finding shows an enabled \"In eval suite\" that opens the review agent's Evals tab", () => {
+    smartDiffData = { data: fullSmartDiff() };
+    reviewsData = {
+      data: [review({ agent_id: "a1", findings: [finding({ ...triaged, eval_case_id: "c1" })] })],
+    };
+    renderTab();
+    const btn = screen.getByText("In eval suite").closest("button")!;
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
+    expect(push).toHaveBeenCalledWith("/agents/a1?tab=evals&case=c1");
+  });
+
+  it("hands prId to the create-case hook so the cached PR reviews can be updated", () => {
+    smartDiffData = { data: fullSmartDiff() };
+    reviewsData = { data: [review({ agent_id: "a1", findings: [finding(triaged)] })] };
+    renderTab();
+    expect(screen.getByText("Turn into eval case")).toBeInTheDocument();
+    expect(createEvalCasePrIds).toContain("pr1");
   });
 });
 

@@ -20,3 +20,10 @@ describe("activeKeyFor", () => {
     expect(activeKeyFor("/repos/x/context")).toBe("context");
   });
 });
+
+describe("activeKeyFor — Eval Dashboard", () => {
+  it("is active on /eval and on every path below it", () => {
+    expect(activeKeyFor("/eval")).toBe("eval");
+    expect(activeKeyFor("/eval/abc")).toBe("eval");
+  });
+});
