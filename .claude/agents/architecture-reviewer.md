@@ -89,7 +89,8 @@ or dropped.
 
 ## Output
 
-Return this report as your final message.
+Return this report as your final message. The `Severity` column takes only `CRITICAL`,
+`WARNING` or `SUGGESTION` — no other scale.
 
 ```markdown
 ## Scope reviewed

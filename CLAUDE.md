@@ -56,6 +56,7 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 | `reviewer-core/` | `@devdigest/reviewer-core` | pure engine: diff → prompt → LLM → grounded findings |
 | `e2e/` | `@devdigest/e2e` | deterministic browser flows |
 | `mcp/` | `@devdigest/mcp` | stdio MCP server (thin client of the API) |
+| `evals/` | `@devdigest/evals` | evals for the harness (skills, agents, CLAUDE.md); per-PR CI in `.github/workflows/evals.yml` |
 | `server/src/vendor/shared` | `@devdigest/shared` | Zod contracts |
 
 `repo-intel` (indexer) lives inside the server: `server/src/modules/repo-intel/`.
