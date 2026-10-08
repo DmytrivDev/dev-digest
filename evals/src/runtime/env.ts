@@ -9,6 +9,8 @@
  * only the model inference is redirected. Select with EVAL_BACKEND=openrouter.
  */
 
+import { EVAL_MODEL } from "../config.js";
+
 const BACKEND = process.env.EVAL_BACKEND ?? "subscription";
 
 /**
@@ -29,9 +31,23 @@ export function subscriptionEnv(): Record<string, string> {
   if (BACKEND === "openrouter") {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) throw new Error("EVAL_BACKEND=openrouter but OPENROUTER_API_KEY is not set");
+    // Launched from inside a Claude Code session (desktop app, an agent's Bash), the parent leaks its
+    // host-session vars (CLAUDECODE, CLAUDE_CODE_OAUTH_SCOPES, CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH…).
+    // The child CLI then expects the HOST to supply auth and sends no header at all — OpenRouter
+    // answers "401 Missing Authentication header" whatever ANTHROPIC_AUTH_TOKEN says. Dropping just
+    // HAS_HOST_AUTH_REFRESH is not enough; drop the whole family. CI runners never have them.
+    for (const k of Object.keys(env)) {
+      if (/^(CLAUDECODE$|CLAUDE_CODE_|CLAUDE_AGENT_SDK_)/.test(k)) delete env[k];
+    }
     env.ANTHROPIC_BASE_URL = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api").replace(/\/$/, "");
     env.ANTHROPIC_AUTH_TOKEN = key;
     env.ANTHROPIC_API_KEY = ""; // blank, not deleted — stops the SDK falling back to Anthropic auth
+    // Agents declare `model: sonnet` / `model: opus`, and Claude Code runs background calls on its
+    // haiku alias. Left alone, a dispatched subagent would hit OpenRouter as a real Sonnet/Opus
+    // (billed at that price, or unknown to a non-Anthropic proxy route). Pin every alias to the
+    // model under test so the whole session — subagents included — runs on EVAL_MODEL.
+    for (const alias of ["OPUS", "SONNET", "HAIKU"]) env[`ANTHROPIC_DEFAULT_${alias}_MODEL`] = EVAL_MODEL;
+    env.CLAUDE_CODE_SUBAGENT_MODEL = EVAL_MODEL;
     return env;
   }
 

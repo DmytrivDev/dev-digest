@@ -1,0 +1,41 @@
+# Shared setup for the model-backed eval jobs in .github/workflows/evals.yml:
+# pnpm + Node 22, `evals/` dependencies, and — only when the tool tiers need it — the LiteLLM proxy.
+name: evals-setup
+description: Install evals/ and, for a non-Anthropic EVAL_MODEL on the tool tiers, start the LiteLLM proxy
+
+inputs:
+  proxy:
+    description: "'true' for jobs that run the Claude Agent SDK (agents, workflow); the content tier never needs it"
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+        cache-dependency-path: evals/pnpm-lock.yaml
+
+    - shell: bash
+      working-directory: evals
+      run: pnpm install --frozen-lockfile
+
+    # The Agent SDK speaks the Anthropic wire format. OpenRouter serves it natively for anthropic/*
+    # slugs; anything else (gemini, deepseek, …) goes through the translating proxy in evals/proxy/.
+    - if: inputs.proxy == 'true'
+      shell: bash
+      working-directory: evals
+      run: |
+        if [[ "$EVAL_MODEL" == anthropic/* ]]; then
+          echo "proxy: not needed — $EVAL_MODEL is served natively by OpenRouter's Anthropic endpoint"
+          exit 0
+        fi
+        echo "proxy: $EVAL_MODEL is not an anthropic/* slug → starting the LiteLLM proxy"
+        docker compose -f proxy/docker-compose.yml up -d
+        bash scripts/litellm-proxy.sh wait
+        echo "OPENROUTER_BASE_URL=http://localhost:4000" >> "$GITHUB_ENV"
