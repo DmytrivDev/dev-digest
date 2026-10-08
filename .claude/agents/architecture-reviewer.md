@@ -83,7 +83,8 @@ is not a finding (`frontend-ui-architecture/SKILL.md` §6).
 - **WARNING** — a real problem worth fixing that does not block.
 - **SUGGESTION** — minor; safe to leave.
 
-Don't inflate: speculative is WARNING at most. Every finding carries `file:line`, the rule
+Don't inflate: speculative is WARNING at most. One severity per finding — never a conditional
+one like "WARNING (CRITICAL if confirmed)"; what would raise it goes in the failure scenario. Every finding carries `file:line`, the rule
 (skill + section) and the failure scenario; one you can't express that way is a SUGGESTION
 or dropped.
 

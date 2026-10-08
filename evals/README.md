@@ -169,6 +169,18 @@ workflow cases:
 | `deepseek/deepseek-chat` | ✅ | ❌ does the work inline instead of dispatching |
 | `openai/gpt-4.1-mini` | ✅ | ❌ |
 
+Measured cost of the agent tier (`agents/architecture-reviewer`, 4 cases + DeepSeek judge, read off
+the OpenRouter key's usage counter, 2026-10-08):
+
+| `EVAL_MODEL` | Cost | Passed | Note |
+|---|---|---|---|
+| `anthropic/claude-haiku-5.5` | $0.050 | 3/4 | **CI default** — no proxy, cheapest per run |
+| `deepseek/deepseek-v4.1-flash` | $0.060 | 4/4 | via proxy; ~90k uncached input tokens per case |
+| `google/gemini-2.5-flash` | $0.017 | 2/4 | barely uses tools (2–4 turns), skips the docs |
+
+List prices mislead here: an agent run is input-heavy (the Claude Code prompt + every doc it
+reads, re-sent each turn), so cache-read pricing decides the bill, not the headline rate.
+
 **Two caveats for the tool tiers on cheap models:**
 
 1. **Rate-limit flakiness under load.** Running the whole suite back-to-back can get throttled by

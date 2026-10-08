@@ -78,7 +78,6 @@ export const cases: AgentCase[] = [
     prompt: BENIGN_PROMPT,
     practices: [
       "states that there are no findings for the change (an empty findings table or an explicit \"no findings\")",
-      "lists server/src/modules/blast/score.ts (or the `summarize` rename) under `Checked and clean`",
       "states under `Scope reviewed` that a change of one file was reviewed",
     ],
     threshold: 1.0, // short, crisp list

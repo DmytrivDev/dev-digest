@@ -72,7 +72,9 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     // `allowedTools` only AUTO-APPROVES; under bypassPermissions every other tool stays usable, and
     // `disallowedTools` alone did not stop a Bash call (a Stop hook talked the model into running
     // append-insight.mjs on the live INSIGHTS.md). `tools` restricts what the session HAS at all.
-    ...(opts.settingSources?.length ? { tools: allowedTools } : {}),
+    // Applies to agentTask too: without it a reviewer declared `tools: Read, Grep, Glob` still
+    // ran Bash in CI. An empty list (content tier) keeps the SDK default and the NO-tools directive.
+    ...(opts.settingSources?.length || allowedTools.length ? { tools: allowedTools } : {}),
   };
 
   const textParts: string[] = [];
