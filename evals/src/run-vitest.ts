@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import { DIM, RESET } from "./ansi.js";
 
 const EVALS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
+// pnpm is pnpm.cmd on Windows; Node cannot spawn a .cmd without a shell (spawn pnpm ENOENT).
+const SHELL = process.platform === "win32";
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 /** How many test cases the pattern matches, via `vitest list` (no model calls). null on error. */
@@ -20,6 +22,7 @@ export function countTests(vitestArgs: string[]): number | null {
       cwd: EVALS_DIR,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      shell: SHELL,
     });
     const n = out.split("\n").filter((l) => l.includes(" > ")).length;
     return n || null;
@@ -37,7 +40,10 @@ export function runVitestOnce(label: string, vitestArgs: string[], extraEnv: Rec
       cwd: EVALS_DIR,
       env: { ...process.env, EVAL_QUIET: "1", ...extraEnv },
       stdio: ["ignore", "pipe", "pipe"],
+      shell: SHELL,
     });
+    child.on("error", (e) => { out += `spawn failed: ${e.message}
+`; });
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (out += d));
 

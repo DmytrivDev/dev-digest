@@ -288,6 +288,10 @@ src/
 
 ## Case layout — where your tests, prompts, and fixtures live
 
+> **Writing or editing a case? Read [`docs/writing-cases.md`](docs/writing-cases.md) first** — the
+> rules per tier (skill / agent / workflow), what the blind judge can and cannot verify, the
+> failure modes seen in real runs, and a pre-commit checklist. Point an agent at it the same way.
+
 > The package ships with **no example cases** — `skills/`, `agents/`, and `workflow/` are yours to
 > fill. The names below (`onion-architecture`, `architecture-reviewer`, …) are **illustrations of
 > the format only**, not files in the repo. Create your own with `pnpm eval:scaffold`.
@@ -565,7 +569,7 @@ tokens > 125% of baseline), `missing_data` (a config has zero records for a test
 | Any artifact's structure | `pnpm eval:quality` |
 | A `SKILL.md` edit you want to **measure** | repeat/delta loop: `--label baseline` before, `--label candidate` after, then `eval:delta` |
 | New skill/agent — is it **worth its tokens**? | `pnpm eval:benchmark skills/<skill> -n 5` |
-| Adding evals for one of **your** skills/agents | `pnpm eval:scaffold <name>` (or `--agent <name>`) |
+| Adding evals for one of **your** skills/agents | `pnpm eval:scaffold <name>` (or `--agent <name>`), then write cases per [`docs/writing-cases.md`](docs/writing-cases.md) |
 | Model / Claude Code version | `pnpm eval` (whole suite) |
 | Stats math changed | `pnpm vitest run src/records/stats.test.ts` |
 

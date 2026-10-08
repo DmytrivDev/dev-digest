@@ -19,6 +19,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [implement](implement/SKILL.md) | Meta | `/implement <plan>` — runs a finished plan through implementer → checks → plan-verifier → architecture review ⟲ fixes → final verdict; never commits |
+| [dependency-checker](dependency-checker/SKILL.md) | Meta | `/dependency-checker [--pkg x] [--online]` — per-package install weight, Mermaid graphs (packages, heaviest deps, component imports), unused/undeclared/misplaced/drift/cycle findings, P0–P2 prioritisation and advice. Collector: `scripts/collect.mjs` (zero deps, read-only). |
 | [workflow-retro](workflow-retro/SKILL.md) | Meta | `/workflow-retro [deep]` — manual only. Analysis and proposals for a finished multi-agent run: agents, order, tokens, hard/easy/duplicated/missed. Output: chat plus an append-only entry in `docs/retro/ledger.md`, module insights included. Source: in-context; `deep` reads the transcripts. |
 | [engineering-insights](engineering-insights/SKILL.md) | Meta | Capture non-obvious findings into the touched module's INSIGHTS.md (read-first, dedup, append-only, fixed sections) |
 

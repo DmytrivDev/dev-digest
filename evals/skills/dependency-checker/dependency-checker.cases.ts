@@ -29,7 +29,7 @@ client/node_modules/zod: 1.9M
 reviewer-core/node_modules/zod: 2.1M
 e2e/node_modules/playwright: 210M
 
-server/package.json also declares zod@3.23.8, client/package.json declares zod@3.22.4, reviewer-core/package.json declares zod@3.23.8 — three different resolved zod versions across packages.
+server/package.json also declares zod@3.23.8, client/package.json declares zod@3.22.4, reviewer-core/package.json declares zod@3.23.8.
 
 grep for imports crossing package boundaries:
 - server/src/routes/reviews.ts imports types from "@shared/review-types" (alias to server/src/vendor/shared)
@@ -44,11 +44,11 @@ export const cases: SkillCase[] = [
     prompt: `Run a dependency check on this repo. I want the full report: graph, sizes, prioritized findings, recommendations.\n\n${REPO_DATA}`,
     grounding: ["```mermaid", "flowchart"],
     practices: [
-      "the report has a section named 'Scope' listing which packages (client, server, reviewer-core, e2e) were analyzed",
+      "the report states its Scope near the top: which packages (client, server, reviewer-core, e2e) were analyzed",
       "the report includes a Mermaid diagram (a fenced ```mermaid code block using flowchart) showing dependency relationships between packages",
       "the report has a section with a size breakdown table showing dependencies and their installed size, not just a vague size statement",
       "the report has a 'Findings & Priorities' section (or equivalently named) that groups findings under explicit severity tiers such as P0, P1, P2, or Info — not an unranked bullet list",
-      "the report ends with a Summary section giving 3-5 concrete, actionable takeaways ordered by priority",
+      "the report ends with a 'Key takeaways' (or Summary) section giving 3-5 concrete, actionable takeaways ordered by priority",
       "every finding names a specific package, dependency, or file rather than giving generic advice like 'consider optimizing dependencies'",
     ],
     threshold: 0.7,
@@ -61,7 +61,7 @@ export const cases: SkillCase[] = [
     practices: [
       "the answer explicitly distinguishes internal cross-package dependencies (the @shared/review-types alias and the direct relative import into reviewer-core/src/pipeline.js) from external npm package dependencies, rather than treating them as the same kind of dependency",
       "the answer flags server/src/services/review-service.ts importing reviewer-core/src/pipeline.js by relative path instead of through reviewer-core's public entry point as a P0-tier or otherwise explicitly called-out issue",
-      "the answer does not claim these packages are linked via workspace:* or pnpm workspaces, since the project explicitly is not a monorepo",
+      "the answer does not state that these packages are linked through workspace:* protocol or pnpm workspaces (using the word 'monorepo' in passing is not such a claim)",
     ],
     threshold: 0.6,
     maxTurns: 10,
@@ -72,12 +72,35 @@ export const cases: SkillCase[] = [
     prompt: `We suspect some npm dependencies in server/ and client/ are unused or duplicated across packages with different versions. Check our dependencies and tell me what to prioritize fixing first.\n\n${REPO_DATA}`,
     practices: [
       "findings are explicitly labeled with one of the defined severity tiers (P0, P1, P2, or Info) rather than left unranked",
-      "the three different zod versions across server, client, and reviewer-core are called out explicitly as version drift",
+      "zod version drift is called out explicitly and counted correctly: TWO distinct versions (3.22.4 in client; 3.23.8 in server and reviewer-core), not three",
       "moment being declared in server/package.json but never imported anywhere under server/src is called out explicitly as an unused dependency",
-      "each recommendation names a specific package name and package.json/file location (e.g. server/package.json, moment, zod) rather than a generic suggestion",
-      "removing a dependency (e.g. moment) is presented as a recommendation for the user to confirm, not something already executed",
+      "heavy but legitimate dependencies (next 132M, react-dom, playwright 210M) are NOT recommended for removal merely because of their size; size alone is not treated as a defect or as P0",
+      "the answer says the sizes are install (disk) sizes and does not claim them to be browser bundle sizes, or otherwise separates install weight from shipped weight",
+      "removing a dependency (e.g. moment) is presented as a recommendation for the user to confirm, with a check to run first (e.g. grep for usage), not as something already executed",
     ],
     threshold: 0.6,
+    maxTurns: 10,
+  },
+  {
+    name: "turns a collected report into prioritized advice without inventing numbers",
+    kind: "quality",
+    prompt: `Below is the machine-generated output of the dependency collector. Write the Recommendations section for the team from it. Do not ask for tools or more data.
+
+Summary: 6 packages, 80 direct deps, full install 1245 MB, prod 828 MB. P0: 0, P1: 9, P2: 49. Package cycles: @devdigest/api <-> @devdigest/reviewer-core (shared contracts live in server/src/vendor/shared).
+Heaviest (exclusive = freed if only it is removed): @anthropic-ai/claude-agent-sdk (evals) 231.7 MB, used in 1 file; mermaid (web) 112.9 MB, used in 1 file; lucide-react (web) 27.3 MB, used in 1 file; next (web) 295.6 MB, used in 25 files.
+Findings: @fastify/autoload (api, prod) declared, no import and no reference; postcss (web, dev) declared, no import, no reference; vitest and gray-matter (evals) declared in devDependencies but imported from src.
+Duplicates: @esbuild/win32-x64 four versions inside api install, 29.7 MB extra. Version drift: typescript 5.7.2 in mcp vs 5.9.3 elsewhere.
+Cycle: 9 components in api (adapters, platform, modules/*) import each other; the architecture notes list this as known debt.
+Method note: sizes are disk bytes in node_modules, not bundle sizes; unused means not found by a regex scan.`,
+    practices: [
+      "none of the large-size items (mermaid, claude-agent-sdk, lucide-react, next) is placed in P0 only because of its size, and no P0 item is invented when the data reports P0: 0 (starting at P1, or stating that P0 is empty, both satisfy this)",
+      "@fastify/autoload is proposed for removal only after a verification step (grep / check how modules are registered), not as an unconditional delete",
+      "next is not recommended for removal or replacement; it is treated as the framework",
+      "the vitest/gray-matter finding is explained as a devDependencies-vs-runtime placement problem with a concrete move (devDependencies to dependencies) in the evals package",
+      "every size, count, version and threshold quoted in the answer appears in the provided data; the answer adds no invented savings estimate, CI limit or 'bundle size' figure",
+      "the api <-> reviewer-core cycle and the 9-component cycle are reported as known structure/debt rather than new regressions to fix immediately",
+    ],
+    threshold: 0.7,
     maxTurns: 10,
   },
 ];
