@@ -1,6 +1,8 @@
 /* EvalCaseRow — one case of the agent's suite (AC-29): status icon, mono name,
    result line, kind badge, severity · category chip and Edit / Delete icon
    buttons. There is deliberately NO Run button: a run covers the whole suite.
+   A manual case has no severity or category, so a "manual" badge stands in for
+   the chip (SPEC-05 AC-41).
 
    Case name and labels are user/model text → rendered as text only (NFR-4). */
 "use client";
@@ -28,8 +30,8 @@ export function EvalCaseRow({
   const status = caseStatus(evalCase.last_outcome);
   const { icon, color } = CASE_STATUS_ICON[status];
   const StatusIcon = Icon[icon];
-  const severity = severityOf(evalCase.labels.severity);
-  const category = categoryOf(evalCase.labels.category);
+  const severity = severityOf(evalCase.labels?.severity ?? "");
+  const category = categoryOf(evalCase.labels?.category ?? "");
 
   return (
     <div
@@ -54,11 +56,17 @@ export function EvalCaseRow({
         </span>
       </button>
       <Badge color="var(--text-muted)">{t(`common.kind.${evalCase.expectation.kind}`)}</Badge>
-      {(severity || category) && (
-        <span style={s.chip}>
-          {severity && <SeverityBadge severity={severity} />}
-          {category && <CategoryTag category={category} />}
-        </span>
+      {evalCase.origin === "manual" ? (
+        <Badge color="var(--accent-text)" bg="var(--accent-bg)">
+          {t("evalsTab.row.manual")}
+        </Badge>
+      ) : (
+        (severity || category) && (
+          <span style={s.chip}>
+            {severity && <SeverityBadge severity={severity} />}
+            {category && <CategoryTag category={category} />}
+          </span>
+        )
       )}
       {/* The icon buttons sit inside the clickable row: their clicks must not
           also reach the row's own open handler. */}

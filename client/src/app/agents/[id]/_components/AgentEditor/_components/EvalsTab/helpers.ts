@@ -4,7 +4,7 @@
 
 import type { Category, Severity } from "@devdigest/ui";
 import { SEV, CAT } from "@devdigest/ui";
-import type { EvalCaseOutcome, EvalSuiteRun } from "@devdigest/shared";
+import type { EvalCaseOutcome, EvalSuiteRun, EvalTrendPoint } from "@devdigest/shared";
 import type { ResultLineParts } from "@/lib/eval";
 import type { CaseStatus } from "./constants";
 
@@ -21,6 +21,31 @@ export function caseStatus(outcome: EvalCaseOutcome | null | undefined): CaseSta
 /** Runs sorted newest first (the API already does; this does not rely on it). */
 export function newestFirst(runs: readonly EvalSuiteRun[]): EvalSuiteRun[] {
   return [...runs].sort((a, b) => b.started_at.localeCompare(a.started_at));
+}
+
+/** Runs the trend plots, at most (SPEC-05 AC-51). */
+export const TREND_MAX_RUNS = 20;
+
+/**
+ * The trend's points: one per `completed` run, oldest first, the last
+ * `TREND_MAX_RUNS` of them. A null metric stays null so the chart leaves a gap
+ * in that line instead of drawing a 0 (AC-53). `running`/`failed` runs have no
+ * metrics and are skipped.
+ */
+export function evalsTabTrendPoints(runs: readonly EvalSuiteRun[]): EvalTrendPoint[] {
+  return runs
+    .filter((r) => r.status === "completed")
+    .sort((a, b) => a.started_at.localeCompare(b.started_at))
+    .slice(-TREND_MAX_RUNS)
+    .map((r) => ({
+      run_id: r.id,
+      started_at: r.started_at,
+      agent_version: r.agent_version,
+      cost_usd: r.cost_usd,
+      recall: r.recall,
+      precision: r.precision,
+      citation_accuracy: r.citation_accuracy,
+    }));
 }
 
 /**

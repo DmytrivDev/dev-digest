@@ -54,6 +54,7 @@ export function FileCard({
   marks,
   badges,
   focus,
+  defaultOpen,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -66,11 +67,14 @@ export function FileCard({
   /** Deep-link target. When it names this file the card starts open (even past
       the large-file collapse), is outlined, and scrolls the target into view. */
   focus?: DiffFocus | null;
+  /** Start open even past the large-file collapse — no outline, no scroll (unlike
+      `focus`). Read once, at mount. */
+  defaultOpen?: boolean;
 }) {
   const t = useTranslations("shell");
   const focused = isFocusedFile(file, focus);
   const [open, setOpen] = React.useState(
-    focused || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    focused || defaultOpen === true || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
   const targetIndex = focused ? focusRowIndex(lines, focus?.line) : -1;

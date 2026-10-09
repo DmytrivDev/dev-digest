@@ -1,0 +1,21 @@
+Repo: client/ (Next.js App Router). Existing routes involved:
+- app/repos/[repoId]/page.tsx
+- app/repos/[repoId]/pulls/page.tsx
+- app/repos/[repoId]/pulls/[prId]/page.tsx
+- app/runs/page.tsx
+
+Three pieces of UI have to be added. Nothing exists yet for any of them.
+
+1. RepoSyncBanner: a banner showing the last sync time of a repo and a "Sync now" button.
+   Importers: app/repos/[repoId]/page.tsx only. No other route or component will render it.
+
+2. FindingsFilterBar: a row of severity and category filter controls.
+   Importers: app/repos/[repoId]/pulls/page.tsx, app/repos/[repoId]/pulls/[prId]/page.tsx and
+   app/runs/page.tsx (all three already need it for this release).
+
+3. A coloured label that shows a finding's severity (CRITICAL, WARNING, SUGGESTION, INFO) in the
+   new findings row.
+
+What src/vendor/ui (imported as @devdigest/ui) currently exports:
+  SEV (severity colour tokens), Chip, SeverityBadge, CategoryTag, ConfidenceNum, Badge,
+  CircularScore, and the ddpop keyframe.

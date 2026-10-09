@@ -20,6 +20,7 @@ export function DiffViewer({
   marks,
   badges,
   focus,
+  defaultOpen,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
@@ -32,6 +33,9 @@ export function DiffViewer({
   badges?: DiffFileBadges;
   /** Deep-link target: expands, outlines and scrolls to this file (and line). */
   focus?: DiffFocus | null;
+  /** Every file card starts open, even a large one — without the deep-link
+      outline and scroll that `focus` brings. Read once, at mount. */
+  defaultOpen?: boolean;
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -48,6 +52,7 @@ export function DiffViewer({
           marks={marks}
           badges={badges}
           focus={focus}
+          defaultOpen={defaultOpen}
         />
       ))}
     </div>

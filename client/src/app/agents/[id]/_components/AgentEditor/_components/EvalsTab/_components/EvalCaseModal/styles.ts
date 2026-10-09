@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import type { DiffLineKind } from "./helpers";
 
 export const s = {
   grid: { display: "grid", gridTemplateColumns: "1fr 1fr", height: 480 } satisfies CSSProperties,
@@ -11,7 +10,7 @@ export const s = {
     borderRightStyle: "solid",
     borderRightColor: "var(--border)",
   } satisfies CSSProperties,
-  right: { display: "flex", flexDirection: "column", minWidth: 0 } satisfies CSSProperties,
+  right: { display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto" } satisfies CSSProperties,
   field: { display: "block", padding: "14px 16px 0" } satisfies CSSProperties,
   fieldLabel: {
     display: "block",
@@ -28,45 +27,6 @@ export const s = {
     marginBottom: 7,
   } satisfies CSSProperties,
   inputBody: { flex: 1, overflow: "auto", padding: "12px 16px" } satisfies CSSProperties,
-  diff: {
-    margin: 0,
-    fontSize: 11.5,
-    lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
-    color: "var(--text-primary)",
-  } satisfies CSSProperties,
-  diffLine: (kind: DiffLineKind): CSSProperties => ({
-    display: "block",
-    backgroundColor:
-      kind === "added" ? "var(--code-add)" : kind === "removed" ? "var(--code-del)" : "transparent",
-    color: kind === "hunk" ? "var(--accent-text)" : "inherit",
-  }),
-  metaLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "var(--text-muted)",
-    marginBottom: 4,
-  } satisfies CSSProperties,
-  metaValue: {
-    fontSize: 13,
-    color: "var(--text-primary)",
-    marginBottom: 14,
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-  } satisfies CSSProperties,
-  expected: {
-    display: "flex",
-    flexDirection: "column",
-    minWidth: 0,
-    flex: 1,
-    padding: "14px 16px 0",
-  } satisfies CSSProperties,
-  expectedHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } satisfies CSSProperties,
-  expectedTitle: {
-    fontSize: 12.5,
-    fontWeight: 600,
-    color: "var(--text-secondary)",
-  } satisfies CSSProperties,
   lastRun: (tone: "ok" | "crit" | "warn" | "none"): CSSProperties => ({
     margin: "12px 16px 0",
     padding: "11px 13px",

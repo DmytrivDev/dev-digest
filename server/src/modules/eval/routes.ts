@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { EvalCaseUpdate } from '@devdigest/shared';
+import { EvalCaseCreate, EvalCaseUpdate } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { parseUnifiedDiff } from '../../adapters/git/diff-parser.js';
@@ -12,8 +12,9 @@ import { EvalService } from './service.js';
  * Eval module (SPEC-04).
  *   POST   /findings/:id/eval-case   → 201 new case | 200 the finding's existing case
  *   GET    /agents/:id/eval/cases    → the agent's suite
+ *   POST   /agents/:id/eval/cases    → 201 a manual case (pasted diff + expectation; no model call)
  *   GET    /eval/cases/:id           → one case
- *   PATCH  /eval/cases/:id           → rename / notes / expectation
+ *   PATCH  /eval/cases/:id           → rename / notes / expectation (+ diff / PR meta of a manual case)
  *   DELETE /eval/cases/:id           → 204
  *   POST   /agents/:id/eval/runs     → 202 { run_id, status, cases_total }
  *   GET    /agents/:id/eval/runs     → the agent's runs, newest first
@@ -54,6 +55,19 @@ export default async function evalRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(app.container, req);
     return service.listCases(workspaceId, req.params.id);
   });
+
+  // `EvalCaseCreate` is `.strict()` and has no size cap on `input_diff`, so an oversize
+  // paste answers `diff_too_large` from the service rather than a generic validation error.
+  // The body limit stays the app's default (1 MB): no per-route override or rate limit.
+  app.post(
+    '/agents/:id/eval/cases',
+    { schema: { params: IdParams, body: EvalCaseCreate } },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const created = await service.createManualCase(workspaceId, req.params.id, req.body);
+      return reply.code(201).send(created);
+    },
+  );
 
   app.get('/eval/cases/:id', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(app.container, req);

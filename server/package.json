@@ -11,10 +11,11 @@
     "arch:check": "depcruise src --config .dependency-cruiser.cjs --output-type err",
     "arch:graph": "depcruise src --config .dependency-cruiser.cjs --output-type dot",
     "test": "vitest run",
+    "mutation:scoring": "stryker run stryker.config.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "verify:l06": "vitest run test/eval-case-diff.test.ts test/eval-scoring.test.ts test/eval-compare.test.ts test/eval-executor.test.ts test/eval-contracts.test.ts test/contracts.test.ts test/eval-fixtures-secrets.test.ts test/eval-cases.it.test.ts test/eval-runs.it.test.ts test/eval-compare.it.test.ts test/eval-seed.it.test.ts test/eval-experiment.it.test.ts test/reviews-eval-fields.it.test.ts"
+    "verify:l06": "vitest run test/eval-case-diff.test.ts test/eval-scoring.test.ts test/eval-compare.test.ts test/eval-executor.test.ts test/eval-contracts.test.ts test/contracts.test.ts test/eval-fixtures-secrets.test.ts test/eval-cases.it.test.ts test/eval-runs.it.test.ts test/eval-compare.it.test.ts test/eval-seed.it.test.ts test/eval-experiment.it.test.ts test/reviews-eval-fields.it.test.ts test/eval-manual-contracts.test.ts test/eval-paste-diff.test.ts test/eval-manual-run.test.ts test/eval-manual-cases.it.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.33.1",
@@ -42,6 +43,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@testcontainers/postgresql": "^10.16.0",
     "@types/node": "^22.10.0",
     "drizzle-kit": "^0.30.1",

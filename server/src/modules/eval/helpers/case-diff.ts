@@ -1,5 +1,10 @@
-import type { UnifiedDiff } from '@devdigest/shared';
-import { CASE_NAME_FALLBACK, CASE_NAME_MAX, MAX_CASE_DIFF_BYTES } from '../constants.js';
+import type { EvalCaseInputErrorCode, UnifiedDiff } from '@devdigest/shared';
+import {
+  CASE_INPUT_ERROR,
+  CASE_NAME_FALLBACK,
+  CASE_NAME_MAX,
+  MAX_CASE_DIFF_BYTES,
+} from '../constants.js';
 
 /**
  * Pure rules for turning a finding's file patch into a stored eval-case diff (SPEC-04).
@@ -21,6 +26,52 @@ export function buildCaseDiff(path: string, patch: string): string {
 /** True when the diff is over the stored-case size cap (AC-23). Exactly the cap is allowed. */
 export function caseDiffTooLarge(diff: string): boolean {
   return Buffer.byteLength(diff, 'utf8') > MAX_CASE_DIFF_BYTES;
+}
+
+/** The hunk header the diff parser recognises: `@@ -N[,M] +N[,M] @@`. */
+const HUNK_HEADER_RE = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/;
+
+/** Outcome of {@link checkPastedDiff}. A failure carries the first failing check's code. */
+export type PastedDiffCheck =
+  | { ok: true; path: string; diff: string }
+  | { ok: false; code: Extract<EvalCaseInputErrorCode, 'diff_too_large' | 'diff_unparseable' | 'multi_file_diff'> };
+
+/**
+ * Validate and normalise a diff pasted into a manual case (SPEC-05 AC-22, AC-23, AC-25).
+ *
+ * Checks run in a fixed order and the first failure wins, so a client mirroring them
+ * (`client/src/lib/eval-case-diff.ts`, same fixture list) shows the same message:
+ *   1. size, measured on the text AS SENT (before CRLF normalisation);
+ *   2. the path, from the FIRST `+++ ` line — missing or `/dev/null` is unparseable;
+ *   3. at least one `@@ -N[,M] +N[,M] @@` hunk header;
+ *   4. one file only: `max(#"diff --git", #"+++ ")` lines.
+ *
+ * On success `diff` is the single-file form every case stores: the pasted `diff --git`,
+ * `index`, `---` and `+++` lines are dropped and rebuilt from the path, so a `+++`-only
+ * paste and a full-header paste store the same text. Pure — it parses nothing with the
+ * adapter's parser; the caller does that on the result.
+ */
+export function checkPastedDiff(raw: string): PastedDiffCheck {
+  if (caseDiffTooLarge(raw)) return { ok: false, code: CASE_INPUT_ERROR.diffTooLarge };
+
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+
+  const plusLine = lines.find((l) => l.startsWith('+++ '));
+  const path = plusLine === undefined ? '' : plusLine.slice(4).trim().replace(/^b\//, '');
+  if (plusLine === undefined || path === '' || path === '/dev/null') {
+    return { ok: false, code: CASE_INPUT_ERROR.diffUnparseable };
+  }
+
+  const firstHunk = lines.findIndex((l) => HUNK_HEADER_RE.test(l));
+  if (firstHunk === -1) return { ok: false, code: CASE_INPUT_ERROR.diffUnparseable };
+
+  const gitHeaders = lines.filter((l) => l.startsWith('diff --git')).length;
+  const plusHeaders = lines.filter((l) => l.startsWith('+++ ')).length;
+  if (Math.max(gitHeaders, plusHeaders) > 1) {
+    return { ok: false, code: CASE_INPUT_ERROR.multiFileDiff };
+  }
+
+  return { ok: true, path, diff: buildCaseDiff(path, lines.slice(firstHunk).join('\n')) };
 }
 
 /** The path of the one file in a parsed case diff, or undefined if it is not single-file. */

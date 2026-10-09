@@ -1,4 +1,6 @@
+import { EVAL_CASE_MAX_BYTES, EVAL_CASE_NAME_MAX } from '@devdigest/shared';
 import type {
+  EvalCaseInputErrorCode,
   EvalCompareErrorCode,
   EvalCreateCaseErrorCode,
   EvalRunStartErrorCode,
@@ -6,9 +8,10 @@ import type {
 } from '@devdigest/shared';
 
 /**
- * Eval pipeline constants (SPEC-04). Type-only imports from the shared contracts: the
- * reason-code maps below are checked against the W1 enums, so a code that drifts from
- * the wire contract fails typecheck instead of shipping a string no client maps.
+ * Eval pipeline constants (SPEC-04). The reason-code maps below are checked against the
+ * shared enums (type imports), so a code that drifts from the wire contract fails
+ * typecheck instead of shipping a string no client maps. The one value import is the
+ * size cap, so a single number governs both packages (SPEC-05).
  */
 
 /** Per-case deadline for one engine review during a suite run (AC-55). */
@@ -21,11 +24,11 @@ export const CASE_DEADLINE_MS = 120_000;
  */
 export const STALE_RUN_MS = 15 * 60_000;
 
-/** Largest stored case diff, in UTF-8 bytes (AC-23): 200 KB. */
-export const MAX_CASE_DIFF_BYTES = 200 * 1024;
+/** Largest stored case diff, in UTF-8 bytes (AC-23): 200 KB. Same number as the contract's. */
+export const MAX_CASE_DIFF_BYTES = EVAL_CASE_MAX_BYTES;
 
 /** Longest generated case name / slug (AC-16), suffix included. */
-export const CASE_NAME_MAX = 60;
+export const CASE_NAME_MAX = EVAL_CASE_NAME_MAX;
 
 /** Used when a title has no ASCII letter or digit to build a slug from. */
 export const CASE_NAME_FALLBACK = 'eval-case';
@@ -57,6 +60,17 @@ export const UPDATE_CASE_ERROR = {
   fileMismatch: 'file_mismatch',
   rangeOutsideHunks: 'range_outside_hunks',
 } as const satisfies Record<string, EvalUpdateCaseErrorCode>;
+
+/**
+ * Reason codes about the pasted diff of a manual case: `POST /agents/:id/eval/cases` and
+ * the diff/meta part of `PATCH /eval/cases/:id` (SPEC-05 AC-25, AC-36, AC-37).
+ */
+export const CASE_INPUT_ERROR = {
+  diffTooLarge: 'diff_too_large',
+  diffUnparseable: 'diff_unparseable',
+  multiFileDiff: 'multi_file_diff',
+  diffFrozen: 'diff_frozen',
+} as const satisfies Record<string, EvalCaseInputErrorCode>;
 
 /** Reason codes of `POST /agents/:id/eval/runs` (AC-51…AC-53). */
 export const RUN_START_ERROR = {

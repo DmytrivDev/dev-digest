@@ -2,6 +2,7 @@
 Spec ID: SPEC-04
 Status: approved
 Supersedes: none
+Superseded by: SPEC-05 (partially — manual case creation and diff editing for manual cases; Evals-tab trend chart)
 
 ## Problem and user
 

@@ -3,6 +3,7 @@ import type { EvalCaseOutcome, EvalExpectation } from "@devdigest/shared";
 import { ApiError } from "./api";
 import { formatCost } from "./cost";
 import {
+  CASE_INPUT_ERROR_KEY,
   CREATE_CASE_ERROR_FALLBACK,
   CREATE_CASE_ERROR_KEY,
   COMPARE_ERROR_KEY,
@@ -11,6 +12,7 @@ import {
   RUN_START_ERROR_KEY,
   UPDATE_CASE_ERROR_KEY,
   alertDropParams,
+  caseSaveErrorKey,
   compareErrorKey,
   createCaseErrorKey,
   deltaPoints,
@@ -20,6 +22,7 @@ import {
   parseExpectationText,
   resultLineParts,
   runStartErrorKey,
+  trendTooltipParts,
   updateCaseErrorKey,
 } from "./eval";
 import evalMessages from "../../messages/en/eval.json";
@@ -199,6 +202,7 @@ describe("reason code → message key (AC-8, AC-64)", () => {
       ...Object.values(RUN_START_ERROR_KEY),
       ...Object.values(UPDATE_CASE_ERROR_KEY),
       ...Object.values(COMPARE_ERROR_KEY),
+      ...Object.values(CASE_INPUT_ERROR_KEY),
       EVAL_ERROR_RATE_LIMITED,
       EVAL_ERROR_GENERIC,
     ];
@@ -210,9 +214,11 @@ describe("reason code → message key (AC-8, AC-64)", () => {
   it("no mapped message is a raw code or an i18n key", () => {
     const texts = [
       ...Object.values(CREATE_CASE_ERROR_KEY).map((k) => resolve(prReviewMessages, k)),
-      ...[...Object.values(RUN_START_ERROR_KEY), ...Object.values(COMPARE_ERROR_KEY)].map((k) =>
-        resolve(evalMessages, k),
-      ),
+      ...[
+        ...Object.values(RUN_START_ERROR_KEY),
+        ...Object.values(COMPARE_ERROR_KEY),
+        ...Object.values(CASE_INPUT_ERROR_KEY),
+      ].map((k) => resolve(evalMessages, k)),
     ] as string[];
     for (const text of texts) {
       expect(text).toMatch(/\s/);
@@ -236,5 +242,47 @@ describe("reason code → message key (AC-8, AC-64)", () => {
       COMPARE_ERROR_KEY.run_not_completed,
     );
     expect(compareErrorKey(err(422, "constructor"))).toBe(EVAL_ERROR_GENERIC);
+  });
+
+  it("maps every manual-case save failure to one eval key (SPEC-05 AC-17)", () => {
+    const err = (status: number, code?: string) => new ApiError("x", status, code);
+    for (const code of Object.keys(CASE_INPUT_ERROR_KEY)) {
+      expect(caseSaveErrorKey(err(422, code))).toBe(CASE_INPUT_ERROR_KEY[code as keyof typeof CASE_INPUT_ERROR_KEY]);
+    }
+    expect(caseSaveErrorKey(err(422, "file_mismatch"))).toBe(UPDATE_CASE_ERROR_KEY.file_mismatch);
+    expect(caseSaveErrorKey(err(422, "range_outside_hunks"))).toBe(UPDATE_CASE_ERROR_KEY.range_outside_hunks);
+    expect(caseSaveErrorKey(err(404, "not_found"))).toBe(EVAL_ERROR_GENERIC);
+    expect(caseSaveErrorKey(err(422, "constructor"))).toBe(EVAL_ERROR_GENERIC);
+    expect(caseSaveErrorKey(new Error("boom"))).toBe(EVAL_ERROR_GENERIC);
+  });
+});
+
+describe("trendTooltipParts (SPEC-05 AC-54)", () => {
+  const point = {
+    started_at: "2026-10-07T10:00:00.000Z",
+    run_id: "run7",
+    agent_version: 7,
+    cost_usd: 0.03,
+    recall: 0.8249,
+    precision: null,
+    citation_accuracy: 0.9,
+  };
+
+  it("formats the date, version, cost and three whole percentages with n/a for a null metric", () => {
+    expect(trendTooltipParts(point)).toEqual({
+      when: expect.stringContaining("2026"),
+      version: 7,
+      cost: "$0.03",
+      recall: "82%",
+      precision: "n/a",
+      citation: "90%",
+    });
+  });
+
+  it("shows a missing cost as the em dash and tolerates a payload without the new fields", () => {
+    const parts = trendTooltipParts({ started_at: point.started_at, recall: 1, precision: 1, citation_accuracy: 1 });
+    expect(parts.cost).toBe("—");
+    expect(parts.version).toBeNull();
+    expect(trendTooltipParts({ ...point, cost_usd: null }).cost).toBe("—");
   });
 });

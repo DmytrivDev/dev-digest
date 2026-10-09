@@ -1,0 +1,272 @@
+[
+  {
+    "name": "range-on-added-line",
+    "diff": "+++ b/src/a.ts\n@@ -10,3 +10,4 @@\n ctx10\n-old\n+add11\n+add12\n ctx13\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 11,
+      "end_line": 11
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": null,
+      "skeleton": {
+        "start_line": 11
+      }
+    }
+  },
+  {
+    "name": "range-on-context-line",
+    "diff": "+++ b/src/a.ts\n@@ -10,3 +10,4 @@\n ctx10\n-old\n+add11\n+add12\n ctx13\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 13,
+      "end_line": 13
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": null,
+      "skeleton": {
+        "start_line": 11
+      }
+    }
+  },
+  {
+    "name": "range-on-removed-only-hunk",
+    "diff": "+++ b/src/a.ts\n@@ -30,2 +30,0 @@\n-gone1\n-gone2\n",
+    "expectation": {
+      "kind": "must_not_flag",
+      "file": "src/a.ts",
+      "start_line": 30,
+      "end_line": 30
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": "range_outside_hunks",
+      "skeleton": null
+    }
+  },
+  {
+    "name": "range-between-two-hunks",
+    "diff": "+++ b/src/a.ts\n@@ -10,3 +10,4 @@\n ctx10\n-old\n+add11\n+add12\n ctx13\n@@ -30,1 +31,2 @@\n ctx31\n+add32\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 20,
+      "end_line": 20
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": "range_outside_hunks",
+      "skeleton": {
+        "start_line": 11
+      }
+    }
+  },
+  {
+    "name": "range-spanning-into-second-hunk",
+    "diff": "+++ b/src/a.ts\n@@ -10,3 +10,4 @@\n ctx10\n-old\n+add11\n+add12\n ctx13\n@@ -30,1 +31,2 @@\n ctx31\n+add32\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 25,
+      "end_line": 32
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": null
+    }
+  },
+  {
+    "name": "one-past-last-hunk-with-no-newline-marker",
+    "diff": "+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n x\n-y\n+z\n\\ No newline at end of file\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 3,
+      "end_line": 3
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": "range_outside_hunks",
+      "skeleton": {
+        "start_line": 2
+      }
+    }
+  },
+  {
+    "name": "hunk-counts-shorter-than-body",
+    "diff": "+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n a\n+b\n+c\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 2,
+      "end_line": 2
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": "range_outside_hunks"
+    }
+  },
+  {
+    "name": "hunk-counts-shorter-than-body-inside-range",
+    "diff": "+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n a\n+b\n+c\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 1,
+      "end_line": 1
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": null
+    }
+  },
+  {
+    "name": "crlf-line-endings",
+    "diff": "+++ b/src/a.ts\r\n@@ -10,3 +10,4 @@\r\n ctx10\r\n-old\r\n+add11\r\n+add12\r\n ctx13\r\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 11,
+      "end_line": 12
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": null,
+      "skeleton": {
+        "start_line": 11
+      }
+    }
+  },
+  {
+    "name": "full-git-header",
+    "diff": "diff --git a/src/a.ts b/src/a.ts\nindex 111..222 100644\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -10,3 +10,4 @@\n ctx10\n-old\n+add11\n+add12\n ctx13\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/a.ts",
+      "start_line": 12,
+      "end_line": 12
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": null,
+      "skeleton": {
+        "start_line": 11
+      }
+    }
+  },
+  {
+    "name": "expectation-names-another-file",
+    "diff": "+++ b/src/a.ts\n@@ -10,3 +10,4 @@\n ctx10\n-old\n+add11\n+add12\n ctx13\n",
+    "expectation": {
+      "kind": "must_find",
+      "file": "src/b.ts",
+      "start_line": 11,
+      "end_line": 11
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "expectation": "file_mismatch"
+    }
+  },
+  {
+    "name": "plus-plus-plus-dev-null",
+    "diff": "--- a/src/a.ts\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-x\n",
+    "expect": {
+      "diff": "diff_unparseable"
+    }
+  },
+  {
+    "name": "two-plus-plus-plus-without-diff-git",
+    "diff": "+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n+x\n+++ b/src/b.ts\n@@ -1,1 +1,1 @@\n+y\n",
+    "expect": {
+      "diff": "multi_file_diff"
+    }
+  },
+  {
+    "name": "two-diff-git-headers",
+    "diff": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n+x\ndiff --git a/src/b.ts b/src/b.ts\n--- a/src/b.ts\n+++ b/src/b.ts\n@@ -1,1 +1,1 @@\n+y\n",
+    "expect": {
+      "diff": "multi_file_diff"
+    }
+  },
+  {
+    "name": "no-hunk-header",
+    "diff": "+++ b/src/a.ts\n+x\n",
+    "expect": {
+      "diff": "diff_unparseable"
+    }
+  },
+  {
+    "name": "no-plus-plus-plus-header",
+    "diff": "@@ -1,1 +1,1 @@\n+x\n",
+    "expect": {
+      "diff": "diff_unparseable"
+    }
+  },
+  {
+    "name": "exactly-200kb",
+    "diff": {
+      "repeatToBytes": 204800,
+      "header": "+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n+"
+    },
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts"
+    }
+  },
+  {
+    "name": "200kb-plus-one-byte",
+    "diff": {
+      "repeatToBytes": 204801,
+      "header": "+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n+"
+    },
+    "expect": {
+      "diff": "diff_too_large"
+    }
+  },
+  {
+    "name": "too-large-wins-over-multi-file",
+    "diff": {
+      "repeatToBytes": 307200,
+      "header": "+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n+x\n+++ b/src/b.ts\n@@ -1,1 +1,1 @@\n+y\n"
+    },
+    "expect": {
+      "diff": "diff_too_large"
+    }
+  },
+  {
+    "name": "deletion-only-has-no-skeleton",
+    "diff": "+++ b/src/a.ts\n@@ -4,2 +4,0 @@\n-a\n-b\n",
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "skeleton": null
+    }
+  },
+  {
+    "name": "context-only-skeleton-is-first-context-line",
+    "diff": "+++ b/src/a.ts\n@@ -5,2 +5,2 @@\n ctx5\n ctx6\n",
+    "expect": {
+      "diff": null,
+      "path": "src/a.ts",
+      "skeleton": {
+        "start_line": 5
+      }
+    }
+  }
+]

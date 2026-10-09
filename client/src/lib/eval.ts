@@ -10,13 +10,17 @@
 import { EvalExpectation } from "@devdigest/shared";
 import type {
   EvalAlert,
+  EvalCaseInputErrorCode,
   EvalCaseOutcome,
   EvalCompareErrorCode,
   EvalCreateCaseErrorCode,
   EvalRunStartErrorCode,
+  EvalTrendPoint,
   EvalUpdateCaseErrorCode,
 } from "@devdigest/shared";
 import { ApiError } from "./api";
+import { formatCost } from "./cost";
+import { formatWhen } from "./datetime";
 
 // ---- Metric formatting (AC-77) ---------------------------------------------
 
@@ -165,6 +169,17 @@ export const UPDATE_CASE_ERROR_KEY: Record<EvalUpdateCaseErrorCode, string> = {
   file_mismatch: "errors.file_mismatch",
   range_outside_hunks: "errors.range_outside_hunks",
 };
+/**
+ * Codes a manual case's create/update answers with beyond the update ones above,
+ * plus the generic 422 body failure. All keys in the `eval` namespace.
+ */
+export const CASE_INPUT_ERROR_KEY: Record<EvalCaseInputErrorCode | "validation_error", string> = {
+  diff_too_large: "errors.diff_too_large",
+  diff_unparseable: "errors.diff_unparseable",
+  multi_file_diff: "errors.multi_file_diff",
+  diff_frozen: "errors.diff_frozen",
+  validation_error: "errors.validation_error",
+};
 export const COMPARE_ERROR_KEY: Record<EvalCompareErrorCode, string> = {
   run_not_completed: "errors.run_not_completed",
   different_agents: "errors.different_agents",
@@ -196,7 +211,83 @@ export function updateCaseErrorKey(err: unknown): string {
   return keyForCode(err, UPDATE_CASE_ERROR_KEY, EVAL_ERROR_GENERIC);
 }
 
+/**
+ * `eval` key for a failed manual-case create or update (SPEC-05 AC-17): an input
+ * code, else an expectation code, else the generic message — a 404 included.
+ */
+export function caseSaveErrorKey(err: unknown): string {
+  const code = err instanceof ApiError ? err.code : undefined;
+  if (code !== undefined && Object.prototype.hasOwnProperty.call(CASE_INPUT_ERROR_KEY, code)) {
+    return CASE_INPUT_ERROR_KEY[code as keyof typeof CASE_INPUT_ERROR_KEY];
+  }
+  return keyForCode(err, UPDATE_CASE_ERROR_KEY, EVAL_ERROR_GENERIC);
+}
+
 /** `eval` key for a failed compare. */
 export function compareErrorKey(err: unknown): string {
   return keyForCode(err, COMPARE_ERROR_KEY, EVAL_ERROR_GENERIC);
+}
+
+// ---- Trend metrics and axis (dashboard + Evals tab) ---------------------------
+
+/** The three scored metrics, in the order the screens show them, with the
+    colour each keeps on the cards, the trend lines and the mini bars (mock:
+    screen_skills.jsx:296-323). Tokens only — no raw colours. */
+export const METRICS = [
+  {
+    key: "recall",
+    color: "var(--accent)",
+    cardKey: "common.metrics.recall",
+    compareKey: "common.metrics.recall",
+    legendKey: "detail.legend.recall",
+  },
+  {
+    key: "precision",
+    color: "var(--ok)",
+    cardKey: "common.metrics.precision",
+    compareKey: "common.metrics.precision",
+    legendKey: "detail.legend.precision",
+  },
+  {
+    key: "citation_accuracy",
+    color: "var(--warn)",
+    cardKey: "common.metrics.citationAccuracy",
+    compareKey: "common.metrics.citation",
+    legendKey: "detail.legend.citation",
+  },
+] as const;
+
+export type MetricKey = (typeof METRICS)[number]["key"];
+
+/** The metrics are ratios: the trend chart spans the whole of 0..1 (AC-83). */
+export const TREND_Y_MIN = 0;
+export const TREND_Y_MAX = 1;
+/** Even 0.2 steps so every label sits on its own grid line (no 0.25 → "0.3"). */
+export const TREND_Y_TICKS = [0, 0.2, 0.4, 0.6, 0.8, 1];
+
+// ---- Trend tooltip (SPEC-05 AC-54) -------------------------------------------
+
+export interface TrendTooltipParts {
+  /** Run start, formatted. */
+  when: string;
+  /** Agent version of the run, or `null` for an older payload without it. */
+  version: number | null;
+  /** `formatCost` text: "$0.03", or "—" for a missing cost. */
+  cost: string;
+  /** Whole percentages, "n/a" for a metric with a zero denominator. */
+  recall: string;
+  precision: string;
+  citation: string;
+}
+
+/** What one trend point's tooltip shows, as display text. */
+export function trendTooltipParts(point: EvalTrendPoint): TrendTooltipParts {
+  return {
+    when: formatWhen(point.started_at),
+    version: point.agent_version ?? null,
+    cost: formatCost(point.cost_usd ?? null),
+    recall: formatMetric(point.recall),
+    precision: formatMetric(point.precision),
+    citation: formatMetric(point.citation_accuracy),
+  };
 }

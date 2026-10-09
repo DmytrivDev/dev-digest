@@ -10,6 +10,7 @@ import {
   doublePrecision,
   index,
   uniqueIndex,
+  check,
 } from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces } from './core';
@@ -24,6 +25,10 @@ import { findings } from './reviews';
  * `expected_output` holds the expectation `{kind, file, start_line, end_line}`.
  * `source_finding_id` is SET NULL when the finding goes away, so the case stays
  * runnable (it carries its own diff, meta and labels).
+ *
+ * `origin` says which kind a row is. A `manual` case is written by hand: it has no source
+ * finding, PR number, repo or labels, so those columns are nullable (a `finding` case always
+ * carries all three; the CHECK ties `source_pr_number` to `origin`).
  */
 export const evalCases = pgTable('eval_cases', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -34,9 +39,10 @@ export const evalCases = pgTable('eval_cases', {
     .notNull()
     .references(() => agents.id, { onDelete: 'cascade' }),
   sourceFindingId: uuid('source_finding_id').references(() => findings.id, { onDelete: 'set null' }),
-  sourcePrNumber: integer('source_pr_number').notNull(),
-  sourceRepo: text('source_repo').notNull(),
-  labels: jsonb('labels').notNull(),
+  origin: text('origin', { enum: ['finding', 'manual'] }).notNull().default('finding'),
+  sourcePrNumber: integer('source_pr_number'),
+  sourceRepo: text('source_repo'),
+  labels: jsonb('labels'),
   createdAt: now(),
   name: text('name').notNull(),
   inputDiff: text('input_diff'),
@@ -50,6 +56,8 @@ export const evalCases = pgTable('eval_cases', {
     // One case per (agent, source finding): the idempotency key of "turn into eval case".
     // NULL source_finding_id rows never collide (NULLs are distinct).
     agentFinding: uniqueIndex('eval_cases_agent_finding_uq').on(t.agentId, t.sourceFindingId),
+    // Only a manual case may lack a source PR; a finding-born case always has one.
+    originSource: check('eval_cases_origin_source_ck', sql`(${t.origin} = 'manual') = (${t.sourcePrNumber} IS NULL)`),
   }),
 );
 

@@ -1,12 +1,13 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent, EvalCase, EvalCaseOutcome, EvalSuiteRun } from "@devdigest/shared";
 import { ToastProvider } from "@/lib/toast";
 import evalMessages from "../../../../../../../../messages/en/eval.json";
 import commonMessages from "../../../../../../../../messages/en/common.json";
+import shellMessages from "../../../../../../../../messages/en/shell.json";
 
 const nav = vi.hoisted(() => ({ search: "tab=evals", replace: vi.fn() }));
 
@@ -15,6 +16,17 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/agents/ag1",
   useSearchParams: () => new URLSearchParams(nav.search),
 }));
+
+// jsdom gives ResponsiveContainer a 0x0 box, so Recharts draws nothing (and
+// warns). A fixed size lets the trend chart lay out, so its dots can be counted.
+vi.mock("recharts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("recharts")>();
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children: React.ReactElement }) =>
+      React.cloneElement(children, { width: 600, height: 200 } as object),
+  };
+});
 
 import { EvalsTab } from "./EvalsTab";
 
@@ -64,6 +76,7 @@ function makeCase(id: string, name: string, over: Partial<EvalCase> = {}): EvalC
     input_diff: "@@ -1,1 +1,1 @@\n+x",
     input_meta: { pr_number: 483, title: "Add Stripe integration", body: null },
     expectation: EXPECTATION,
+    origin: "finding",
     labels: { severity: "CRITICAL", category: "security", title: "Hardcoded Stripe secret key" },
     source: { finding_id: "f1", pr_number: 483, repo: "acme/payments-api", available: true },
     created_at: "2026-10-01T10:00:00.000Z",
@@ -126,6 +139,19 @@ beforeEach(() => {
       cases = cases.filter((c) => c.id !== id);
       return jsonResponse(null, 204);
     }
+    if (method === "POST" && url.endsWith("/agents/ag1/eval/cases")) {
+      const body = JSON.parse(init!.body as string);
+      const created = makeCase("new1", body.name, {
+        origin: "manual",
+        labels: null,
+        source: null,
+        input_diff: body.input_diff,
+        input_meta: { pr_number: null, title: body.input_meta?.title ?? "", body: null },
+        expectation: body.expectation,
+      });
+      cases = [...cases, created];
+      return jsonResponse(created, 201);
+    }
     if (url.endsWith("/eval/cases")) return jsonResponse(cases);
     if (url.endsWith("/eval/runs")) return jsonResponse(runs);
     return jsonResponse({ error: { code: "not_found", message: "no" } }, 404);
@@ -144,7 +170,7 @@ function renderTab() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <NextIntlClientProvider locale="en" messages={{ eval: evalMessages, common: commonMessages }}>
+      <NextIntlClientProvider locale="en" messages={{ eval: evalMessages, common: commonMessages, shell: shellMessages }}>
         <ToastProvider>
           <EvalsTab agent={AGENT} />
         </ToastProvider>
@@ -244,6 +270,9 @@ describe("EvalsTab — case list (AC-29, AC-30, AC-32)", () => {
     renderTab();
     expect(await screen.findByText("No eval cases yet")).toBeInTheDocument();
     expect(screen.getByText(/Turn an accepted or dismissed finding into a case/)).toBeInTheDocument();
+    // SPEC-05 AC-49: the second source of a case is named too.
+    expect(screen.getByText(/"Turn into eval case"/)).toBeInTheDocument();
+    expect(screen.getByText(/"New eval case"/)).toBeInTheDocument();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Run all evals (0 cases)" })).toBeDisabled();
   });
@@ -379,6 +408,138 @@ describe("EvalsTab — keyboard (NFR-3)", () => {
       expect(control.getAttribute("tabindex")).not.toBe("-1");
       control.focus();
       expect(document.activeElement).toBe(control);
+    }
+  });
+});
+
+// ---- SPEC-05: New eval case --------------------------------------------------
+
+const newCaseButton = () => screen.getByRole("button", { name: "New eval case" });
+
+describe("EvalsTab — New eval case button (SPEC-05 AC-1, AC-2)", () => {
+  it("is a primary Plus button right after the run button (AC-1)", async () => {
+    cases = [makeCase("c1", "stripe-key-leak")];
+    runs = [makeRun(1)];
+    renderTab();
+    const run = await screen.findByRole("button", { name: "Run all evals (1 cases)" });
+    const add = newCaseButton();
+    expect(run.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(add.parentElement).toBe(run.parentElement);
+    expect(add.nextElementSibling).toBeNull();
+    expect(add).toHaveStyle({ background: "var(--accent)" });
+    expect(add.querySelector("svg.lucide-plus")).not.toBeNull();
+  });
+
+  it("stays enabled with zero cases, with no run, and while a run is running (AC-2)", async () => {
+    renderTab();
+    await screen.findByText("No eval cases yet");
+    expect(newCaseButton()).toBeEnabled();
+    cleanup();
+    cases = [makeCase("c1", "stripe-key-leak")];
+    runs = [];
+    renderTab();
+    await screen.findByText("stripe-key-leak");
+    expect(newCaseButton()).toBeEnabled();
+    cleanup();
+    runs = [makeRun(1, { status: "running", finished_at: null, cases_done: 2, cases_total: 8 })];
+    renderTab();
+    await screen.findByText("stripe-key-leak");
+    expect(await screen.findByRole("button", { name: /Running 2 \/ 8 cases/ })).toBeDisabled();
+    expect(newCaseButton()).toBeEnabled();
+  });
+});
+
+describe("EvalsTab — creating a case (SPEC-05 AC-16)", () => {
+  it("lists the new case and counts it in the run button, with no reload", async () => {
+    cases = [makeCase("c1", "stripe-key-leak")];
+    renderTab();
+    await screen.findByText("stripe-key-leak");
+    expect(screen.getByRole("button", { name: "Run all evals (1 cases)" })).toBeInTheDocument();
+
+    fireEvent.click(newCaseButton());
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("New eval case")).toBeInTheDocument();
+    const change = (el: HTMLElement, value: string) => fireEvent.change(el, { target: { value } });
+    change(dialog.getByRole("textbox", { name: "Name" }), "hand-written");
+    change(
+      dialog.getByRole("textbox", { name: "Diff" }),
+      "+++ b/src/config.ts\n@@ -10,2 +12,3 @@\n+added\n ctx\n+more\n",
+    );
+    change(
+      dialog.getByRole("textbox", { name: /Expected output/ }),
+      JSON.stringify({ kind: "must_find", file: "src/config.ts", start_line: 12, end_line: 12 }),
+    );
+    fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("hand-written")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run all evals (2 cases)" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("opens no create modal until the button is clicked, and closes it on Cancel", async () => {
+    renderTab();
+    await screen.findByText("No eval cases yet");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(newCaseButton());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toHaveLength(0);
+  });
+});
+
+describe("EvalsTab — the manual badge (SPEC-05 AC-41)", () => {
+  it("shows 'manual' in place of severity and category on a manual row, and leaves a finding row alone", async () => {
+    cases = [
+      makeCase("c1", "stripe-key-leak"),
+      makeCase("c2", "hand-written", { origin: "manual", labels: null, source: null }),
+    ];
+    renderTab();
+    const manual = (await screen.findByText("hand-written")).closest("[role=listitem]") as HTMLElement;
+    const finding = screen.getByText("stripe-key-leak").closest("[role=listitem]") as HTMLElement;
+    expect(within(manual).getByText("must find")).toBeInTheDocument();
+    expect(within(manual).getByText("manual")).toBeInTheDocument();
+    expect(within(manual).queryByText(/critical/i)).toBeNull();
+    expect(within(manual).queryByText(/security/i)).toBeNull();
+    expect(within(finding).queryByText("manual")).toBeNull();
+    expect(within(finding).getByText(/critical/i)).toBeInTheDocument();
+  });
+});
+
+describe("EvalsTab — the metric trend (SPEC-05 AC-50, AC-56)", () => {
+  const dots = (container: HTMLElement) => container.querySelectorAll(".recharts-line-dot");
+
+  it("sits between the EVAL METRICS section and the case list", async () => {
+    cases = [makeCase("c1", "stripe-key-leak")];
+    runs = [makeRun(2), makeRun(1)];
+    renderTab();
+    const trend = await screen.findByRole("group", { name: "Metric trend by run" });
+    const metrics = screen.getByText("Eval metrics");
+    const list = await screen.findByRole("list");
+    expect(metrics.compareDocumentPosition(trend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(trend.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Metric trend")).toBeInTheDocument();
+  });
+
+  it("adds a point when a polled run changes from running to completed, without a reload", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      cases = [makeCase("c1", "stripe-key-leak")];
+      runs = [
+        makeRun(3, { status: "running", finished_at: null, recall: null, precision: null, citation_accuracy: null }),
+        makeRun(2),
+        makeRun(1),
+      ];
+      const { container } = renderTab();
+      await waitFor(() => expect(dots(container)).toHaveLength(6)); // 2 completed runs x 3 lines
+
+      runs = [makeRun(3), makeRun(2), makeRun(1)];
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3100); // the runs list polls every 3 s while one runs
+      });
+      await waitFor(() => expect(dots(container)).toHaveLength(9));
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

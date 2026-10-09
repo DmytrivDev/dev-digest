@@ -1,6 +1,7 @@
 import type {
   EvalAlert,
   EvalCase,
+  EvalCaseCreate,
   EvalCaseOutcome,
   EvalCaseUpdate,
   EvalCompare,
@@ -18,6 +19,7 @@ import { AppError, ConfigError, NotFoundError } from '../../platform/errors.js';
 import type { AgentsRepository } from '../agents/repository.js';
 import { assembleSkills } from '../reviews/helpers.js';
 import {
+  CASE_INPUT_ERROR,
   COMPARE_ERROR,
   CREATE_CASE_ERROR,
   RUN_LIST_LIMIT,
@@ -28,6 +30,7 @@ import {
 import {
   buildCaseDiff,
   caseDiffTooLarge,
+  checkPastedDiff,
   diffFilePath,
   rangeIntersectsHunks,
   slugifyTitle,
@@ -83,6 +86,42 @@ const CREATE_CASE_MESSAGE = {
 
 function createError(code: keyof typeof CREATE_CASE_MESSAGE): AppError {
   return new AppError(code, CREATE_CASE_MESSAGE[code], UNPROCESSABLE);
+}
+
+/** Human message per manual-case input reason; the code is what clients map on (SPEC-05). */
+const CASE_INPUT_MESSAGE = {
+  [CASE_INPUT_ERROR.diffTooLarge]: 'The diff is too large to store as an eval case.',
+  [CASE_INPUT_ERROR.diffUnparseable]:
+    'The diff needs a "+++ b/<path>" line and at least one "@@ -N,M +N,M @@" hunk header.',
+  [CASE_INPUT_ERROR.multiFileDiff]: 'An eval case covers one file; the diff names more than one.',
+  [CASE_INPUT_ERROR.diffFrozen]:
+    'The diff and PR text of a case made from a finding cannot be edited.',
+} as const;
+
+function inputError(code: keyof typeof CASE_INPUT_MESSAGE): AppError {
+  return new AppError(code, CASE_INPUT_MESSAGE[code], UNPROCESSABLE);
+}
+
+/** The expectation checks shared by create and update: same file, inside the hunks. */
+function expectationError(
+  parsed: UnifiedDiff,
+  expectation: EvalExpectation,
+): AppError | undefined {
+  if (expectation.file !== diffFilePath(parsed)) {
+    return new AppError(
+      UPDATE_CASE_ERROR.fileMismatch,
+      'The expectation must stay in the file this case’s diff is for.',
+      UNPROCESSABLE,
+    );
+  }
+  if (!rangeIntersectsHunks(parsed, expectation.file, expectation.start_line, expectation.end_line)) {
+    return new AppError(
+      UPDATE_CASE_ERROR.rangeOutsideHunks,
+      'The expectation’s lines are outside the changed hunks of the case diff.',
+      UNPROCESSABLE,
+    );
+  }
+  return undefined;
 }
 
 function runInProgress(): AppError {
@@ -168,6 +207,59 @@ export class EvalService {
   }
 
   // ===========================================================================
+  // Create a manual case from a pasted diff (SPEC-05 AC-19 … AC-30)
+  // ===========================================================================
+
+  /**
+   * A case written by hand: a pasted single-file diff, optional PR title/body, and one
+   * expectation. Makes NO model call (AC-30): it is validated, named and stored, nothing
+   * more — a model only sees it when a suite run reviews it.
+   */
+  async createManualCase(
+    workspaceId: string,
+    agentId: string,
+    body: EvalCaseCreate,
+  ): Promise<EvalCase> {
+    const { repo, agents, parseDiff } = this.deps;
+
+    // 1. The agent, scoped to the workspace (404 across tenants, AC-29).
+    if (!(await agents.getById(workspaceId, agentId))) throw new NotFoundError('Agent not found');
+
+    // 2. The pasted diff: size, path, hunk header, one file — in that order (AC-25).
+    const checked = checkPastedDiff(body.input_diff);
+    if (!checked.ok) throw inputError(checked.code);
+
+    // 3. The expectation must name that file and sit inside its hunks (AC-26, AC-27).
+    const mismatch = expectationError(parseDiff(checked.diff), body.expectation);
+    if (mismatch) throw mismatch;
+
+    // 4. Unique inside the agent's suite (AC-24). Zod already trimmed and bounded the name.
+    const taken = new Set(await repo.caseNamesForAgent(workspaceId, agentId));
+    const name = uniqueCaseName(body.name, taken);
+
+    const inserted = await repo.insertCase({
+      workspaceId,
+      agentId,
+      origin: 'manual',
+      sourceFindingId: null,
+      sourcePrNumber: null,
+      sourceRepo: null,
+      labels: null,
+      name,
+      inputDiff: checked.diff,
+      inputMeta: {
+        pr_number: null,
+        title: body.input_meta?.title ?? '',
+        body: body.input_meta?.body || null,
+      },
+      expectedOutput: body.expectation,
+      notes: body.notes ?? null,
+    });
+    if (!inserted) throw new AppError('internal_error', 'Could not create the eval case', 500);
+    return caseRowToDto(inserted, null);
+  }
+
+  // ===========================================================================
   // Case reads / edit / delete
   // ===========================================================================
 
@@ -187,38 +279,48 @@ export class EvalService {
   }
 
   /**
-   * Edit name, notes and/or expectation (AC-41…AC-43). The expectation must stay in the
-   * case's own file and inside its hunks; `kind` may change freely. Stored outcomes of
-   * past runs are not touched (AC-35).
+   * Edit a case (AC-41…AC-43; SPEC-05 AC-35…AC-39). Name, notes and expectation are open to
+   * every case. The diff and the PR title/body belong to a MANUAL case only: a finding-born
+   * case answers `diff_frozen`. Whatever the diff or the expectation ends up as, the pair
+   * is checked together — same file, inside the hunks — and nothing is written until every
+   * check has passed. Stored outcomes of past runs are not touched (AC-35).
    */
   async updateCase(workspaceId: string, id: string, body: EvalCaseUpdate): Promise<EvalCase> {
     const { repo, parseDiff } = this.deps;
     const row = await repo.getCase(workspaceId, id);
     if (!row) throw new NotFoundError('Eval case not found');
 
-    const expectation = body.expectation;
-    if (expectation) {
-      const parsed = parseDiff(row.inputDiff ?? '');
-      if (expectation.file !== diffFilePath(parsed)) {
-        throw new AppError(
-          UPDATE_CASE_ERROR.fileMismatch,
-          'The expectation must stay in the file this case’s diff is for.',
-          UNPROCESSABLE,
-        );
-      }
-      if (!rangeIntersectsHunks(parsed, expectation.file, expectation.start_line, expectation.end_line)) {
-        throw new AppError(
-          UPDATE_CASE_ERROR.rangeOutsideHunks,
-          'The expectation’s lines are outside the changed hunks of the case diff.',
-          UNPROCESSABLE,
-        );
-      }
+    const editsInput = body.input_diff !== undefined || body.input_meta !== undefined;
+    if (editsInput && row.origin === 'finding') throw inputError(CASE_INPUT_ERROR.diffFrozen);
+
+    let newDiff: string | undefined;
+    if (body.input_diff !== undefined) {
+      const checked = checkPastedDiff(body.input_diff);
+      if (!checked.ok) throw inputError(checked.code);
+      newDiff = checked.diff;
+    }
+
+    // The diff + expectation the case would have after this edit (AC-38).
+    if (newDiff !== undefined || body.expectation) {
+      const expectation = body.expectation ?? caseRowToDto(row, null).expectation;
+      const mismatch = expectationError(parseDiff(newDiff ?? row.inputDiff ?? ''), expectation);
+      if (mismatch) throw mismatch;
     }
 
     const updated = await repo.updateCase(workspaceId, id, {
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
-      ...(expectation ? { expectedOutput: expectation } : {}),
+      ...(body.expectation ? { expectedOutput: body.expectation } : {}),
+      ...(newDiff !== undefined ? { inputDiff: newDiff } : {}),
+      ...(body.input_meta !== undefined
+        ? {
+            inputMeta: {
+              pr_number: null,
+              title: body.input_meta.title,
+              body: body.input_meta.body || null,
+            },
+          }
+        : {}),
     });
     if (!updated) throw new NotFoundError('Eval case not found');
     return this.toDto(updated);
@@ -450,6 +552,9 @@ export class EvalService {
       cases_total: counts.get(agent.id) ?? 0,
       runs,
       trend: [...completed].reverse().map((r) => ({
+        run_id: r.id,
+        agent_version: r.agent_version,
+        cost_usd: r.cost_usd,
         started_at: r.started_at,
         recall: r.recall,
         precision: r.precision,

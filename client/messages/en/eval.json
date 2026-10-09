@@ -51,7 +51,12 @@
     "different_agents": "These runs belong to different agents and cannot be compared.",
     "same_run": "Pick two different runs to compare.",
     "file_mismatch": "The expected output must point at the same file as the case diff.",
-    "range_outside_hunks": "The expected line range must overlap a changed line of the case diff."
+    "range_outside_hunks": "The expected line range must overlap a changed line of the case diff.",
+    "diff_too_large": "The diff is larger than 200 KB. Paste a smaller one.",
+    "diff_unparseable": "The diff could not be read. It needs a +++ header naming a file and an @@ hunk.",
+    "multi_file_diff": "A case holds one file only. Remove the other files from the diff.",
+    "diff_frozen": "The input of a case made from a finding cannot be edited.",
+    "validation_error": "Some fields are not valid. Check the name and the text sizes and try again."
   },
   "runButton": {
     "tab": "Run all evals ({count} cases)",
@@ -67,7 +72,7 @@
     "loadingCases": "Loading eval cases…",
     "loadError": "Could not load the eval cases.",
     "emptyTitle": "No eval cases yet",
-    "emptyBody": "Turn an accepted or dismissed finding into a case: triage a finding on a pull request, then choose \"Turn into eval case\".",
+    "emptyBody": "Turn an accepted or dismissed finding into a case: triage a finding on a pull request, then choose \"Turn into eval case\". Or write one by hand with \"New eval case\".",
     "row": {
       "edit": "Edit",
       "delete": "Delete",
@@ -76,7 +81,8 @@
         "fail": "Failed",
         "errored": "Errored",
         "never": "Never run"
-      }
+      },
+      "manual": "manual"
     },
     "runHistory": {
       "title": "Run history",
@@ -97,7 +103,8 @@
       "title": "Delete eval case {name}?",
       "body": "The case is removed from this agent's suite. Results of past runs keep their stored outcome.",
       "confirm": "Delete case"
-    }
+    },
+    "newCase": "New eval case"
   },
   "caseModal": {
     "title": "Eval case · {name}",
@@ -114,7 +121,9 @@
       "number": "PR number",
       "title": "Title",
       "body": "Body",
-      "noBody": "No description"
+      "noBody": "No description",
+      "titleLabel": "Title",
+      "bodyLabel": "Body"
     },
     "expectedLabel": "Expected output",
     "validJson": "valid JSON",
@@ -127,12 +136,26 @@
     },
     "source": {
       "line": "PR #{number} · {file}:{start}–{end}",
-      "removed": "source removed"
+      "removed": "source removed",
+      "manual": "Created manually"
     },
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…",
-    "loadError": "Could not load this eval case."
+    "loadError": "Could not load this eval case.",
+    "createTitle": "New eval case",
+    "createSubtitle": "{agent} · simulate a PR and assert the expected output",
+    "diffPlaceholder": "Paste a unified diff for one file. It needs a +++ b/'<'path'>' header and an @@ hunk.",
+    "diffErrors": {
+      "diff_too_large": "The diff is larger than 200 KB. Paste a smaller one.",
+      "diff_unparseable": "This is not a diff the case can use. It needs a +++ header naming a file and an @@ hunk.",
+      "multi_file_diff": "A case holds one file only. Remove the other files from the diff."
+    },
+    "expectationErrors": {
+      "file_mismatch": "The expected output must point at the same file as the diff.",
+      "range_outside_hunks": "The expected line range must touch lines inside a hunk, as its @@ header declares them."
+    },
+    "skeleton": "Finding skeleton"
   },
   "overview": {
     "title": "Eval Dashboard",
@@ -214,5 +237,18 @@
   "nav": {
     "skillsLab": "Skills Lab",
     "evalDashboard": "Eval Dashboard"
+  },
+  "trend": {
+    "title": "Metric trend",
+    "notEnough": "Run the suite at least twice to see a trend",
+    "loadError": "Could not load the run history for the trend.",
+    "chartLabel": "Metric trend by run",
+    "tooltip": {
+      "version": "v{version}",
+      "cost": "Cost {cost}",
+      "recall": "Recall {value}",
+      "precision": "Precision {value}",
+      "citation": "Citation {value}"
+    }
   }
 }

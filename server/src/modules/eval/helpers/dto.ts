@@ -58,27 +58,47 @@ export function caseRowToDto(
   lastOutcome?: EvalCaseOutcomeRow | null,
 ): EvalCase {
   const meta = EvalCaseInputMeta.safeParse(row.inputMeta);
-  const labels = EvalCaseLabels.safeParse(row.labels);
-  return {
+  const base = {
     id: row.id,
     agent_id: row.agentId,
     name: row.name,
     notes: row.notes,
     input_diff: row.inputDiff ?? '',
+    expectation: parseExpectation(row.expectedOutput, fileOfDiff(row.inputDiff)),
+    created_at: row.createdAt.toISOString(),
+    last_outcome: lastOutcome ? outcomeRowToDto(lastOutcome) : null,
+  };
+
+  // A manual case has no source finding, PR or labels; its meta never carries a PR number.
+  if (row.origin === 'manual') {
+    return {
+      ...base,
+      input_meta: {
+        pr_number: null,
+        title: meta.success ? meta.data.title : '',
+        body: meta.success ? meta.data.body : null,
+      },
+      origin: 'manual',
+      labels: null,
+      source: null,
+    };
+  }
+
+  const labels = EvalCaseLabels.safeParse(row.labels);
+  return {
+    ...base,
     input_meta: meta.success
       ? meta.data
-      : { pr_number: row.sourcePrNumber, title: '', body: null },
-    expectation: parseExpectation(row.expectedOutput, fileOfDiff(row.inputDiff)),
+      : { pr_number: row.sourcePrNumber ?? null, title: '', body: null },
+    origin: 'finding',
     labels: labels.success ? labels.data : { severity: '', category: '', title: row.name },
     source: {
       finding_id: row.sourceFindingId,
-      pr_number: row.sourcePrNumber,
-      repo: row.sourceRepo,
+      pr_number: row.sourcePrNumber ?? 0,
+      repo: row.sourceRepo ?? '',
       // SET NULL on the finding's deletion: the case stays runnable, its link is gone (AC-45).
       available: row.sourceFindingId !== null,
     },
-    created_at: row.createdAt.toISOString(),
-    last_outcome: lastOutcome ? outcomeRowToDto(lastOutcome) : null,
   };
 }
 

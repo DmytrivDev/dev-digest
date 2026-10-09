@@ -1,0 +1,54 @@
+PR under review: "Add FindingCard and tidy imports". Files added or changed:
+
+--- src/components/index.ts ---
+export * from "./AgentRunRow";
+export * from "./AppShell";
+export * from "./DiffViewer";
+export * from "./EmptyState";
+export * from "./FindingCard";
+export * from "./PrListRow";
+export * from "./RepoPicker";
+export * from "./RunCostBadge";
+export * from "./RunTraceDrawer";
+export * from "./SettingsPanel";
+export * from "./SkeletonRows";
+export * from "./ToastHost";
+
+Consumers (4 of 31 shown):
+  app/repos/[repoId]/pulls/page.tsx:  import { PrListRow, SkeletonRows } from "@/components";
+  app/runs/page.tsx:                  import { AgentRunRow, RunCostBadge } from "@/components";
+  app/settings/page.tsx:              import { SettingsPanel } from "@/components";
+  app/layout.tsx:                     import { AppShell, ToastHost } from "@/components";
+
+--- src/lib/utils.ts ---
+export function formatCost(usd: number): string { return `$${usd.toFixed(4)}`; }
+export function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+export function isoDay(d: Date): string { return d.toISOString().slice(0, 10); }
+// importers: formatCost <- RunCostBadge, AgentRunRow; truncate <- FindingCard; isoDay <- PrListRow
+
+--- src/components/FindingCard/index.ts ---
+/* FindingCard — one finding with severity, location and body. */
+export { FindingCard } from "./FindingCard";
+export { lineLabel } from "./helpers";
+
+--- src/components/FindingCard/helpers.ts ---
+export function lineLabel(f: { start_line: number; end_line: number }): string {
+  return f.start_line === f.end_line ? `${f.start_line}` : `${f.start_line}-${f.end_line}`;
+}
+
+--- src/components/FindingCard/FindingCard.tsx (first lines) ---
+import type { FindingRecord } from "@devdigest/shared";
+import { lineLabel } from "./index";
+import { truncate } from "@/lib/utils";
+import { s } from "./styles";
+
+export function FindingCard({ finding }: { finding: FindingRecord }) {
+  return (
+    <div style={s.card}>
+      <span style={s.loc}>{finding.file}:{lineLabel(finding)}</span>
+      <p>{truncate(finding.body, 240)}</p>
+    </div>
+  );
+}

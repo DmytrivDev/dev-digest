@@ -208,6 +208,28 @@ describe('aggregateRun', () => {
     ]);
     expect(r).toMatchObject({ cases_passed: 1, cases_scored: 2, cases_errored: 1 });
   });
+
+  // Mutation-testing killers (docs/mutation-testing.md): each is named for the Stryker
+  // mutant it exists to kill, so a regression is traceable to the survivor table.
+  it('kills MethodExpression @ scoring.ts:122 — a run of only errored, cost-less cases has null cost, not 0', () => {
+    const errored = outcome({ status: 'errored', pass: null, cost_usd: null });
+    expect(aggregateRun([errored]).cost_usd).toBeNull();
+  });
+
+  it('kills ConditionalExpression @ scoring.ts:122 — null costs are dropped before the "no cost at all" check', () => {
+    const errored = outcome({ status: 'errored', pass: null, cost_usd: null });
+    expect(aggregateRun([errored, errored]).cost_usd).toBeNull();
+  });
+
+  it('kills EqualityOperator @ scoring.ts:128 — cases_passed counts the passed cases, not the failed ones', () => {
+    const r = aggregateRun([outcome({ pass: true }), outcome({ pass: true }), outcome({ pass: false })]);
+    expect(r.cases_passed).toBe(2);
+  });
+
+  it('kills BooleanLiteral @ scoring.ts:128 — cases_passed is 0 when every scored case failed', () => {
+    const r = aggregateRun([outcome({ pass: false }), outcome({ pass: false })]);
+    expect(r.cases_passed).toBe(0);
+  });
 });
 
 describe('finalStatus (AC-56, AC-57)', () => {

@@ -1,4 +1,3 @@
-import type { ChartSeries } from "@devdigest/ui";
 import type { EvalSuiteRun, EvalTrendPoint } from "@devdigest/shared";
 import { deltaPoints } from "@/lib/eval";
 import { COMPARE_COUNT, MAX_TREND_POINTS, METRICS, type MetricKey } from "./constants";
@@ -36,19 +35,12 @@ export function metricCardData(
 }
 
 /**
- * The three trend lines. `LineChart` takes equal-length number arrays, so a
- * point where any metric is null (a 0 denominator) is left out of ALL three
- * rather than drawn as a false 0.
+ * The points the dashboard chart draws. A point where any metric is null (a 0
+ * denominator) is left out of ALL three lines rather than drawn as a false 0
+ * (the Evals tab, by contrast, keeps the gap); the last 20 remain.
  */
-export function trendSeries(trend: readonly EvalTrendPoint[]): ChartSeries[] {
-  const points = trend
-    .filter((p) => METRICS.every((m) => p[m.key] != null))
-    .slice(-MAX_TREND_POINTS);
-  return METRICS.map((m) => ({
-    name: m.key,
-    color: m.color,
-    data: points.map((p) => p[m.key] as number),
-  }));
+export function trendPoints(trend: readonly EvalTrendPoint[]): EvalTrendPoint[] {
+  return trend.filter((p) => METRICS.every((m) => p[m.key] != null)).slice(-MAX_TREND_POINTS);
 }
 
 /** Add `id` to the selection, or remove it. A third pick is ignored. */

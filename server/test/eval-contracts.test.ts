@@ -89,6 +89,7 @@ describe('eval contracts', () => {
       input_diff: 'diff --git a/x b/x\n',
       input_meta: { pr_number: 483, title: 'Add charge', body: null },
       expectation,
+      origin: 'finding',
       labels: { severity: 'CRITICAL', category: 'security', title: 'Hardcoded secret' },
       source: { finding_id: 'f1', pr_number: 483, repo: 'acme/payments-api', available: true },
       created_at: '2026-10-08T09:00:00.000Z',

@@ -22,6 +22,27 @@ import { Conformance, Provider, ReviewStrategy, CiFailOn } from './knowledge.js'
 // no further model call. Wire fields are snake_case.
 // ===========================================================================
 
+/**
+ * Largest diff / PR-meta text a manual case may carry, in UTF-8 bytes (200 KB). One number
+ * governs the server's `diff_too_large` check and the title+body size check below.
+ */
+export const EVAL_CASE_MAX_BYTES = 200 * 1024;
+
+/** Longest manual eval case name, in characters (after trim). */
+export const EVAL_CASE_NAME_MAX = 60;
+
+/** A string that must not contain a NUL byte (Postgres text cannot store one). */
+const hasNoNul = (s: string): boolean => !s.includes('\u0000');
+const NO_NUL_MESSAGE = 'must not contain a NUL character';
+const NoNul = z.string().refine(hasNoNul, { message: NO_NUL_MESSAGE });
+
+/** Title + body of a manual case's PR meta must fit in EVAL_CASE_MAX_BYTES together. */
+const metaFitsBudget = (m: { title?: string; body?: string | null }): boolean => {
+  const enc = new TextEncoder();
+  return enc.encode(m.title ?? '').length + enc.encode(m.body ?? '').length <= EVAL_CASE_MAX_BYTES;
+};
+const META_TOO_LARGE = { message: 'title and body together are too large' };
+
 /** What the case expects of the agent: flag this range, or stay away from it. */
 export const EvalExpectationKind = z.enum(['must_find', 'must_not_flag']);
 export type EvalExpectationKind = z.infer<typeof EvalExpectationKind>;
@@ -39,9 +60,13 @@ export const EvalExpectation = z
   });
 export type EvalExpectation = z.infer<typeof EvalExpectation>;
 
-/** PR facts frozen onto the case when it was created. */
+/** Where a case came from: promoted from a finding, or written by hand. */
+export const EvalCaseOrigin = z.enum(['finding', 'manual']);
+export type EvalCaseOrigin = z.infer<typeof EvalCaseOrigin>;
+
+/** PR facts frozen onto the case when it was created. `pr_number` is null on a manual case. */
 export const EvalCaseInputMeta = z.object({
-  pr_number: z.number().int(),
+  pr_number: z.number().int().nullable(),
   title: z.string(),
   body: z.string().nullable(),
 });
@@ -108,8 +133,11 @@ export const EvalCase = z.object({
   input_diff: z.string(),
   input_meta: EvalCaseInputMeta,
   expectation: EvalExpectation,
-  labels: EvalCaseLabels,
-  source: EvalCaseSource,
+  origin: EvalCaseOrigin,
+  /** null on a manual case. */
+  labels: EvalCaseLabels.nullable(),
+  /** null on a manual case. */
+  source: EvalCaseSource.nullable(),
   created_at: z.string(),
   /** From the latest run that contained the case. */
   last_outcome: EvalCaseOutcome.nullable(),
@@ -119,12 +147,38 @@ export type EvalCase = z.infer<typeof EvalCase>;
 /** Body of `PATCH /eval/cases/:id`. Strict: an unknown key is a 422, not ignored. */
 export const EvalCaseUpdate = z
   .object({
-    name: z.string().trim().min(1).optional(),
-    notes: z.string().nullable().optional(),
+    name: z.string().trim().min(1).max(EVAL_CASE_NAME_MAX).refine(hasNoNul, { message: NO_NUL_MESSAGE }).optional(),
+    notes: NoNul.nullable().optional(),
     expectation: EvalExpectation.optional(),
+    /** Manual cases only: a finding-born case answers 422 `diff_frozen`. */
+    input_diff: NoNul.optional(),
+    input_meta: z
+      .object({ title: NoNul, body: NoNul.nullable() })
+      .strict()
+      .refine(metaFitsBudget, META_TOO_LARGE)
+      .optional(),
   })
   .strict();
 export type EvalCaseUpdate = z.infer<typeof EvalCaseUpdate>;
+
+/**
+ * Body of `POST /agents/:id/eval/cases` — a manual case. Strict. `input_diff` has NO size
+ * cap here on purpose: an oversize diff must answer `diff_too_large`, not `validation_error`.
+ */
+export const EvalCaseCreate = z
+  .object({
+    name: z.string().trim().min(1).max(EVAL_CASE_NAME_MAX).refine(hasNoNul, { message: NO_NUL_MESSAGE }),
+    notes: NoNul.nullable().optional(),
+    input_diff: NoNul,
+    input_meta: z
+      .object({ title: NoNul.optional(), body: NoNul.nullable().optional() })
+      .strict()
+      .refine(metaFitsBudget, META_TOO_LARGE)
+      .optional(),
+    expectation: EvalExpectation,
+  })
+  .strict();
+export type EvalCaseCreate = z.infer<typeof EvalCaseCreate>;
 
 export const EvalRunStatus = z.enum(['running', 'completed', 'failed']);
 export type EvalRunStatus = z.infer<typeof EvalRunStatus>;
@@ -234,6 +288,10 @@ export type EvalAlert = z.infer<typeof EvalAlert>;
 /** One point on the dashboard trend (per completed run, chronological). */
 export const EvalTrendPoint = z.object({
   started_at: z.string(),
+  /** Optional on the wire so older fixtures still parse; the server always sends them. */
+  run_id: z.string().optional(),
+  agent_version: z.number().int().optional(),
+  cost_usd: z.number().nullable().optional(),
   recall: z.number().nullable(),
   precision: z.number().nullable(),
   citation_accuracy: z.number().nullable(),
@@ -279,6 +337,15 @@ export type EvalCreateCaseErrorCode = z.infer<typeof EvalCreateCaseErrorCode>;
 
 export const EvalUpdateCaseErrorCode = z.enum(['file_mismatch', 'range_outside_hunks']);
 export type EvalUpdateCaseErrorCode = z.infer<typeof EvalUpdateCaseErrorCode>;
+
+/** Codes a pasted/edited manual-case diff can fail with (create and update). */
+export const EvalCaseInputErrorCode = z.enum([
+  'diff_too_large',
+  'diff_unparseable',
+  'multi_file_diff',
+  'diff_frozen',
+]);
+export type EvalCaseInputErrorCode = z.infer<typeof EvalCaseInputErrorCode>;
 
 export const EvalRunStartErrorCode = z.enum([
   'run_in_progress',

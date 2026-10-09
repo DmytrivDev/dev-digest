@@ -42,13 +42,15 @@ export interface FindingCaseContext {
 export interface InsertEvalCase {
   workspaceId: string;
   agentId: string;
+  /** 'finding' when omitted. A 'manual' case has no source finding, PR, repo or labels. */
+  origin?: 'finding' | 'manual';
   sourceFindingId: string | null;
-  sourcePrNumber: number;
-  sourceRepo: string;
-  labels: { severity: string; category: string; title: string };
+  sourcePrNumber: number | null;
+  sourceRepo: string | null;
+  labels: { severity: string; category: string; title: string } | null;
   name: string;
   inputDiff: string;
-  inputMeta: { pr_number: number; title: string; body: string | null };
+  inputMeta: { pr_number: number | null; title: string; body: string | null };
   expectedOutput: EvalExpectation;
   notes?: string | null;
 }
@@ -57,6 +59,9 @@ export interface EvalCasePatch {
   name?: string;
   notes?: string | null;
   expectedOutput?: EvalExpectation;
+  /** Manual cases only (the service refuses a finding-born case before it gets here). */
+  inputDiff?: string;
+  inputMeta?: { pr_number: null; title: string; body: string | null };
 }
 
 export interface InsertEvalRun {
@@ -205,6 +210,7 @@ export class EvalRepository {
       .values({
         workspaceId: values.workspaceId,
         agentId: values.agentId,
+        origin: values.origin ?? 'finding',
         sourceFindingId: values.sourceFindingId,
         sourcePrNumber: values.sourcePrNumber,
         sourceRepo: values.sourceRepo,
@@ -246,6 +252,8 @@ export class EvalRepository {
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.notes !== undefined) set.notes = patch.notes;
     if (patch.expectedOutput !== undefined) set.expectedOutput = patch.expectedOutput;
+    if (patch.inputDiff !== undefined) set.inputDiff = patch.inputDiff;
+    if (patch.inputMeta !== undefined) set.inputMeta = patch.inputMeta;
     if (Object.keys(set).length === 0) return this.getCase(workspaceId, id);
     const [row] = await this.db
       .update(t.evalCases)

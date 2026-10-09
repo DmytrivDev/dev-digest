@@ -13,12 +13,13 @@ import { useTranslations } from "next-intl";
 import { api } from "../api";
 import { notify } from "../toast";
 import {
+  caseSaveErrorKey,
   createCaseErrorKey,
   runStartErrorKey,
-  updateCaseErrorKey,
 } from "../eval";
 import type {
   EvalCase,
+  EvalCaseCreate,
   EvalCaseUpdate,
   EvalCompare,
   EvalDashboard,
@@ -170,7 +171,27 @@ export function useCreateEvalCase(prId?: string | null) {
   });
 }
 
-/** Edit a case's name, notes or expectation (PATCH). */
+/**
+ * Create a manual case (POST, SPEC-05). A 422 is an ANSWER the modal keeps its
+ * fields for, so the global handler stays quiet and this hook shows exactly one
+ * mapped toast. The list, the dashboard and the overview all count the new case.
+ */
+export function useCreateManualEvalCase(agentId: string | null | undefined) {
+  const qc = useQueryClient();
+  const t = useTranslations("eval");
+  return useMutation({
+    meta: { quietError: true },
+    mutationFn: (body: EvalCaseCreate) => api.post<EvalCase>(`/agents/${agentId}/eval/cases`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: evalKeys.cases(agentId) });
+      qc.invalidateQueries({ queryKey: evalKeys.dashboard(agentId) });
+      qc.invalidateQueries({ queryKey: evalKeys.overview });
+    },
+    onError: (err) => notify.error(t(caseSaveErrorKey(err))),
+  });
+}
+
+/** Edit a case's name, notes, expectation or — on a manual case — its input (PATCH). */
 export function useUpdateEvalCase(agentId: string | null | undefined) {
   const qc = useQueryClient();
   const t = useTranslations("eval");
@@ -184,7 +205,7 @@ export function useUpdateEvalCase(agentId: string | null | undefined) {
       );
       qc.invalidateQueries({ queryKey: evalKeys.cases(agentId) });
     },
-    onError: (err) => notify.error(t(updateCaseErrorKey(err))),
+    onError: (err) => notify.error(t(caseSaveErrorKey(err))),
   });
 }
 

@@ -1,0 +1,68 @@
+PR under review: "Add RunTimeline to the runs page". New folder, used by one route only.
+
+app/repos/[repoId]/runs/page.tsx            imports { RunTimeline } from "./_components/RunTimeline"
+app/repos/[repoId]/runs/_components/RunTimeline/
+  RunTimeline.tsx          168 lines
+  RunTimeline.test.tsx     colocated test, 6 cases
+  constants.ts
+  helpers.ts
+  styles.ts
+  index.ts
+
+--- constants.ts ---
+/** Step kind -> label shown in the timeline. */
+export const STEP_LABEL = {
+  prompt: "Prompt",
+  tool_call: "Tool call",
+  tool_result: "Tool result",
+  final: "Final answer",
+} as const;
+
+/** Rows shown while the run is loading. */
+export const SKELETON_ROWS = 6;
+
+--- helpers.ts ---
+import type { RunStep, StepGroup } from "@devdigest/shared";
+
+/** Duration of one step, "820 ms" under a second, else "1.4 s". */
+export function stepDuration(step: Pick<RunStep, "started_at" | "ended_at">): string { /* 7 lines */ }
+
+/** Steps sorted by start time (on a copy, the input is not mutated), tool results grouped under their call. */
+export function groupSteps(steps: RunStep[]): StepGroup[] { /* 22 lines */ }
+
+--- styles.ts ---
+import type { CSSProperties } from "react";
+export const s = {
+  list: { display: "flex", flexDirection: "column", gap: 8 } satisfies CSSProperties,
+  row: (active: boolean): CSSProperties => ({
+    borderStyle: "solid",
+    borderWidth: 1,
+    borderColor: active ? "var(--accent)" : "var(--border)",
+  }),
+};
+
+--- index.ts ---
+/* RunTimeline — step-by-step timeline of one agent run. Public surface: the component itself. */
+export { RunTimeline } from "./RunTimeline";
+
+--- RunTimeline.tsx (outline) ---
+"use client";
+import { useRunSteps } from "@/lib/hooks/runs";
+import { STEP_LABEL, SKELETON_ROWS } from "./constants";
+import { groupSteps, stepDuration } from "./helpers";
+import { s } from "./styles";
+
+export function RunTimeline({ runId }: { runId: string }) {
+  const query = useRunSteps(runId);
+  // 12 lines: loading, error and empty states (early returns)
+  const groups = groupSteps(query.data);
+  return (
+    <ol style={s.list}>
+      {groups.map((g) => (
+        // 120 lines of JSX: one row per step group with label, duration,
+        // tool input/output blocks and the final answer. Everything is read-only: the
+        // component holds no state of its own.
+      ))}
+    </ol>
+  );
+}
