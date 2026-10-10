@@ -9,7 +9,21 @@
     "replyToAuthor": "Reply to author",
     "replyPlaceholder": "Reply to the author about this finding…",
     "sendReply": "Send reply",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "evalCase": {
+      "turnInto": "Turn into eval case",
+      "inSuite": "In eval suite",
+      "agentMissing": "Agent no longer exists",
+      "errors": {
+        "finding_not_triaged": "Accept or reject this finding first, then turn it into an eval case.",
+        "not_agent_finding": "This finding was not produced by an agent, so it cannot become an eval case.",
+        "agent_missing": "The agent that produced this finding no longer exists.",
+        "patch_missing": "GitHub stored no diff for this file, so there is nothing to freeze into a case.",
+        "range_outside_hunks": "This finding's lines are outside the changed hunks of its file.",
+        "diff_too_large": "This file's diff is too large to store as an eval case (limit 200 KB).",
+        "generic": "Could not create the eval case. Please try again."
+      }
+    }
   },
   "trifecta": {
     "lethal": "LETHAL TRIFECTA — ALL 3 PRESENT",

@@ -36,3 +36,5 @@ test-results/
 # `pnpm approve-builds` output — machine-specific, ships placeholder values
 /client/pnpm-workspace.yaml
 /server/pnpm-workspace.yaml
+/server/.stryker-tmp/
+/server/reports/

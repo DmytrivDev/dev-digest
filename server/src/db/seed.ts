@@ -19,6 +19,17 @@ import {
   TEST_QUALITY_RUBRIC,
 } from './seed-skills.js';
 import { SEED_PR_482_BRIEF, SEED_PR_482_FILES } from './seed-pulls.js';
+import {
+  SEED_EVAL_AGENT,
+  SEED_EVAL_REPO,
+  SEED_PR_483_BODY,
+  SEED_PR_483_FILES,
+  SEED_PR_483_FINDINGS,
+  SEED_PR_483_NUMBER,
+  SEED_PR_483_REVIEW,
+  SEED_PR_483_TITLE,
+  caseDiff,
+} from './seed-eval.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -34,7 +45,10 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  * Performance + Test Quality), all on the default openrouter/deepseek-v4-flash
  * provider+model, and the L02 starter skills with their agent links.
  *
- * Later lessons populate the remaining tables (conventions, memory, eval, …)
+ * Eval (SPEC-04) is seeded too: PR #483 with a Security Reviewer review of 11 findings, and the
+ * 8 eval cases built from the triaged ones (server/src/db/seed-eval.ts).
+ *
+ * Later lessons populate the remaining tables (conventions, memory, …)
  * once their features are built — they start empty here.
  */
 
@@ -276,6 +290,130 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, a.name)));
     if (!existing) await db.insert(t.agents).values(a);
+  }
+
+  // ---- PR #483 + its Security Reviewer review + the eval suite built from it (SPEC-04) ----
+  // After the agents loop on purpose: the review and every case belong to the Security Reviewer.
+  // A new PR rather than an edit of #482, because the seed never updates an existing PR.
+  const [securityAgent] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, SEED_EVAL_AGENT)));
+  if (securityAgent) {
+    let [pr483] = await db
+      .select()
+      .from(t.pullRequests)
+      .where(
+        and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, SEED_PR_483_NUMBER)),
+      );
+    if (!pr483) {
+      [pr483] = await db
+        .insert(t.pullRequests)
+        .values({
+          workspaceId,
+          repoId,
+          number: SEED_PR_483_NUMBER,
+          title: SEED_PR_483_TITLE,
+          author: 'dev.okafor',
+          branch: 'feat/payment-webhooks',
+          base: 'main',
+          headSha: 'c0ffee483a1b',
+          additions: SEED_PR_483_FILES.reduce((n, f) => n + f.additions, 0),
+          deletions: SEED_PR_483_FILES.reduce((n, f) => n + f.deletions, 0),
+          filesCount: SEED_PR_483_FILES.length,
+          status: 'needs_review',
+          body: SEED_PR_483_BODY,
+        })
+        .returning();
+      await db.insert(t.prFiles).values(SEED_PR_483_FILES.map((f) => ({ prId: pr483!.id, ...f })));
+      await db.insert(t.prCommits).values({
+        prId: pr483!.id,
+        sha: 'c0ffee483a1b',
+        message: 'Add payment webhooks and admin export',
+        author: 'dev.okafor',
+      });
+
+      const [review483] = await db
+        .insert(t.reviews)
+        .values({
+          workspaceId,
+          prId: pr483!.id,
+          agentId: securityAgent.id,
+          kind: 'review',
+          verdict: SEED_PR_483_REVIEW.verdict,
+          summary: SEED_PR_483_REVIEW.summary,
+          score: SEED_PR_483_REVIEW.score,
+          model: 'seed',
+        })
+        .returning();
+      const triagedAt = new Date();
+      await db.insert(t.findings).values(
+        SEED_PR_483_FINDINGS.map((f) => ({
+          reviewId: review483!.id,
+          file: f.file,
+          startLine: f.startLine,
+          endLine: f.endLine,
+          severity: f.severity,
+          category: f.category,
+          title: f.title,
+          rationale: f.rationale,
+          suggestion: f.suggestion,
+          confidence: f.confidence,
+          acceptedAt: f.triage === 'accepted' ? triagedAt : null,
+          dismissedAt: f.triage === 'dismissed' ? triagedAt : null,
+        })),
+      );
+    }
+
+    // The cases sit OUTSIDE the `if (!pr483)` block, like the PR #482 brief above: the seed never
+    // updates, so an existing dev DB that already has PR #483 still gets its cases through this
+    // insert-when-absent. A case is matched to its finding by (review, file, start line, title).
+    const [review483] = await db
+      .select()
+      .from(t.reviews)
+      .where(and(eq(t.reviews.prId, pr483!.id), eq(t.reviews.agentId, securityAgent.id)));
+    if (review483) {
+      const seededFindings = await db
+        .select()
+        .from(t.findings)
+        .where(eq(t.findings.reviewId, review483.id));
+      const patchByFile = new Map(SEED_PR_483_FILES.map((f) => [f.path, f.patch]));
+      for (const planned of SEED_PR_483_FINDINGS) {
+        if (!planned.evalCase) continue;
+        const patch = patchByFile.get(planned.file);
+        const finding = seededFindings.find(
+          (f) =>
+            f.file === planned.file &&
+            f.startLine === planned.startLine &&
+            f.title === planned.title,
+        );
+        if (!finding || !patch) continue;
+        await db
+          .insert(t.evalCases)
+          .values({
+            workspaceId,
+            agentId: securityAgent.id,
+            name: planned.evalCase.name,
+            inputDiff: caseDiff(planned.file, patch),
+            inputMeta: {
+              pr_number: SEED_PR_483_NUMBER,
+              title: SEED_PR_483_TITLE,
+              body: SEED_PR_483_BODY,
+            },
+            expectedOutput: {
+              kind: planned.evalCase.kind,
+              file: planned.file,
+              start_line: planned.startLine,
+              end_line: planned.endLine,
+            },
+            labels: { severity: planned.severity, category: planned.category, title: planned.title },
+            sourceFindingId: finding.id,
+            sourcePrNumber: SEED_PR_483_NUMBER,
+            sourceRepo: SEED_EVAL_REPO,
+          })
+          .onConflictDoNothing();
+      }
+    }
   }
 
   // ---- built-in skills (L02) + their agent links ----

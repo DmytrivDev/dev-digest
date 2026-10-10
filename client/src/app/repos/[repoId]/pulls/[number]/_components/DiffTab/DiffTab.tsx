@@ -102,6 +102,8 @@ export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabP
             <FindingCard
               f={f}
               defaultExpanded
+              agentId={latestReview.agent_id}
+              prId={prId ?? undefined}
               onAction={(act) => (prId ? action.mutate({ findingId: f.id, action: act, prId }) : undefined)}
               pending={action.isPending && action.variables?.findingId === f.id}
             />

@@ -6,3 +6,6 @@ Deep-dives for the `server` package (pipelines, diagrams, design notes).
 ## Naming
 One file per topic: `<topic>.md` (e.g. `review-context.md`). Add a line to this
 index when you add a file — keep the index itself short, the depth goes in the file.
+
+## Index
+- `mutation-testing.md` — Stryker on `eval/helpers/scoring.ts`: how to run it, baseline vs final score, survivor table.

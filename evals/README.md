@@ -169,6 +169,18 @@ workflow cases:
 | `deepseek/deepseek-chat` | ✅ | ❌ does the work inline instead of dispatching |
 | `openai/gpt-4.1-mini` | ✅ | ❌ |
 
+Measured cost of the agent tier (`agents/architecture-reviewer`, 4 cases + DeepSeek judge, read off
+the OpenRouter key's usage counter, 2026-10-08):
+
+| `EVAL_MODEL` | Cost | Passed | Note |
+|---|---|---|---|
+| `anthropic/claude-haiku-5.5` | $0.050 | 3/4 | **CI default** — no proxy, cheapest per run |
+| `deepseek/deepseek-v4.1-flash` | $0.060 | 4/4 | via proxy; ~90k uncached input tokens per case |
+| `google/gemini-2.5-flash` | $0.017 | 2/4 | barely uses tools (2–4 turns), skips the docs |
+
+List prices mislead here: an agent run is input-heavy (the Claude Code prompt + every doc it
+reads, re-sent each turn), so cache-read pricing decides the bill, not the headline rate.
+
 **Two caveats for the tool tiers on cheap models:**
 
 1. **Rate-limit flakiness under load.** Running the whole suite back-to-back can get throttled by
@@ -186,62 +198,57 @@ workflow cases:
 > checkout is disposable); locally, prefer the Anthropic path or a throwaway clone for the workflow
 > tier.
 
-### Wiring it into GitHub Actions (per-PR)
+### GitHub Actions (per-PR) — one workflow per tier
 
-The engine is CI-ready: bring the proxy up as a step, wait for it, run the tier, tear it down. Put
-the OpenRouter key in the repo's **Actions secrets** as `OPENROUTER_API_KEY` (Settings → Secrets and
-variables → Actions). Create `.github/workflows/<name>.yml` in your repo:
+The repo runs the evals on every PR that touches the harness, on OpenRouter, and runs **only the
+suites the PR affects**. Each tier is its own workflow, so a PR shows one status per tier and a red
+check says at once which tier broke:
 
-```yaml
-name: evals
-on:
-  pull_request:
-    paths: ['evals/**', '.claude/**', 'CLAUDE.md']   # only when the harness/artifacts change
+| Workflow | Tier | Runs |
+|---|---|---|
+| `.github/workflows/eval-skills.yml` | skills (content tier, no tools) | the changed skills' evals, one matrix job each |
+| `.github/workflows/eval-agents.yml` | agents (tool tier) | the changed agents' evals, one matrix job each |
+| `.github/workflows/eval-workflow.yml` | workflow (live harness) | `evals/workflow/` |
 
-permissions:
-  contents: read
+All three call the reusable `.github/workflows/eval-detect.yml`. Its `detect` job runs
+`scripts/ci-detect.mjs` with `EVAL_TIER=<tier>`, and its `static` job needs no model. The detector
+maps the PR diff onto suites:
 
-jobs:
-  workflow-evals:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: evals
-    env:
-      EVAL_BACKEND: openrouter
-      OPENROUTER_BASE_URL: http://localhost:4000
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}   # repo Actions secret
-      EVAL_MODEL: google/gemini-2.5-flash
-      EVAL_JUDGE_MODEL: google/gemini-2.5-flash
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: 10 }
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: evals/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
+| PR changes | Runs |
+|---|---|
+| `.claude/skills/<name>/**` or `evals/skills/<name>/**` | `evals/skills/<name>` |
+| `.claude/agents/<name>.md` or `evals/agents/<name>/**` | `evals/agents/<name>` **and** the workflow tier |
+| any `CLAUDE.md` (root or nested), `.claude/settings.json`, `.claude/hooks/**`, `.claude/skill-routing.md`, `evals/workflow/**` | the workflow tier |
+| a skill the workflow cases name (e.g. `engineering-insights`) | that skill **and** the workflow tier |
+| one tier's own workflow file (`eval-<tier>.yml`) | that whole tier, nothing else |
+| the eval engine (`evals/src/**`, deps, `proxy/`), `eval-detect.yml` or the setup action | every tier, in full |
 
-      # --- the engine ---
-      - run: docker compose -f proxy/docker-compose.yml up -d   # OPENROUTER_API_KEY from job env
-      - run: pnpm proxy:wait                                     # block until the proxy answers
-      - run: pnpm eval:workflow                                  # or eval:agents / eval:skills / eval
-      - if: failure()
-        run: docker compose -f proxy/docker-compose.yml logs --tail 100
-      - if: always()
-        run: docker compose -f proxy/docker-compose.yml down
-```
+An artifact with **no evals written** is not a failure — the `detect` job logs
+`SKIP skill zod — no evals written (evals/skills/zod/)` and moves on. Same for an eval folder whose
+artifact is gone (`SKIP agent architecture-reviewer-lite — artifact not found (...)`). An eval
+folder that imports another folder's cases (`../architecture-reviewer/...`) re-runs with it.
 
-Notes:
-- ubuntu runners ship Docker + `docker compose`, so no extra setup is needed.
-- The proxy container reads `OPENROUTER_API_KEY` straight from the job `env` (which is fed by the
-  secret) — you don't pass it to `docker compose` explicitly.
-- Because tool tiers cost real tokens, gate on `paths:` (only when the harness/artifacts change) and
-  keep the case count small. For a stricter gate, split into a required `eval:agents`/`eval:skills`
-  job and a non-blocking `eval:workflow` job (activation flakiness, above).
+Jobs per tier workflow: `detect / detect` and `detect / static` (detector tests, `typecheck`,
+`eval:quality`, stats tests) → the tier job (`skills` / `agents` matrix, or `workflow`). Each model
+job uploads `evals/results/` as a build artifact. The workflow tier is **advisory** by default
+(`continue-on-error`); set the repo variable `EVAL_WORKFLOW_BLOCKING=true` to make it gate merges.
+A manual run (Actions → *eval-skills* / *eval-agents* / *eval-workflow* → *Run workflow*)
+evaluates that whole tier.
+
+**Setup:** add the secret `OPENROUTER_API_KEY` (Settings → Secrets and variables → Actions). The
+`detect` job fails loudly when there is something to run and the secret is missing.
+
+**Switching the model** — no code change, first non-empty wins:
+
+1. manual run: Actions → *eval-skills* / *eval-agents* / *eval-workflow* → *Run workflow* → `model` / `judge_model`;
+2. every PR run: repo **Variables** `EVAL_MODEL` / `EVAL_JUDGE_MODEL`;
+3. the default in each tier workflow file.
+
+An `anthropic/*` slug talks to OpenRouter's Anthropic endpoint directly. Any other slug makes the
+tool-tier jobs start the LiteLLM proxy automatically (`.github/actions/evals-setup`). Under
+`EVAL_BACKEND=openrouter`, `src/runtime/env.ts` also pins Claude Code's `sonnet`/`opus`/`haiku`
+aliases and the subagent model to `EVAL_MODEL` — agents declare `model: sonnet|opus`, and a
+dispatched subagent would otherwise be billed as a real Sonnet/Opus.
 
 ## Module layout — `src/` (the engine)
 

@@ -17,6 +17,9 @@ services:
       - "4000:4000"
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in the environment}
+      # LiteLLM refuses to start without a master key. Reuse the OpenRouter key: both clients
+      # already send it as the bearer token (SDK: ANTHROPIC_AUTH_TOKEN, content tier: apiKey).
+      LITELLM_MASTER_KEY: ${OPENROUTER_API_KEY}
     volumes:
       - ./litellm.config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]

@@ -51,7 +51,8 @@ Read `deps-report.md` fully. Use the JSON for what the table cut (`priorities` b
 ### 4. Verify before recommending (mandatory)
 The scanner is a regex over source text. For each P0/P1 item you will mention:
 - **unused** → `Grep` the package (src, tests, configs, scripts, Dockerfile, `.github`) for the
-  name, and check how the repo loads it (config string, CLI, dynamic import). Also search the
+  name, and check how the repo loads it (config string, CLI, dynamic import, a `pnpm`/`npx`
+  call in a CI workflow — a dep only CI runs is still used). Also search the
   package `INSIGHTS.md` / `CLAUDE.md` — e.g. server's CLAUDE.md says modules are registered
   statically, which is why `@fastify/autoload` is a real finding.
 - **heavy for N files** → look at the import sites. A framework or runtime (`next`, `react-dom`,

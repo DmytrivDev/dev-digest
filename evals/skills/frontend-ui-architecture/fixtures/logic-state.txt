@@ -1,0 +1,47 @@
+--- app/runs/_components/RunsTable/RunsTable.tsx ---
+"use client";
+import { useEffect, useState } from "react";
+import type { RunSummary } from "@devdigest/shared";
+import { useRuns } from "@/lib/hooks/runs";
+
+export function useFormatCost(usd: number): string {
+  return `$${usd.toFixed(4)}`;
+}
+
+export function RunsTable({ repoId }: { repoId: string }) {
+  const query = useRuns(repoId);
+  const [runs, setRuns] = useState<RunSummary[]>(query.data ?? []);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    setTotal(runs.reduce((sum, r) => sum + r.cost_usd, 0));
+  }, [runs]);
+
+  function renderRow(run: RunSummary) {
+    return (
+      <tr key={run.id}>
+        <td>{run.agent}</td>
+        <td>{run.status}</td>
+        <td>{run.tokens_in + run.tokens_out}</td>
+      </tr>
+    );
+  }
+
+  return (
+    <table>
+      <tbody>{runs.map(renderRow)}</tbody>
+      <tfoot>
+        <tr>
+          <td colSpan={3}>Total {useFormatCost(total)}</td>
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
+--- app/runs/_components/RunsTable/RunsTable.test.tsx (summary) ---
+Renders three runs from a mocked useRuns and checks the three agent names are on screen.
+
+--- lib/hooks/runs.ts (summary) ---
+useRuns(repoId) wraps the project's useApiQuery for GET /repos/:id/runs and returns the
+TanStack Query result. Its data refetches in the background every 30 seconds.

@@ -69,6 +69,12 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     // Default: do NOT load on-disk config — isolates the injected artifact. workflowTask overrides.
     settingSources: opts.settingSources ?? [],
     env: subscriptionEnv(),
+    // `allowedTools` only AUTO-APPROVES; under bypassPermissions every other tool stays usable, and
+    // `disallowedTools` alone did not stop a Bash call (a Stop hook talked the model into running
+    // append-insight.mjs on the live INSIGHTS.md). `tools` restricts what the session HAS at all.
+    // Applies to agentTask too: without it a reviewer declared `tools: Read, Grep, Glob` still
+    // ran Bash in CI. An empty list (content tier) keeps the SDK default and the NO-tools directive.
+    ...(opts.settingSources?.length || allowedTools.length ? { tools: allowedTools } : {}),
   };
 
   const textParts: string[] = [];
@@ -111,7 +117,8 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
             }
             if (block.name === "Read") {
               const fp = input.file_path ?? input.path;
-              if (fp) reads.push(fp);
+              // Windows reports `D:\repo\docs\x.md`; cases match `docs/x.md` — normalise to `/`.
+              if (fp) reads.push(String(fp).replace(/\\/g, "/"));
             }
             if (block.name === "Skill") {
               const s = input.skill ?? input.command;

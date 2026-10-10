@@ -1,0 +1,95 @@
+# Harness evals, WORKFLOW tier (the live harness: CLAUDE.md, settings, hooks, routing, agents)
+# — its own status on every PR.
+#
+#   any CLAUDE.md (root or nested), .claude/settings.json, .claude/hooks/**, .claude/skill-routing.md,
+#   any .claude/agents/*.md, evals/workflow/**, or a skill the workflow cases name → evals/workflow
+#   this file → the workflow tier; eval engine / shared eval CI → every tier
+# Mapping: evals/scripts/ci-detect.mjs (EVAL_TIER=workflow), via the reusable eval-detect.yml.
+# Advisory by default (activation cases are behaviour-shaped): set the repo variable
+# EVAL_WORKFLOW_BLOCKING=true to make it gate the merge.
+#
+# Model knobs — first non-empty wins: manual run inputs → repo Variables EVAL_MODEL /
+# EVAL_JUDGE_MODEL → the defaults below. Required secret: OPENROUTER_API_KEY.
+name: eval-workflow
+
+on:
+  pull_request:
+    paths:
+      - '**/CLAUDE.md'
+      - '.claude/settings.json'
+      - '.claude/hooks/**'
+      - '.claude/skill-routing.md'
+      - '.claude/agents/**'
+      - '.claude/skills/**' # only skills the workflow cases name actually run it — ci-detect decides
+      - 'evals/workflow/**'
+      - 'evals/src/**'
+      - 'evals/scripts/**'
+      - 'evals/proxy/**'
+      - 'evals/package.json'
+      - 'evals/pnpm-lock.yaml'
+      - 'evals/vitest.config.ts'
+      - 'evals/tsconfig.json'
+      - '.github/actions/evals-setup/**'
+      - '.github/workflows/eval-detect.yml'
+      - '.github/workflows/eval-workflow.yml'
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Model under test (OpenRouter slug); empty = repo variable or default
+        default: ''
+      judge_model:
+        description: Judge model (OpenRouter slug); empty = repo variable or default
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-workflow-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVAL_BACKEND: openrouter
+  EVAL_MODEL: ${{ inputs.model || vars.EVAL_MODEL || 'anthropic/claude-haiku-5.5' }}
+  EVAL_JUDGE_MODEL: ${{ inputs.judge_model || vars.EVAL_JUDGE_MODEL || 'deepseek/deepseek-v4.1-flash' }}
+
+jobs:
+  detect:
+    uses: ./.github/workflows/eval-detect.yml
+    with:
+      tier: workflow
+      scope: ${{ github.event_name == 'workflow_dispatch' && 'workflow' || 'changed' }}
+    secrets:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+  workflow:
+    needs: detect
+    if: needs.detect.outputs.has_work == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    continue-on-error: ${{ vars.EVAL_WORKFLOW_BLOCKING != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/evals-setup
+        with:
+          proxy: 'true'
+          openrouter_key: ${{ secrets.OPENROUTER_API_KEY }} # the LiteLLM proxy needs it at startup
+      - working-directory: evals
+        # The key reaches only this step, not the setup / upload actions.
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          echo "model under test: $EVAL_MODEL · judge: $EVAL_JUDGE_MODEL"
+          pnpm vitest run workflow/ --no-file-parallelism
+      - if: failure()
+        working-directory: evals
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }} # compose interpolates it even for `logs`
+        run: docker compose -f proxy/docker-compose.yml logs --tail 100 || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-workflow
+          path: evals/results/
+          if-no-files-found: ignore
+          retention-days: 14

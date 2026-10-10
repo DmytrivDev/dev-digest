@@ -64,6 +64,11 @@ export class ReviewRepository {
     return reviewRepo.reviewsForPull(this.db, prId);
   }
 
+  /** Eval case id per finding (findingId -> caseId). Ids must come from a scoped read. */
+  evalCaseIdsForFindings(findingIds: string[]): Promise<Map<string, string>> {
+    return reviewRepo.evalCaseIdsForFindings(this.db, findingIds);
+  }
+
   getReview(reviewId: string): Promise<ReviewRow | undefined> {
     return reviewRepo.getReview(this.db, reviewId);
   }

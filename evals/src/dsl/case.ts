@@ -65,6 +65,11 @@ export type WorkflowCase =
       expectSubagents?: string[];
       expectSkills?: string[];
       expectFilesRead?: string[];
+      // Substrings the final answer must / must not contain (case-insensitive). For facts that only
+      // reach the model via an auto-loaded nested CLAUDE.md — those never show up in filesRead.
+      // Setting either disables the early stop: the answer is only complete at the end of the run.
+      expectText?: string[];
+      forbidText?: string[];
       maxTurns?: number;
     };
 
@@ -152,9 +157,13 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         const skillEngaged = (p: { skillsInvoked: string[]; filesRead: string[] }, skill: string) =>
           p.skillsInvoked.some((s) => s === skill || s.endsWith(`:${skill}`)) ||
           p.filesRead.some((f) => f.includes(`skills/${skill}/SKILL.md`));
+        const texts = c.expectText ?? [];
+        const forbidden = c.forbidText ?? [];
+        const needsAnswer = texts.length > 0 || forbidden.length > 0;
         const result = await workflowTask(c.prompt, {
           maxTurns: c.maxTurns,
           stopWhen: (p) =>
+            !needsAnswer &&
             subs.every((s) => p.subagents.includes(s)) &&
             skls.every((s) => skillEngaged(p, s)) &&
             files.every((f) => p.filesRead.some((r) => r.includes(f))),
@@ -175,6 +184,15 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
               result.filesRead.some((f) => f.includes(file)),
               `${file} not read | reads: ${result.filesRead.join(", ")}`,
             ).toBe(true);
+          }
+          const answer = result.text.toLowerCase();
+          for (const t of texts) {
+            expect(answer.includes(t.toLowerCase()), `answer lacks "${t}":
+${result.text}`).toBe(true);
+          }
+          for (const t of forbidden) {
+            expect(answer.includes(t.toLowerCase()), `answer must not contain "${t}":
+${result.text}`).toBe(false);
           }
           expect(result.isError).toBe(false);
         } finally {

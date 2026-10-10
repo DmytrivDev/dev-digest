@@ -24,7 +24,8 @@ export const COST_REGRESSION_RATIO = 1.25; // candidate mean tokens > 125% of ba
 // --- Tool allow-lists -------------------------------------------------------
 // Subagent-spawning tool name varies by harness; count both.
 export const SPAWN_TOOLS = new Set(["Task", "Agent"]);
-// workflowTask runs against the LIVE repo with bypassPermissions — keep this read-only.
+// workflowTask runs against the LIVE repo with bypassPermissions. This list only auto-approves;
+// mutation is blocked for real by `disallowedTools` in runtime/run-claude.ts.
 export const WORKFLOW_ALLOWED_TOOLS = ["Read", "Grep", "Glob", "Task", "Agent", "Skill"];
 
 // --- Output verbosity -------------------------------------------------------

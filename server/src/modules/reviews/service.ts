@@ -183,6 +183,10 @@ export class ReviewService {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError('Pull request not found');
     const rows = await this.repo.reviewsForPull(prId);
+    // One query for the whole PR; the ids come from the workspace-scoped read above.
+    const caseIds = await this.repo.evalCaseIdsForFindings(
+      rows.flatMap(({ findings }) => findings.map((f) => f.id)),
+    );
     const names = new Map<string, string>();
     for (const { review } of rows) {
       if (review.agentId && !names.has(review.agentId)) {
@@ -191,7 +195,11 @@ export class ReviewService {
       }
     }
     return rows.map(({ review, findings }) =>
-      reviewToDto(review, findings, review.agentId ? names.get(review.agentId) : null),
+      reviewToDto(review, findings, review.agentId ? names.get(review.agentId) : null, {
+        caseIds,
+        // `names` is built from workspace-scoped `getById`, so a miss means the agent is gone.
+        agentExists: review.agentId ? names.has(review.agentId) : false,
+      }),
     );
   }
 
