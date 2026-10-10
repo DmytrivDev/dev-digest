@@ -3,7 +3,11 @@
    Reads one `EvalDashboard` (runs, trend, alert) and lays it out: header,
    regression banner, three metric cards, the trend chart and the recent-runs
    table with run selection. The two selected run ids are the only state kept
-   here; everything else is derived from the query during render. */
+   here; everything else is derived from the query during render.
+
+   A single-case run (SPEC-07) shows up in `runs` while it runs; it is left out
+   of the cards, the count and the table (`suiteRunsOnly`) but still drives the
+   run button's "Running case…" label (`runningRunOf` looks at both scopes). */
 "use client";
 
 import React from "react";
@@ -11,6 +15,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button, EmptyState, ErrorState, Icon, SectionLabel, Skeleton } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
+import { runningRunOf, suiteRunsOnly } from "@/lib/eval";
 import { useEvalDashboard } from "@/lib/hooks/eval";
 import { CompareRunsModal } from "./_components/CompareRunsModal";
 import { DetailHeader } from "./_components/DetailHeader";
@@ -32,7 +37,8 @@ export function EvalAgentDetail({ agentId }: { agentId: string }) {
 
   // A selected run can disappear (a refetch drops it from the last 20): derive
   // the live selection instead of trusting the stored ids.
-  const runIds = new Set((data?.runs ?? []).map((r) => r.id));
+  const suiteRuns = suiteRunsOnly(data?.runs ?? []);
+  const runIds = new Set(suiteRuns.map((r) => r.id));
   const selected = picked.filter((id) => runIds.has(id));
   const pair = selected.length === COMPARE_COUNT ? selected : null;
   const pairKey = pair ? pair.join("|") : null;
@@ -70,14 +76,14 @@ export function EvalAgentDetail({ agentId }: { agentId: string }) {
           <>
             <DetailHeader
               agent={data.agent}
-              runCount={data.runs.length}
+              runCount={suiteRuns.length}
               caseCount={data.cases_total}
-              runningRun={data.runs.find((r) => r.status === "running") ?? null}
+              runningRun={runningRunOf(data.runs)}
             />
             {data.alert && <RegressionBanner alert={data.alert} />}
             <div style={s.cards}>
               {METRICS.map((m) => {
-                const card = metricCardData(data.runs, data.trend, m.key);
+                const card = metricCardData(suiteRuns, data.trend, m.key);
                 return (
                   <EvalMetricCard
                     key={m.key}
@@ -107,11 +113,11 @@ export function EvalAgentDetail({ agentId }: { agentId: string }) {
                 </Button>
               </div>
             </div>
-            {data.runs.length === 0 ? (
+            {suiteRuns.length === 0 ? (
               <EmptyState icon="History" title={t("detail.noRuns")} />
             ) : (
               <RunsTable
-                runs={data.runs}
+                runs={suiteRuns}
                 selected={selected}
                 onToggle={(id) => setPicked(toggleSelected(selected, id))}
               />

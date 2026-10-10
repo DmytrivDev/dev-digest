@@ -353,3 +353,46 @@ describe("EvalAgentDetail — selecting runs to compare (AC-87…89)", () => {
     await waitFor(() => expect(screen.queryByText("Compare runs · v7 → v8")).toBeNull());
   });
 });
+
+describe("EvalAgentDetail — a running single-case run (SPEC-07 AC-24, AC-25)", () => {
+  const caseRun = run(9, {
+    id: "run-case",
+    status: "running",
+    scope: "case",
+    case_id: "c1",
+    cases_total: 1,
+    cases_done: 0,
+    finished_at: null,
+    recall: null,
+    precision: null,
+    citation_accuracy: null,
+    cost_usd: null,
+  });
+
+  it("adds no table row, no run to the count and leaves the cards unchanged", async () => {
+    reply = dashboard({ runs: [caseRun, run(8, { recall: 0.82, precision: 0.85, citation_accuracy: 0.95 }), run(7)] });
+    await renderDetail();
+    const table = screen.getByRole("table", { name: "Recent runs" });
+    expect(within(table).getAllByTestId(/^run-row-/).map((r) => r.getAttribute("data-testid"))).toEqual([
+      "run-row-run-v8",
+      "run-row-run-v7",
+    ]);
+    expect(screen.queryByTestId("run-row-run-case")).toBeNull();
+    expect(screen.getByText("Regression harness · 2 runs on the 8-case set")).toBeInTheDocument();
+    const recall = within(screen.getByTestId("metric-card-recall"));
+    expect(recall.getByText("82")).toBeInTheDocument();
+    expect(recall.getByText("4pt")).toBeInTheDocument();
+  });
+
+  it("shows 'Running case…' on the run button, disabled", async () => {
+    reply = dashboard({ runs: [caseRun, run(8), run(7)] });
+    await renderDetail();
+    expect(screen.getByRole("button", { name: "Running case…" })).toBeDisabled();
+  });
+
+  it("says 'No runs yet' when the only run is a case run", async () => {
+    reply = dashboard({ runs: [caseRun], trend: [] });
+    await renderDetail();
+    expect(screen.getByText("No runs yet. Run the eval to see metrics here.")).toBeInTheDocument();
+  });
+});

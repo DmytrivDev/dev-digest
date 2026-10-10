@@ -120,3 +120,29 @@ describe("EvalRunButton — starting", () => {
     expect(screen.queryByText("server wording")).toBeNull();
   });
 });
+
+describe("EvalRunButton — a running single-case run (SPEC-07 AC-24)", () => {
+  const caseRun = {
+    id: "k1",
+    agent_id: "a1",
+    status: "running",
+    scope: "case",
+    case_id: "c1",
+    cases_done: 0,
+    cases_total: 1,
+  } as EvalSuiteRun;
+
+  it("reads 'Running case…', not 'Running 0 / 1 cases', and is disabled — in both variants", () => {
+    render(wrap(ui({ runningRun: caseRun })));
+    expect(screen.getByRole("button", { name: "Running case…" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Running 0 \/ 1 cases/ })).toBeNull();
+    cleanup();
+    render(wrap(ui({ variant: "dashboard", runningRun: caseRun })));
+    expect(screen.getByRole("button", { name: "Running case…" })).toBeDisabled();
+  });
+
+  it("keeps 'Running k / N cases' for a running suite run", () => {
+    render(wrap(ui({ runningRun: { ...runningRun(2), scope: "suite" } as EvalSuiteRun })));
+    expect(screen.getByRole("button", { name: "Running 2 / 8 cases" })).toBeDisabled();
+  });
+});

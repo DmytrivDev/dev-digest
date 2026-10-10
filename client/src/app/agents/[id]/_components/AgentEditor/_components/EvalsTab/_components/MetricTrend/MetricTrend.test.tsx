@@ -49,6 +49,8 @@ function makeRun(n: number, over: Partial<EvalSuiteRun> = {}): EvalSuiteRun {
     cost_usd: 0.12,
     duration_ms: 1000,
     config: { system_prompt: "p", model: "gpt-4.1", provider: "openai", strategy: "single-pass", skills: [] },
+    scope: "suite",
+    case_id: null,
     ...over,
   };
 }

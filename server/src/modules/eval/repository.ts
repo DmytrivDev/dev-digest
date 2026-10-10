@@ -8,7 +8,7 @@ import type {
   FindingRow,
   PullRow,
 } from '../../db/rows.js';
-import type { EvalExpectation } from '@devdigest/shared';
+import type { EvalExpectation, EvalRunScope } from '@devdigest/shared';
 
 /**
  * Eval data-access (SPEC-04). Owns `eval_cases`, `eval_suite_runs` and
@@ -64,14 +64,21 @@ export interface EvalCasePatch {
   inputMeta?: { pr_number: null; title: string; body: string | null };
 }
 
-export interface InsertEvalRun {
+/**
+ * A suite run (`scope` 'suite' or omitted) has no `caseId`; a 'case' run reviews
+ * exactly one case (SPEC-07) and must name it — the table's CHECK enforces the same.
+ */
+export type InsertEvalRun = {
   workspaceId: string;
   agentId: string;
   agentVersion: number;
   config: unknown;
   caseIds: string[];
   casesTotal: number;
-}
+} & (
+  | { scope?: Extract<EvalRunScope, 'suite'>; caseId?: never }
+  | { scope: Extract<EvalRunScope, 'case'>; caseId: string }
+);
 
 export interface InsertEvalOutcome {
   runId: string;
@@ -311,7 +318,19 @@ export class EvalRepository {
    */
   async insertRun(values: InsertEvalRun): Promise<EvalSuiteRunRow | 'conflict'> {
     try {
-      const [row] = await this.db.insert(t.evalSuiteRuns).values(values).returning();
+      const [row] = await this.db
+        .insert(t.evalSuiteRuns)
+        .values({
+          workspaceId: values.workspaceId,
+          agentId: values.agentId,
+          agentVersion: values.agentVersion,
+          config: values.config,
+          caseIds: values.caseIds,
+          casesTotal: values.casesTotal,
+          scope: values.scope ?? 'suite',
+          caseId: values.caseId ?? null,
+        })
+        .returning();
       return row!;
     } catch (err) {
       if (isUniqueViolation(err)) return 'conflict';
@@ -319,16 +338,46 @@ export class EvalRepository {
     }
   }
 
-  /** An agent's runs, newest first. */
-  async listRuns(workspaceId: string, agentId: string, limit: number): Promise<EvalSuiteRunRow[]> {
+  /**
+   * An agent's SUITE runs, newest first. The scope filter runs in SQL before the limit,
+   * so case runs never use up the window (SPEC-07 AC-45).
+   */
+  async listSuiteRuns(
+    workspaceId: string,
+    agentId: string,
+    limit: number,
+  ): Promise<EvalSuiteRunRow[]> {
     return this.db
       .select()
       .from(t.evalSuiteRuns)
       .where(
-        and(eq(t.evalSuiteRuns.workspaceId, workspaceId), eq(t.evalSuiteRuns.agentId, agentId)),
+        and(
+          eq(t.evalSuiteRuns.workspaceId, workspaceId),
+          eq(t.evalSuiteRuns.agentId, agentId),
+          eq(t.evalSuiteRuns.scope, 'suite'),
+        ),
       )
       .orderBy(desc(t.evalSuiteRuns.startedAt), desc(t.evalSuiteRuns.id))
       .limit(limit);
+  }
+
+  /**
+   * The agent's `running` run of ANY scope (SPEC-07 DR-4). The partial unique index allows
+   * at most one, whichever scope it has.
+   */
+  async runningRun(workspaceId: string, agentId: string): Promise<EvalSuiteRunRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(t.evalSuiteRuns)
+      .where(
+        and(
+          eq(t.evalSuiteRuns.workspaceId, workspaceId),
+          eq(t.evalSuiteRuns.agentId, agentId),
+          eq(t.evalSuiteRuns.status, 'running'),
+        ),
+      )
+      .limit(1);
+    return row;
   }
 
   async getRun(workspaceId: string, id: string): Promise<EvalSuiteRunRow | undefined> {
@@ -371,12 +420,14 @@ export class EvalRepository {
     return rows.length > 0;
   }
 
-  /** The newest run of any status for each agent in the workspace, as agentId -> run. */
-  async latestRunPerAgent(workspaceId: string): Promise<Map<string, EvalSuiteRunRow>> {
+  /** The newest SUITE run of any status for each agent in the workspace, as agentId -> run. */
+  async latestSuiteRunPerAgent(workspaceId: string): Promise<Map<string, EvalSuiteRunRow>> {
     const rows = await this.db
       .selectDistinctOn([t.evalSuiteRuns.agentId])
       .from(t.evalSuiteRuns)
-      .where(eq(t.evalSuiteRuns.workspaceId, workspaceId))
+      .where(
+        and(eq(t.evalSuiteRuns.workspaceId, workspaceId), eq(t.evalSuiteRuns.scope, 'suite')),
+      )
       .orderBy(t.evalSuiteRuns.agentId, desc(t.evalSuiteRuns.startedAt), desc(t.evalSuiteRuns.id));
     return new Map(rows.map((r) => [r.agentId, r]));
   }

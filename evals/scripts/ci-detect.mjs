@@ -1,5 +1,7 @@
 /**
- * CI change detector for the harness evals (.github/workflows/evals.yml).
+ * CI change detector for the harness evals. There is one workflow per tier — eval-skills.yml,
+ * eval-agents.yml, eval-workflow.yml — so each tier reports its own status. Each one calls the
+ * reusable eval-detect.yml, which runs this script with $EVAL_TIER set to that tier.
  *
  * Maps the PR's changed files (newline-separated, repo-relative, in $CHANGED_FILES) onto the eval
  * suites to run. $EVAL_SCOPE overrides the diff for a manual run: changed (default) | all |
@@ -10,13 +12,16 @@
  *   an eval folder importing another's cases (`../<name>/`) re-runs with it (agent A/B variants)
  *   any CLAUDE.md, .claude settings/hooks/skill-routing, any agent, evals/workflow/**, or a skill
  *   the workflow cases name                               → the workflow tier
- *   the eval engine or this CI workflow itself             → everything
+ *   the eval engine, or the shared eval-detect.yml / setup → everything
+ *   one tier's own workflow file (eval-<tier>.yml)          → that whole tier, and nothing else
  *
  * Nothing here is a failure: an artifact with no written evals, or an eval folder whose artifact
  * no longer exists, is logged as `SKIP <tier> <name> — <reason>` and left out of the run.
  *
  * Emits step outputs (skills, agents as JSON arrays; run_workflow, has_work as "true"/"false") to
- * $GITHUB_OUTPUT, or prints them when run locally. No deps — Node built-ins only.
+ * $GITHUB_OUTPUT, or prints them when run locally. With $EVAL_TIER (skills | agents | workflow) it
+ * also emits `targets`, that tier's JSON array (["workflow"] or [] for the workflow tier), and
+ * `has_work` then means "this tier has work". No deps — Node built-ins only.
  */
 
 import { existsSync, readdirSync, readFileSync, appendFileSync } from "node:fs";
@@ -24,15 +29,23 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCOPES = ["changed", "all", "skills", "agents", "workflow"];
+const TIERS = ["skills", "agents", "workflow"];
 
 // Changing any of these changes how EVERY eval runs, so the whole suite re-runs.
 const ENGINE = [
   /^evals\/src\//,
   /^evals\/(package\.json|pnpm-lock\.yaml|vitest\.config\.ts|tsconfig\.json)$/,
   /^evals\/proxy\//,
-  /^\.github\/workflows\/evals\.yml$/,
+  /^\.github\/workflows\/eval-detect\.yml$/,
   /^\.github\/actions\/evals-setup\//,
 ];
+
+// A tier's own workflow file re-runs that whole tier, and nothing else.
+const TIER_WORKFLOW = {
+  skills: ".github/workflows/eval-skills.yml",
+  agents: ".github/workflows/eval-agents.yml",
+  workflow: ".github/workflows/eval-workflow.yml",
+};
 
 // The workflow tier loads the LIVE harness (settingSources: ["project"]), so these re-trigger it.
 const WORKFLOW = [
@@ -91,11 +104,14 @@ export function detect({ changed, scope = "changed", repo }) {
   let agentCandidates;
   let runWorkflow;
   if (effective === "changed") {
-    skillCandidates = touched(SKILL_PATHS);
-    agentCandidates = touched(AGENT_PATHS);
+    const tierFileChanged = (tier) => changed.includes(TIER_WORKFLOW[tier]);
+    const touchedSkills = touched(SKILL_PATHS);
+    skillCandidates = tierFileChanged("skills") ? new Set(repo.evalNames("skills")) : touchedSkills;
+    agentCandidates = tierFileChanged("agents") ? new Set(repo.evalNames("agents")) : touched(AGENT_PATHS);
     runWorkflow =
+      tierFileChanged("workflow") ||
       changed.some((f) => WORKFLOW.some((re) => re.test(f))) ||
-      [...skillCandidates].some((s) => repo.workflowSkills.has(s));
+      [...touchedSkills].some((s) => repo.workflowSkills.has(s));
   } else {
     const all = effective === "all";
     skillCandidates = new Set(all || effective === "skills" ? repo.evalNames("skills") : []);
@@ -106,6 +122,13 @@ export function detect({ changed, scope = "changed", repo }) {
   const skills = pick("skills", skillCandidates);
   const agents = pick("agents", agentCandidates);
   return { scope: effective, engineChanged, skills, agents, runWorkflow, skipped };
+}
+
+/** One tier's slice of a `detect` result — what that tier's workflow runs. */
+export function tierTargets(result, tier) {
+  if (!TIERS.includes(tier)) throw new Error(`EVAL_TIER must be one of ${TIERS.join(", ")}, got "${tier}"`);
+  if (tier === "workflow") return result.runWorkflow ? ["workflow"] : [];
+  return result[tier];
 }
 
 function artifactPath(tier, name) {
@@ -156,18 +179,22 @@ function main() {
     .map((s) => s.trim())
     .filter(Boolean);
   const scope = process.env.EVAL_SCOPE || "changed";
+  const tier = process.env.EVAL_TIER || "";
   const r = detect({ changed, scope, repo: fsRepo(repoRoot) });
+  const targets = tier ? tierTargets(r, tier) : null;
 
   const out = process.env.GITHUB_OUTPUT;
   const write = (k, v) => (out ? appendFileSync(out, `${k}=${v}\n`) : console.log(`${k}=${v}`));
   write("skills", JSON.stringify(r.skills));
   write("agents", JSON.stringify(r.agents));
   write("run_workflow", String(r.runWorkflow));
-  write("has_work", String(r.skills.length > 0 || r.agents.length > 0 || r.runWorkflow));
+  if (targets) write("targets", JSON.stringify(targets));
+  write("has_work", String(targets ? targets.length > 0 : r.skills.length > 0 || r.agents.length > 0 || r.runWorkflow));
 
   const log = (s) => console.error(s);
   log("── eval change detection ──");
-  log(`scope         : ${r.scope}${r.engineChanged ? " (eval engine / CI workflow changed → full suite)" : ""}`);
+  log(`scope         : ${r.scope}${r.engineChanged ? " (eval engine / shared eval CI changed → full suite)" : ""}`);
+  if (tier) log(`tier          : ${tier} → ${targets.length ? targets.join(", ") : "nothing to run"}`);
   if (scope === "changed") log(`changed files : ${changed.length}`);
   for (const s of r.skills) log(`RUN  skill    ${s}`);
   for (const a of r.agents) log(`RUN  agent    ${a}`);

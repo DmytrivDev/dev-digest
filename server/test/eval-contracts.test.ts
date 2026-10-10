@@ -4,6 +4,7 @@ import {
   EvalCaseOutcome,
   EvalCaseUpdate,
   EvalCompare,
+  EvalCompareErrorCode,
   EvalDashboard,
   EvalExpectation,
   EvalOverviewRow,
@@ -76,6 +77,8 @@ const run = (id: string, over: Record<string, unknown> = {}) => ({
   cost_usd: 0.012,
   duration_ms: 60000,
   config,
+  scope: 'suite' as const,
+  case_id: null,
   ...over,
 });
 
@@ -102,6 +105,22 @@ describe('eval contracts', () => {
   it('parses an EvalSuiteRun with outcomes, and one without', () => {
     expect(EvalSuiteRun.parse(run('r1', { outcomes: [outcome] })).outcomes).toHaveLength(1);
     expect(EvalSuiteRun.parse(run('r2')).outcomes).toBeUndefined();
+  });
+
+  it('parses a single-case run (scope case, one case_id, cases_total 1)', () => {
+    const parsed = EvalSuiteRun.parse(run('r3', { scope: 'case', case_id: 'c1', cases_total: 1 }));
+    expect(parsed.scope).toBe('case');
+    expect(parsed.case_id).toBe('c1');
+    expect(parsed.cases_total).toBe(1);
+  });
+
+  it('rejects an EvalSuiteRun without scope', () => {
+    const { scope: _scope, ...withoutScope } = run('r4');
+    expect(EvalSuiteRun.safeParse(withoutScope).success).toBe(false);
+  });
+
+  it('lists not_suite_run among the compare error codes', () => {
+    expect(EvalCompareErrorCode.options).toContain('not_suite_run');
   });
 
   it('parses an EvalCompare', () => {

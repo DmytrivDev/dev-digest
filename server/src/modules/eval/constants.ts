@@ -84,4 +84,5 @@ export const COMPARE_ERROR = {
   runNotCompleted: 'run_not_completed',
   differentAgents: 'different_agents',
   sameRun: 'same_run',
+  notSuiteRun: 'not_suite_run',
 } as const satisfies Record<string, EvalCompareErrorCode>;

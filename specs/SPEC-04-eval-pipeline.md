@@ -2,7 +2,7 @@
 Spec ID: SPEC-04
 Status: approved
 Supersedes: none
-Superseded by: SPEC-05 (partially — manual case creation and diff editing for manual cases; Evals-tab trend chart)
+Superseded by: SPEC-05 (partially — manual case creation and diff editing for manual cases; Evals-tab trend chart); SPEC-07 (partially — per-case runs: "Run case" in the case editor and the per-row ▶ Run, stored as case-scope runs excluded from every suite aggregate; AC-29, DR-19/DR-20, the per-case-runs Non-goal)
 
 ## Problem and user
 

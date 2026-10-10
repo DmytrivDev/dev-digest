@@ -2,7 +2,13 @@
    size constant that governs the contract and this modal alike. */
 
 import { EVAL_CASE_NAME_MAX } from "@devdigest/shared";
-import type { EvalCase, EvalCaseCreate, EvalCaseUpdate, EvalExpectation } from "@devdigest/shared";
+import type {
+  EvalCase,
+  EvalCaseCreate,
+  EvalCaseUpdate,
+  EvalExpectation,
+  EvalSuiteRun,
+} from "@devdigest/shared";
 
 /** Hard cap on a case name — the contract's `EVAL_CASE_NAME_MAX`, shared with the Save gate (AC-13). */
 export const NAME_MAX = EVAL_CASE_NAME_MAX;
@@ -13,7 +19,56 @@ export function nameIsValid(name: string): boolean {
   return trimmed !== "" && trimmed.length <= NAME_MAX;
 }
 
-export type DiffLineKind = "added" | "removed" | "hunk" | "context";
+/**
+ * True while the draft cannot be sent: a bad name, an unparseable or off-diff
+ * expectation, an invalid diff (editable inputs only), or a request in flight.
+ * Save and Run case both gate on this one function (SPEC-05 AC-13, SPEC-07
+ * AC-2), so the two cannot drift apart.
+ */
+export function saveBlocked(draft: {
+  name: string;
+  expectationOk: boolean;
+  expectationError: string | null;
+  editable: boolean;
+  diffOk: boolean;
+  pending: boolean;
+}): boolean {
+  return (
+    !nameIsValid(draft.name) ||
+    !draft.expectationOk ||
+    draft.expectationError !== null ||
+    (draft.editable && !draft.diffOk) ||
+    draft.pending
+  );
+}
+
+/**
+ * What the modal knows about THIS case's own run (SPEC-07 AC-13, AC-17):
+ * - `running`: the runs list holds it, or a run id is being followed and its own
+ *   read is not final yet — including before that read has answered at all, so
+ *   the id from a 202 never leaves a gap where Run case looks free. A failed read
+ *   (`isError`) ends the wait, so "Running…" cannot stay stuck.
+ * - `interrupted`: the followed run failed as interrupted.
+ * Run case must stay disabled while `running` (a started run is not in the list yet).
+ */
+export function ownRunState(input: {
+  /** The agent's runs list holds a running run of this case. */
+  listRunning: boolean;
+  /** The run id being followed (from the list or from a 202), or `null`. */
+  trackedRunId: string | null;
+  /** The read of that run by id. */
+  read: { data: Pick<EvalSuiteRun, "status" | "error_reason"> | undefined; isError: boolean };
+}): { running: boolean; interrupted: boolean } {
+  const { listRunning, trackedRunId, read } = input;
+  const followingUnsettled =
+    trackedRunId !== null && !read.isError && (read.data === undefined || read.data.status === "running");
+  return {
+    running: listRunning || followingUnsettled,
+    interrupted: read.data?.status === "failed" && read.data.error_reason === "interrupted",
+  };
+}
+
+export type DiffLineKind ="added" | "removed" | "hunk" | "context";
 
 /**
  * How a unified-diff line is coloured (AC-38). `+++` / `---` file headers are

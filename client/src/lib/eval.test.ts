@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { EvalCaseOutcome, EvalExpectation } from "@devdigest/shared";
+import type { EvalCaseOutcome, EvalExpectation, EvalSuiteRun } from "@devdigest/shared";
 import { ApiError } from "./api";
 import { formatCost } from "./cost";
 import {
@@ -21,7 +21,10 @@ import {
   lastRunParts,
   parseExpectationText,
   resultLineParts,
+  runningCaseRunFor,
+  runningRunOf,
   runStartErrorKey,
+  suiteRunsOnly,
   trendTooltipParts,
   updateCaseErrorKey,
 } from "./eval";
@@ -284,5 +287,61 @@ describe("trendTooltipParts (SPEC-05 AC-54)", () => {
     expect(parts.cost).toBe("—");
     expect(parts.version).toBeNull();
     expect(trendTooltipParts({ ...point, cost_usd: null }).cost).toBe("—");
+  });
+});
+
+// ---- SPEC-07: run scope helpers ------------------------------------------------
+
+function scopedRun(id: string, over: Partial<EvalSuiteRun> = {}): EvalSuiteRun {
+  return { id, status: "completed", scope: "suite", case_id: null, ...over } as EvalSuiteRun;
+}
+
+describe("suiteRunsOnly / runningRunOf / runningCaseRunFor (SPEC-07 AC-24, AC-25, AC-45)", () => {
+  // The AC-45 shape: 20 suite runs, then the one running case run.
+  const suite = Array.from({ length: 20 }, (_, i) => scopedRun(`s${i}`));
+  const caseRun = scopedRun("k1", { status: "running", scope: "case", case_id: "c7" });
+  const list = [...suite, caseRun];
+
+  it("keeps the 20 suite runs and drops the running case run", () => {
+    const only = suiteRunsOnly(list);
+    expect(only).toHaveLength(20);
+    expect(only.map((r) => r.id)).toEqual(suite.map((r) => r.id));
+  });
+
+  it("drops a finished case run too, and counts a run without a scope as a suite run", () => {
+    const finished = scopedRun("k0", { scope: "case", case_id: "c7" });
+    const legacy = { id: "old", status: "completed" } as EvalSuiteRun;
+    expect(suiteRunsOnly([finished, legacy, scopedRun("s")]).map((r) => r.id)).toEqual(["old", "s"]);
+    expect(suiteRunsOnly([])).toEqual([]);
+  });
+
+  it("runningRunOf finds the running run of either scope, else null", () => {
+    expect(runningRunOf(list)?.id).toBe("k1");
+    const runningSuite = scopedRun("rs", { status: "running" });
+    expect(runningRunOf([scopedRun("a"), runningSuite])?.id).toBe("rs");
+    expect(runningRunOf(suite)).toBeNull();
+    expect(runningRunOf([])).toBeNull();
+  });
+
+  it("runningCaseRunFor matches only a running case run of that case", () => {
+    expect(runningCaseRunFor(list, "c7")?.id).toBe("k1");
+    expect(runningCaseRunFor(list, "c8")).toBeNull();
+    // a running SUITE run is not a case run, and a finished case run is not running
+    expect(runningCaseRunFor([scopedRun("rs", { status: "running" })], "c7")).toBeNull();
+    expect(
+      runningCaseRunFor([scopedRun("k0", { scope: "case", case_id: "c7" })], "c7"),
+    ).toBeNull();
+  });
+});
+
+describe("SPEC-07 strings (NFR-1)", () => {
+  it("every new eval.json key resolves to the spec's English text", () => {
+    expect(resolve(evalMessages, "caseModal.runCase")).toBe("Run case");
+    expect(resolve(evalMessages, "caseModal.running")).toBe("Running…");
+    expect(resolve(evalMessages, "caseModal.interrupted")).toBe("Run interrupted — try again");
+    expect(resolve(evalMessages, "caseRun.savedNotRun")).toBe("Case saved; not run: {reason}");
+    expect(resolve(evalMessages, "evalsTab.row.run")).toBe("Run");
+    expect(resolve(evalMessages, "evalsTab.row.running")).toBe("Running");
+    expect(resolve(evalMessages, "runButton.runningCase")).toBe("Running case…");
   });
 });

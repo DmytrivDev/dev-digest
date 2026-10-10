@@ -131,6 +131,8 @@ export function runRowToDto(row: EvalSuiteRunRow, outcomes?: EvalCaseOutcomeRow[
     cost_usd: row.costUsd,
     duration_ms: row.durationMs,
     config: config.success ? config.data : EMPTY_RUN_CONFIG,
+    scope: row.scope,
+    case_id: row.caseId,
     ...(outcomes ? { outcomes: outcomes.map(outcomeRowToDto) } : {}),
   };
 }

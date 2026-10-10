@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { detect, fsRepo } from "./ci-detect.mjs";
+import { detect, fsRepo, tierTargets } from "./ci-detect.mjs";
 
 const repo = {
   evalNames: (tier) =>
@@ -67,14 +67,37 @@ test("unrelated changes run nothing", () => {
   assert.deepEqual([r.skills, r.agents, r.runWorkflow, r.skipped], [[], [], false, []]);
 });
 
-test("an eval-engine or CI-workflow change runs the full suite", () => {
-  for (const f of ["evals/src/tasks.ts", "evals/package.json", ".github/workflows/evals.yml"]) {
+test("an eval-engine or shared-CI change runs the full suite", () => {
+  for (const f of ["evals/src/tasks.ts", "evals/package.json", ".github/workflows/eval-detect.yml", ".github/actions/evals-setup/action.yml"]) {
     const r = run([f]);
     assert.equal(r.scope, "all", f);
     assert.deepEqual(r.skills, ["dependency-checker", "engineering-insights"]);
     assert.deepEqual(r.agents, ["architecture-reviewer"]);
     assert.equal(r.runWorkflow, true);
   }
+});
+
+test("a tier's own workflow file re-runs that whole tier and nothing else", () => {
+  const s = run([".github/workflows/eval-skills.yml"]);
+  assert.deepEqual([s.scope, s.skills, s.agents, s.runWorkflow], ["changed", ["dependency-checker", "engineering-insights"], [], false]);
+  const a = run([".github/workflows/eval-agents.yml"]);
+  assert.deepEqual([a.skills, a.agents, a.runWorkflow], [[], ["architecture-reviewer"], false]);
+  const w = run([".github/workflows/eval-workflow.yml"]);
+  assert.deepEqual([w.skills, w.agents, w.runWorkflow], [[], [], true]);
+});
+
+test("tierTargets slices one tier out of a detect result", () => {
+  const r = run([".claude/agents/architecture-reviewer.md"]);
+  assert.deepEqual(tierTargets(r, "skills"), []);
+  assert.deepEqual(tierTargets(r, "agents"), ["architecture-reviewer"]);
+  assert.deepEqual(tierTargets(r, "workflow"), ["workflow"]);
+  assert.deepEqual(tierTargets(run(["server/src/index.ts"]), "workflow"), []);
+  assert.throws(() => tierTargets(r, "all"), /EVAL_TIER/);
+});
+
+test("the old single evals.yml no longer triggers anything", () => {
+  const r = run([".github/workflows/evals.yml"]);
+  assert.deepEqual([r.skills, r.agents, r.runWorkflow], [[], [], false]);
 });
 
 test("manual scopes ignore the diff", () => {

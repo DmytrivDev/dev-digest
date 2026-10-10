@@ -1,7 +1,8 @@
 /* EvalRunButton — "Run all evals (N cases)" on the Evals tab, "Run eval (N
-   cases)" on the dashboard detail (SPEC-04). While a run of the agent is
-   running it reads "Running k / N cases" and is disabled; with no cases it is
-   disabled too. A refused start (409 / 422 / 429) becomes one mapped toast —
+   cases)" on the dashboard detail (SPEC-04). While a suite run of the agent is
+   running it reads "Running k / N cases" and is disabled; while a single-case
+   run is running (SPEC-07) it reads "Running case…" and is disabled too; with
+   no cases it is disabled. A refused start (409 / 422 / 429) becomes one mapped toast —
    the mapping lives in `useStartEvalRun`. */
 "use client";
 
@@ -16,7 +17,7 @@ interface Props {
   /** The agent's current number of eval cases. */
   caseCount: number;
   variant: "tab" | "dashboard";
-  /** The agent's run that is `running` right now, if any. */
+  /** The agent's run that is `running` right now, of either scope, if any. */
   runningRun?: EvalSuiteRun | null;
 }
 
@@ -29,7 +30,9 @@ export function EvalRunButton({ agentId, caseCount, variant, runningRun }: Props
 
   const running = !!runningRun;
   const label = runningRun
-    ? t("runButton.running", { done: runningRun.cases_done, total: runningRun.cases_total })
+    ? runningRun.scope === "case"
+      ? t("runButton.runningCase")
+      : t("runButton.running", { done: runningRun.cases_done, total: runningRun.cases_total })
     : t(variant === "tab" ? "runButton.tab" : "runButton.dashboard", { count: caseCount });
 
   return (

@@ -16,6 +16,7 @@ import type {
   UnifiedDiff,
 } from '@devdigest/shared';
 import { AppError, ConfigError, NotFoundError } from '../../platform/errors.js';
+import type { EvalCaseRow, EvalSuiteRunRow } from '../../db/rows.js';
 import type { AgentsRepository } from '../agents/repository.js';
 import { assembleSkills } from '../reviews/helpers.js';
 import {
@@ -44,8 +45,8 @@ import type { EvalRepository } from './repository.js';
 import { EvalRunExecutor, type CaseSnapshot } from './run-executor.js';
 
 /**
- * Eval use cases (SPEC-04): cases from findings, case edit/read/delete, suite runs, and
- * the compare / overview / dashboard reads.
+ * Eval use cases (SPEC-04): cases from findings, case edit/read/delete, suite runs and
+ * single-case runs (SPEC-07), and the compare / overview / dashboard reads.
  *
  * Ring 3. Built from the ports and repositories it uses — never the `Container`
  * (`service-not-to-composition-root`); `routes.ts` does the composition. The diff parser
@@ -70,6 +71,9 @@ export interface StartRunResult extends EvalRunStartResponse {
   /** For tests only — routes drop it. Never rejects. */
   done: Promise<void>;
 }
+
+/** The agent row as a run start needs it (what `AgentsRepository.getById` resolves to). */
+type AgentForRun = NonNullable<Awaited<ReturnType<EvalServiceDeps['agents']['getById']>>>;
 
 const UNPROCESSABLE = 422;
 const CONFLICT = 409;
@@ -341,15 +345,13 @@ export class EvalService {
    * on an in-memory snapshot so a later edit or delete of a case cannot change this run.
    */
   async startRun(workspaceId: string, agentId: string): Promise<StartRunResult> {
-    const { repo, agents, parseDiff, resolveLlm } = this.deps;
+    const { repo, agents } = this.deps;
 
     const agent = await agents.getById(workspaceId, agentId);
     if (!agent) throw new NotFoundError('Agent not found');
 
-    // A run left `running` past the stale window is dead; reap it so it cannot block the start.
-    await this.reapStale(workspaceId);
-    const recent = await repo.listRuns(workspaceId, agentId, RUN_LIST_LIMIT);
-    if (recent.some((r) => r.status === 'running')) throw runInProgress();
+    // A running run of EITHER scope blocks the start (SPEC-07 AC-35).
+    await this.assertNoRunningRun(workspaceId, agent.id);
 
     const caseRows = await repo.listCases(workspaceId, agentId);
     if (caseRows.length === 0) {
@@ -360,37 +362,8 @@ export class EvalService {
       );
     }
 
-    let llm: LLMProvider;
-    try {
-      llm = await resolveLlm(agent.provider);
-    } catch (err) {
-      if (err instanceof ConfigError) {
-        throw new AppError(
-          RUN_START_ERROR.providerKeyMissing,
-          `No API key is configured for ${agent.provider}.`,
-          UNPROCESSABLE,
-        );
-      }
-      throw err;
-    }
-
-    // The skills the run will carry: ENABLED links only, in link order (AC-47). The
-    // blocks come from the same assembler a review uses, so an imported skill is wrapped
-    // in its untrusted delimiter here too (NFR-5). Token counts are not needed here.
-    const links = await agents.linkedSkills(agent.id);
-    const assembly = assembleSkills(
-      links.map((l) => l.skill),
-      () => 0,
-    );
-    const config: EvalRunConfig = {
-      system_prompt: agent.systemPrompt,
-      model: agent.model,
-      provider: agent.provider,
-      strategy: agent.strategy,
-      skills: links
-        .filter((l) => l.skill.enabled)
-        .map((l) => ({ name: l.skill.name, version: l.skill.version })),
-    };
+    const llm = await this.resolveLlmOrKeyMissing(agent.provider);
+    const { config, skillBlocks } = await this.recordConfig(agent);
 
     const run = await repo.insertRun({
       workspaceId,
@@ -402,45 +375,50 @@ export class EvalService {
     });
     if (run === 'conflict') throw runInProgress();
 
-    const cases: CaseSnapshot[] = caseRows.map((row) => {
-      const dto = caseRowToDto(row, null);
-      return {
-        id: dto.id,
-        name: dto.name,
-        inputDiff: dto.input_diff,
-        inputMeta: dto.input_meta,
-        expectation: dto.expectation,
-      };
-    });
+    return this.launch(run, caseRows.map((row) => this.snapshotOf(row)), config, skillBlocks, llm);
+  }
 
-    const executor = new EvalRunExecutor({
-      store: repo,
-      parseDiff,
-      now: () => this.now().getTime(),
-    });
-    // Detached on purpose (A8). `execute` never rejects; the catch is the second net so
-    // an unexpected bug can never become an unhandled rejection.
-    const done = executor
-      .execute({
-        runId: run.id,
-        startedAt: run.startedAt,
-        cases,
-        config,
-        skillBlocks: assembly.blocks,
-        llm,
-      })
-      .catch(() => undefined);
+  /**
+   * Start a run of exactly ONE case (SPEC-07). The same lock, key check, recorded config
+   * and executor as a suite run, so the engine input is identical (AC-29). The case is
+   * resolved through the workspace FIRST: a foreign or unknown id is a 404 before any
+   * model is resolved or any row is written (AC-37).
+   */
+  async startCaseRun(workspaceId: string, caseId: string): Promise<StartRunResult> {
+    const { repo, agents } = this.deps;
 
-    return { run_id: run.id, status: 'running', cases_total: run.casesTotal, done };
+    const row = await repo.getCase(workspaceId, caseId);
+    if (!row) throw new NotFoundError('Eval case not found');
+
+    const agent = await agents.getById(workspaceId, row.agentId);
+    if (!agent) throw new NotFoundError('Agent not found');
+
+    await this.assertNoRunningRun(workspaceId, agent.id);
+    const llm = await this.resolveLlmOrKeyMissing(agent.provider);
+    const { config, skillBlocks } = await this.recordConfig(agent);
+
+    const run = await repo.insertRun({
+      workspaceId,
+      agentId: agent.id,
+      agentVersion: agent.version,
+      config,
+      caseIds: [row.id],
+      casesTotal: 1,
+      scope: 'case',
+      caseId: row.id,
+    });
+    if (run === 'conflict') throw runInProgress();
+
+    // The snapshot is taken here, at start (AC-28).
+    return this.launch(run, [this.snapshotOf(row)], config, skillBlocks, llm);
   }
 
   /** An agent's runs, newest first (without per-case outcomes). */
   async listRuns(workspaceId: string, agentId: string): Promise<EvalSuiteRun[]> {
-    const { repo, agents } = this.deps;
+    const { agents } = this.deps;
     if (!(await agents.getById(workspaceId, agentId))) throw new NotFoundError('Agent not found');
     await this.reapStale(workspaceId);
-    const rows = await repo.listRuns(workspaceId, agentId, RUN_LIST_LIMIT);
-    return rows.map((r) => runRowToDto(r));
+    return this.runsForViews(workspaceId, agentId);
   }
 
   /** One run with its per-case outcomes (progress while running, results when done). */
@@ -466,6 +444,14 @@ export class EvalService {
     ]);
     if (!a || !b) throw new NotFoundError('Eval run not found');
 
+    // A single-case run has no suite metrics to compare (SPEC-07 AC-49).
+    if (a.scope !== 'suite' || b.scope !== 'suite') {
+      throw new AppError(
+        COMPARE_ERROR.notSuiteRun,
+        'Only suite runs can be compared.',
+        UNPROCESSABLE,
+      );
+    }
     if (a.id === b.id) {
       throw new AppError(COMPARE_ERROR.sameRun, 'Pick two different runs to compare.', UNPROCESSABLE);
     }
@@ -512,7 +498,7 @@ export class EvalService {
     const [list, counts, latest] = await Promise.all([
       agents.list(workspaceId),
       repo.caseCountsByAgent(workspaceId),
-      repo.latestRunPerAgent(workspaceId),
+      repo.latestSuiteRunPerAgent(workspaceId),
     ]);
     return list.map((agent) => {
       const run = latest.get(agent.id);
@@ -533,12 +519,12 @@ export class EvalService {
     if (!agent) throw new NotFoundError('Agent not found');
     await this.reapStale(workspaceId);
 
-    const [rows, counts] = await Promise.all([
-      repo.listRuns(workspaceId, agentId, RUN_LIST_LIMIT),
+    const [runs, counts] = await Promise.all([
+      this.runsForViews(workspaceId, agentId),
       repo.caseCountsByAgent(workspaceId),
     ]);
-    const runs = rows.map((r) => runRowToDto(r));
-    const completed = runs.filter((r) => r.status === 'completed');
+    // Trend and alert read completed SUITE runs only (SPEC-07 AC-47).
+    const completed = runs.filter((r) => r.scope === 'suite' && r.status === 'completed');
 
     // The alert reads the outcomes of the two newest completed runs only.
     const outcomes = new Map<string, EvalCaseOutcome[]>();
@@ -573,6 +559,108 @@ export class EvalService {
   /** Lazy reaping (A4): fail this workspace's runs still `running` past the stale window. */
   private async reapStale(workspaceId: string): Promise<void> {
     await this.deps.repo.failStaleRuns(workspaceId, new Date(this.now().getTime() - STALE_RUN_MS));
+  }
+
+  /** Reap, then refuse when the agent has a running run of either scope (409). */
+  private async assertNoRunningRun(workspaceId: string, agentId: string): Promise<void> {
+    // A run left `running` past the stale window is dead; reap it so it cannot block the start.
+    await this.reapStale(workspaceId);
+    if (await this.deps.repo.runningRun(workspaceId, agentId)) throw runInProgress();
+  }
+
+  private async resolveLlmOrKeyMissing(provider: Provider): Promise<LLMProvider> {
+    try {
+      return await this.deps.resolveLlm(provider);
+    } catch (err) {
+      if (err instanceof ConfigError) {
+        throw new AppError(
+          RUN_START_ERROR.providerKeyMissing,
+          `No API key is configured for ${provider}.`,
+          UNPROCESSABLE,
+        );
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * The config the run records and the skill blocks it carries: ENABLED links only, in
+   * link order (AC-47). The blocks come from the same assembler a review uses, so an
+   * imported skill is wrapped in its untrusted delimiter here too (NFR-5). Token counts
+   * are not needed here.
+   */
+  private async recordConfig(agent: AgentForRun): Promise<{
+    config: EvalRunConfig;
+    skillBlocks: readonly string[];
+  }> {
+    const links = await this.deps.agents.linkedSkills(agent.id);
+    const assembly = assembleSkills(
+      links.map((l) => l.skill),
+      () => 0,
+    );
+    const config: EvalRunConfig = {
+      system_prompt: agent.systemPrompt,
+      model: agent.model,
+      provider: agent.provider,
+      strategy: agent.strategy,
+      skills: links
+        .filter((l) => l.skill.enabled)
+        .map((l) => ({ name: l.skill.name, version: l.skill.version })),
+    };
+    return { config, skillBlocks: assembly.blocks };
+  }
+
+  private snapshotOf(row: EvalCaseRow): CaseSnapshot {
+    const dto = caseRowToDto(row, null);
+    return {
+      id: dto.id,
+      name: dto.name,
+      inputDiff: dto.input_diff,
+      inputMeta: dto.input_meta,
+      expectation: dto.expectation,
+    };
+  }
+
+  /** Hand a freshly inserted run to a detached executor and build the 202 result. */
+  private launch(
+    run: EvalSuiteRunRow,
+    cases: CaseSnapshot[],
+    config: EvalRunConfig,
+    skillBlocks: readonly string[],
+    llm: LLMProvider,
+  ): StartRunResult {
+    const executor = new EvalRunExecutor({
+      store: this.deps.repo,
+      parseDiff: this.deps.parseDiff,
+      now: () => this.now().getTime(),
+    });
+    // Detached on purpose (A8). `execute` never rejects; the catch is the second net so
+    // an unexpected bug can never become an unhandled rejection.
+    const done = executor
+      .execute({
+        runId: run.id,
+        startedAt: run.startedAt,
+        cases,
+        config,
+        skillBlocks,
+        llm,
+      })
+      .catch(() => undefined);
+    return { run_id: run.id, status: 'running', cases_total: run.casesTotal, done };
+  }
+
+  /**
+   * The runs the list and the dashboard show (SPEC-07 AC-45/AC-46): the newest suite runs,
+   * followed by the agent's running CASE run, if any. Finished case runs never appear.
+   */
+  private async runsForViews(workspaceId: string, agentId: string): Promise<EvalSuiteRun[]> {
+    const { repo } = this.deps;
+    const [suite, running] = await Promise.all([
+      repo.listSuiteRuns(workspaceId, agentId, RUN_LIST_LIMIT),
+      repo.runningRun(workspaceId, agentId),
+    ]);
+    const rows = running && running.scope === 'case' ? [...suite, running] : suite;
+    return rows.map((r) => runRowToDto(r));
   }
 
   private async toDto(row: Parameters<typeof caseRowToDto>[0]): Promise<EvalCase> {

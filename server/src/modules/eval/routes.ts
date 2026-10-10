@@ -17,7 +17,8 @@ import { EvalService } from './service.js';
  *   PATCH  /eval/cases/:id           → rename / notes / expectation (+ diff / PR meta of a manual case)
  *   DELETE /eval/cases/:id           → 204
  *   POST   /agents/:id/eval/runs     → 202 { run_id, status, cases_total }
- *   GET    /agents/:id/eval/runs     → the agent's runs, newest first
+ *   POST   /eval/cases/:id/runs      → 202 { run_id, status, cases_total } a run of ONE case (SPEC-07)
+ *   GET    /agents/:id/eval/runs     → the agent's suite runs (+ a running case run), newest first
  *   GET    /eval/runs/:id            → one run with its per-case outcomes
  *   GET    /eval/compare?a=&b=       → two completed runs of one agent, side by side
  *   GET    /eval/overview            → every workspace agent with its latest run
@@ -97,6 +98,15 @@ export default async function evalRoutes(appBase: FastifyInstance) {
   app.post('/agents/:id/eval/runs', { schema: { params: IdParams } }, async (req, reply) => {
     const { workspaceId } = await getContext(app.container, req);
     const { done: _done, ...started } = await service.startRun(workspaceId, req.params.id);
+    return reply.code(202).send(started);
+  });
+
+  // Runs ONE case of the suite (SPEC-07). Same 202 shape as the suite start; no body schema
+  // for the same null-body reason, and no per-route rate limit (the one-running-run lock
+  // bounds the spend).
+  app.post('/eval/cases/:id/runs', { schema: { params: IdParams } }, async (req, reply) => {
+    const { workspaceId } = await getContext(app.container, req);
+    const { done: _done, ...started } = await service.startCaseRun(workspaceId, req.params.id);
     return reply.code(202).send(started);
   });
 

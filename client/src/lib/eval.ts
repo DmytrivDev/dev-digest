@@ -15,6 +15,7 @@ import type {
   EvalCompareErrorCode,
   EvalCreateCaseErrorCode,
   EvalRunStartErrorCode,
+  EvalSuiteRun,
   EvalTrendPoint,
   EvalUpdateCaseErrorCode,
 } from "@devdigest/shared";
@@ -184,6 +185,7 @@ export const COMPARE_ERROR_KEY: Record<EvalCompareErrorCode, string> = {
   run_not_completed: "errors.run_not_completed",
   different_agents: "errors.different_agents",
   same_run: "errors.same_run",
+  not_suite_run: "errors.not_suite_run",
 };
 export const EVAL_ERROR_RATE_LIMITED = "errors.rateLimited";
 export const EVAL_ERROR_GENERIC = "errors.generic";
@@ -290,4 +292,32 @@ export function trendTooltipParts(point: EvalTrendPoint): TrendTooltipParts {
     precision: formatMetric(point.precision),
     citation: formatMetric(point.citation_accuracy),
   };
+}
+
+// ---- Run scope (SPEC-07) -----------------------------------------------------
+// A run covers the whole suite or exactly one case (`scope`). Every aggregate
+// (cards, badge, trend, history) reads suite runs only; the "is anything running"
+// questions look at both scopes.
+
+/**
+ * The suite-scoped runs. A case run is the only thing dropped, so a run without
+ * a `scope` (an older payload) counts as a suite run.
+ */
+export function suiteRunsOnly(runs: readonly EvalSuiteRun[]): EvalSuiteRun[] {
+  return runs.filter((r) => r.scope !== "case");
+}
+
+/** The agent's run that is `running` right now, of either scope, or `null`. */
+export function runningRunOf(runs: readonly EvalSuiteRun[]): EvalSuiteRun | null {
+  return runs.find((r) => r.status === "running") ?? null;
+}
+
+/** The `running` single-case run of `caseId`, or `null`. */
+export function runningCaseRunFor(
+  runs: readonly EvalSuiteRun[],
+  caseId: string,
+): EvalSuiteRun | null {
+  return (
+    runs.find((r) => r.status === "running" && r.scope === "case" && r.case_id === caseId) ?? null
+  );
 }

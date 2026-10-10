@@ -1,6 +1,10 @@
 /* EvalsTab — the agent's regression suite (SPEC-04 B): metric cards for the
    latest completed run, their trend over the completed runs (SPEC-05), the case
-   list with Edit / Delete, and the last runs.
+   list with Run / Edit / Delete, and the last runs.
+
+   A single-case run (SPEC-07) is a run of the agent too, but not part of the
+   suite's numbers: the cards, the badge, the trend and the history read
+   `suiteRunsOnly`, while "is anything running" reads both scopes.
 
    The open case lives in the URL (`?tab=evals&case=<id>`), so "In eval suite"
    on a PR finding lands here with its modal open (AC-5) and a reload keeps it.
@@ -16,7 +20,14 @@ import { Badge, Button, EmptyState } from "@devdigest/ui";
 import type { Agent, EvalCase } from "@devdigest/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EvalRunButton } from "@/components/EvalRunButton";
-import { useDeleteEvalCase, useEvalCases, useEvalRuns } from "@/lib/hooks/eval";
+import { runningRunOf, suiteRunsOnly } from "@/lib/eval";
+import {
+  useDeleteEvalCase,
+  useEvalCases,
+  useEvalRun,
+  useEvalRuns,
+  useStartCaseRun,
+} from "@/lib/hooks/eval";
 import { EvalCaseModal } from "./_components/EvalCaseModal";
 import { EvalCaseRow } from "./_components/EvalCaseRow";
 import { EvalMetrics } from "./_components/EvalMetrics";
@@ -34,13 +45,23 @@ export function EvalsTab({ agent }: { agent: Agent }) {
   const cases = useEvalCases(agent.id);
   const runs = useEvalRuns(agent.id);
   const del = useDeleteEvalCase(agent.id);
+  const startCase = useStartCaseRun(agent.id);
+  // The click lands before React re-renders with `isPending`; the ref keeps a
+  // double click on a row's Run from starting two runs (AC-21).
+  const rowStarting = React.useRef(false);
+  // The run a row's Run started is followed by id: the 202 says it was running, so
+  // the rows refresh when it is first read final, even if no read caught it
+  // `running` (an instant provider error; AC-16, AC-18).
+  const [startedRunId, setStartedRunId] = React.useState<string | null>(null);
+  useEvalRun(startedRunId, agent.id);
   const [pendingDelete, setPendingDelete] = React.useState<EvalCase | null>(null);
   const [creating, setCreating] = React.useState(false);
 
   const allRuns = runs.data ?? [];
   const caseList = cases.data ?? [];
-  const { latest, previous } = latestAndPrevious(allRuns);
-  const runningRun = allRuns.find((r) => r.status === "running") ?? null;
+  const suiteRuns = suiteRunsOnly(allRuns);
+  const { latest, previous } = latestAndPrevious(suiteRuns);
+  const runningRun = runningRunOf(allRuns);
 
   const openId = search.get(CASE_PARAM);
   const openCase = openId ? caseList.find((c) => c.id === openId) : undefined;
@@ -49,6 +70,18 @@ export function EvalsTab({ agent }: { agent: Agent }) {
     if (id) sp.set(CASE_PARAM, id);
     else sp.delete(CASE_PARAM);
     router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
+
+  const runCase = (caseId: string) => {
+    if (rowStarting.current) return;
+    rowStarting.current = true;
+    startCase.mutate(
+      { caseId, afterSave: false },
+      {
+        onSuccess: (started) => setStartedRunId(started.run_id),
+        onSettled: () => (rowStarting.current = false),
+      },
+    );
   };
 
   return (
@@ -77,7 +110,7 @@ export function EvalsTab({ agent }: { agent: Agent }) {
         <EvalMetrics latest={latest} previous={previous} />
       </div>
 
-      <MetricTrend runs={allRuns} isLoading={runs.isLoading} isError={runs.isError} />
+      <MetricTrend runs={suiteRuns} isLoading={runs.isLoading} isError={runs.isError} />
 
       <div style={s.section}>
         {cases.isLoading ? (
@@ -94,13 +127,16 @@ export function EvalsTab({ agent }: { agent: Agent }) {
                 evalCase={c}
                 onOpen={() => setOpenId(c.id)}
                 onDelete={() => setPendingDelete(c)}
+                onRun={() => runCase(c.id)}
+                runDisabled={!!runningRun || startCase.isPending}
+                running={runningRun?.scope === "case" && runningRun.case_id === c.id}
               />
             ))}
           </div>
         )}
       </div>
 
-      <RunHistory agentId={agent.id} runs={allRuns} />
+      <RunHistory agentId={agent.id} runs={suiteRuns} />
 
       {openCase && (
         <EvalCaseModal
@@ -117,6 +153,11 @@ export function EvalsTab({ agent }: { agent: Agent }) {
           agentId={agent.id}
           agentName={agent.name}
           onClose={() => setCreating(false)}
+          onCreated={(id) => {
+            // Run case in create mode: the case exists now, so continue in its edit modal.
+            setCreating(false);
+            setOpenId(id);
+          }}
         />
       )}
       {pendingDelete && (

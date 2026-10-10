@@ -151,8 +151,11 @@ function fakeRepo() {
       return new Map();
     },
     async failStaleRuns() {},
-    async listRuns() {
+    async listSuiteRuns() {
       return run ? [run] : [];
+    },
+    async runningRun() {
+      return undefined;
     },
     async insertRun(v: { casesTotal: number }) {
       run = { id: 'run-1', status: 'running', startedAt: new Date(), casesTotal: v.casesTotal };

@@ -2,6 +2,7 @@
 Spec ID: SPEC-05
 Status: approved
 Supersedes: SPEC-04 (partially) — the Non-goal "Creating a case from scratch" and the Finding skeleton (`SPEC-04-eval-pipeline.md` L96-97, AC-36), the read-only Diff and PR meta for cases created by hand (Goals L66-67, AC-37, DR-19), and the Evals-tab EmptyState copy (AC-32). Every other SPEC-04 decision stands, including the read-only input of finding-born cases, whole-suite runs only and the "last 20 runs" window.
+Superseded by: SPEC-07 (partially — the Non-goal "Run case, Run on save, and per-case runs" (decision 8) and the AC-3 "Run case button" clause; Run on save stays out)
 
 ## Problem and user
 

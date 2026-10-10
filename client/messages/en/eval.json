@@ -50,6 +50,7 @@
     "run_not_completed": "Only completed runs can be compared.",
     "different_agents": "These runs belong to different agents and cannot be compared.",
     "same_run": "Pick two different runs to compare.",
+    "not_suite_run": "Only suite runs can be compared.",
     "file_mismatch": "The expected output must point at the same file as the case diff.",
     "range_outside_hunks": "The expected line range must overlap a changed line of the case diff.",
     "diff_too_large": "The diff is larger than 200 KB. Paste a smaller one.",
@@ -61,7 +62,8 @@
   "runButton": {
     "tab": "Run all evals ({count} cases)",
     "dashboard": "Run eval ({count} cases)",
-    "running": "Running {done} / {total} cases"
+    "running": "Running {done} / {total} cases",
+    "runningCase": "Running case…"
   },
   "evalsTab": {
     "metricsTitle": "Eval metrics",
@@ -74,6 +76,8 @@
     "emptyTitle": "No eval cases yet",
     "emptyBody": "Turn an accepted or dismissed finding into a case: triage a finding on a pull request, then choose \"Turn into eval case\". Or write one by hand with \"New eval case\".",
     "row": {
+      "run": "Run",
+      "running": "Running",
       "edit": "Edit",
       "delete": "Delete",
       "status": {
@@ -106,7 +110,13 @@
     },
     "newCase": "New eval case"
   },
+  "caseRun": {
+    "savedNotRun": "Case saved; not run: {reason}"
+  },
   "caseModal": {
+    "runCase": "Run case",
+    "running": "Running…",
+    "interrupted": "Run interrupted — try again",
     "title": "Eval case · {name}",
     "subtitle": "{agent} · simulate a PR and assert the expected output",
     "nameLabel": "Name",

@@ -186,6 +186,10 @@ export type EvalRunStatus = z.infer<typeof EvalRunStatus>;
 export const EvalRunErrorReason = z.enum(['all_cases_errored', 'interrupted']);
 export type EvalRunErrorReason = z.infer<typeof EvalRunErrorReason>;
 
+/** A run covers the agent's whole suite, or exactly one case (SPEC-07). */
+export const EvalRunScope = z.enum(['suite', 'case']);
+export type EvalRunScope = z.infer<typeof EvalRunScope>;
+
 /** The agent configuration a run was started with (recorded at start). */
 export const EvalRunConfig = z.object({
   system_prompt: z.string(),
@@ -215,6 +219,9 @@ export const EvalSuiteRun = z.object({
   cost_usd: z.number().nullable(),
   duration_ms: z.number().int().nullable(),
   config: EvalRunConfig,
+  scope: EvalRunScope,
+  /** The run's one case when scope = "case"; null exactly when scope = "suite". */
+  case_id: z.string().nullable(),
   /** Only on `GET /eval/runs/:id`. */
   outcomes: z.array(EvalCaseOutcome).optional(),
 });
@@ -358,6 +365,7 @@ export const EvalCompareErrorCode = z.enum([
   'run_not_completed',
   'different_agents',
   'same_run',
+  'not_suite_run',
 ]);
 export type EvalCompareErrorCode = z.infer<typeof EvalCompareErrorCode>;
 

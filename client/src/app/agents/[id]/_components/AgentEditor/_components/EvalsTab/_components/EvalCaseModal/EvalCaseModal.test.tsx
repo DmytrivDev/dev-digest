@@ -1,17 +1,24 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { EvalCase, EvalCaseOutcome } from "@devdigest/shared";
+import type { EvalCase, EvalCaseOutcome, EvalSuiteRun } from "@devdigest/shared";
 import messages from "../../../../../../../../../../messages/en/eval.json";
 import shellMessages from "../../../../../../../../../../messages/en/shell.json";
 
-const update = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
-const createMut = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
+const update = vi.hoisted(() => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }));
+const createMut = vi.hoisted(() => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }));
+const startMut = vi.hoisted(() => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }));
+/** What `useEvalRuns` returns (the tab's runs list) and what `useEvalRun` returns for a tracked id. */
+const runsQ = vi.hoisted(() => ({ data: [] as EvalSuiteRun[] | undefined }));
+const ownQ = vi.hoisted(() => ({ data: undefined as EvalSuiteRun | undefined, isError: false }));
 
 vi.mock("@/lib/hooks/eval", () => ({
   useUpdateEvalCase: () => update,
   useCreateManualEvalCase: () => createMut,
+  useStartCaseRun: () => startMut,
+  useEvalRuns: () => runsQ,
+  useEvalRun: (id: string | null) => (id ? ownQ : { data: undefined, isError: false }),
 }));
 
 import { EvalCaseModal } from "./EvalCaseModal";
@@ -68,29 +75,71 @@ function makeCase(over: Partial<EvalCase> = {}): EvalCase {
 }
 
 const onClose = vi.fn();
+const onCreated = vi.fn();
+
+function runOf(over: Partial<EvalSuiteRun> = {}): EvalSuiteRun {
+  return {
+    id: "run1",
+    agent_id: "ag1",
+    agent_version: 1,
+    status: "running",
+    error_reason: null,
+    started_at: "2026-10-09T10:00:00.000Z",
+    finished_at: null,
+    cases_total: 8,
+    cases_done: 0,
+    cases_passed: 0,
+    cases_scored: 0,
+    cases_errored: 0,
+    recall: null,
+    precision: null,
+    citation_accuracy: null,
+    cost_usd: null,
+    duration_ms: null,
+    config: { system_prompt: "p", model: "gpt-4.1", provider: "openai", strategy: "single-pass", skills: [] },
+    scope: "suite",
+    case_id: null,
+    ...over,
+  };
+}
+const caseRunOf = (caseId: string, over: Partial<EvalSuiteRun> = {}) =>
+  runOf({ id: `run-${caseId}`, scope: "case", case_id: caseId, cases_total: 1, ...over });
+
+const modalTree = (evalCase: EvalCase) => (
+  <NextIntlClientProvider locale="en" messages={{ eval: messages, shell: shellMessages }}>
+    <EvalCaseModal mode="edit" evalCase={evalCase} agentName="Security Reviewer" onClose={onClose} />
+  </NextIntlClientProvider>
+);
 
 function renderModal(evalCase: EvalCase = makeCase()) {
-  return render(
-    <NextIntlClientProvider locale="en" messages={{ eval: messages, shell: shellMessages }}>
-      <EvalCaseModal mode="edit" evalCase={evalCase} agentName="Security Reviewer" onClose={onClose} />
-    </NextIntlClientProvider>,
-  );
+  return render(modalTree(evalCase));
 }
 
 function renderCreate() {
   return render(
     <NextIntlClientProvider locale="en" messages={{ eval: messages, shell: shellMessages }}>
-      <EvalCaseModal mode="create" agentId="ag1" agentName="Security Reviewer" onClose={onClose} />
+      <EvalCaseModal
+        mode="create"
+        agentId="ag1"
+        agentName="Security Reviewer"
+        onClose={onClose}
+        onCreated={onCreated}
+      />
     </NextIntlClientProvider>,
   );
 }
 
 beforeEach(() => {
-  update.mutate.mockReset();
-  update.isPending = false;
-  createMut.mutate.mockReset();
-  createMut.isPending = false;
+  for (const m of [update, createMut, startMut]) {
+    m.mutate.mockReset();
+    m.mutateAsync.mockReset();
+    m.isPending = false;
+  }
+  runsQ.data = [];
+  ownQ.data = undefined;
+  ownQ.isError = false;
   onClose.mockReset();
+  onCreated.mockReset();
 });
 afterEach(cleanup);
 
@@ -117,9 +166,9 @@ describe("EvalCaseModal — parts (AC-36)", () => {
     expect(save()).toBeInTheDocument();
   });
 
-  it("has no Files tab, Finding skeleton, Run case or Run on save", () => {
+  it("has no Files tab, Finding skeleton or Run on save", () => {
     renderModal();
-    for (const gone of [/Files/, /Finding skeleton/, /Run case/, /Run on save/]) {
+    for (const gone of [/Files/, /Finding skeleton/, /Run on save/]) {
       expect(screen.queryByText(gone)).toBeNull();
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }
@@ -359,7 +408,7 @@ describe("EvalCaseModal create mode — parts (SPEC-05 AC-3)", () => {
     expect(skeletonBtn().querySelector("svg")).not.toBeNull();
     expect(d.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(d.getByRole("button", { name: "Save" })).toBeInTheDocument();
-    for (const gone of [/Files/, /Run case/, /Run on save/, /Last run/, /Never run/, /Created manually/, /PR #/]) {
+    for (const gone of [/Files/, /Run on save/, /Last run/, /Never run/, /Created manually/, /PR #/]) {
       expect(d.queryByText(gone)).toBeNull();
       expect(d.queryByRole("button", { name: gone })).toBeNull();
     }
@@ -755,5 +804,338 @@ describe("EvalCaseModal — editing a manual case (SPEC-05 AC-31..AC-34)", () =>
     expect(update.mutate.mock.calls[0]![0]).toEqual({ id: "c1", patch: { name: "renamed" } });
     type(nameBox(), "a".repeat(61));
     expect(save()).toBeDisabled();
+  });
+});
+
+// ---- SPEC-07: Run case (hooks mocked; the request sequences live in EvalCaseModal.requests.test.tsx) ----
+
+const runCaseBtn = () => within(screen.getByRole("dialog")).getByRole("button", { name: "Run case" });
+const manualCase = (over: Partial<EvalCase> = {}) =>
+  makeCase({
+    origin: "manual",
+    labels: null,
+    source: null,
+    input_meta: { pr_number: null, title: "Add Stripe", body: "Wire up payments." },
+    ...over,
+  });
+
+describe("EvalCaseModal — footer (SPEC-07 AC-1)", () => {
+  const footerOrder = () => {
+    const d = within(screen.getByRole("dialog"));
+    const cancel = d.getByRole("button", { name: "Cancel" });
+    const run = d.getByRole("button", { name: "Run case" });
+    const saveBtn = d.getByRole("button", { name: /^(Save|Saving…)$/ });
+    expect(cancel.compareDocumentPosition(run) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(run.compareDocumentPosition(saveBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(run.parentElement).toBe(cancel.parentElement);
+    expect(saveBtn.parentElement).toBe(cancel.parentElement);
+    // Run case is the secondary kind with a Play icon; Save stays the primary one.
+    expect(run).toHaveStyle({ background: "var(--bg-elevated)" });
+    expect(run.querySelector("svg.lucide-play")).not.toBeNull();
+    expect(saveBtn).toHaveStyle({ background: "var(--accent)" });
+    expect(screen.queryByText(/Run on save/)).toBeNull();
+  };
+
+  it("is Cancel, Run case, Save in a finding-born case modal", () => {
+    renderModal();
+    footerOrder();
+  });
+  it("is Cancel, Run case, Save in a manual case modal", () => {
+    renderModal(manualCase());
+    footerOrder();
+  });
+  it("is Cancel, Run case, Save in create mode", () => {
+    renderCreate();
+    footerOrder();
+  });
+});
+
+describe("EvalCaseModal — Run case is disabled whenever Save is (SPEC-07 AC-2)", () => {
+  it("is enabled for a valid case, and for a valid draft in create mode", () => {
+    renderModal();
+    expect(runCaseBtn()).toBeEnabled();
+    cleanup();
+    renderCreate();
+    expect(runCaseBtn()).toBeDisabled();
+    fillValid();
+    expect(runCaseBtn()).toBeEnabled();
+  });
+
+  it("is disabled for a blank name and a name over 60 characters", () => {
+    renderModal();
+    type(nameBox(), "  ");
+    expect(save()).toBeDisabled();
+    expect(runCaseBtn()).toBeDisabled();
+    type(nameBox(), "a".repeat(61));
+    expect(runCaseBtn()).toBeDisabled();
+    type(nameBox(), "a".repeat(60));
+    expect(runCaseBtn()).toBeEnabled();
+  });
+
+  it("is disabled for invalid JSON and for a shape missing a field", () => {
+    renderModal();
+    type(expectedBox(), "{ not json");
+    expect(runCaseBtn()).toBeDisabled();
+    type(expectedBox(), json({ kind: "must_find", start_line: 1, end_line: 2 }));
+    expect(runCaseBtn()).toBeDisabled();
+  });
+
+  it("is disabled for an expectation that fails a diff check (create mode)", () => {
+    renderCreate();
+    fillValid();
+    type(expectedBox(), json({ ...PASTE_EXPECTATION, file: "src/other.ts" }));
+    expect(save()).toBeDisabled();
+    expect(runCaseBtn()).toBeDisabled();
+    type(expectedBox(), json({ ...PASTE_EXPECTATION, start_line: 99, end_line: 99 }));
+    expect(runCaseBtn()).toBeDisabled();
+  });
+
+  it("is disabled for an invalid diff in a manual case, and for an empty one in create mode", () => {
+    renderModal(manualCase());
+    type(diffBox(), "not a diff");
+    expect(save()).toBeDisabled();
+    expect(runCaseBtn()).toBeDisabled();
+    cleanup();
+    renderCreate();
+    fillValid();
+    type(diffBox(), "");
+    expect(runCaseBtn()).toBeDisabled();
+  });
+
+  it("is disabled while a save request is pending", () => {
+    update.isPending = true;
+    renderModal();
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(runCaseBtn()).toBeDisabled();
+    cleanup();
+    update.isPending = false;
+    createMut.isPending = true;
+    renderCreate();
+    fillValid();
+    expect(runCaseBtn()).toBeDisabled();
+  });
+
+  it("is disabled while a run start is in flight", () => {
+    startMut.isPending = true;
+    renderModal();
+    expect(runCaseBtn()).toBeDisabled();
+  });
+});
+
+describe("EvalCaseModal — Run case waits for any running run (SPEC-07 AC-3)", () => {
+  it("is disabled while a suite run is running", () => {
+    runsQ.data = [runOf()];
+    renderModal();
+    expect(runCaseBtn()).toBeDisabled();
+    expect(save()).toBeEnabled();
+  });
+
+  it("is disabled while a case run of ANOTHER case is running, and this case shows no Running line", () => {
+    runsQ.data = [caseRunOf("c2")];
+    renderModal();
+    expect(runCaseBtn()).toBeDisabled();
+    expect(screen.queryByText("Running…")).toBeNull();
+    expect(screen.getByText("Never run")).toBeInTheDocument();
+  });
+
+  it("is enabled when the only runs are finished ones", () => {
+    runsQ.data = [runOf({ status: "completed" })];
+    renderModal();
+    expect(runCaseBtn()).toBeEnabled();
+  });
+});
+
+describe("EvalCaseModal — this case's own run is running (SPEC-07 AC-13, AC-14, AC-15, AC-17)", () => {
+  const caseWithOutcome = () => makeCase({ last_outcome: outcome() });
+
+  it("reads 'Running…' in place of the Last run line (AC-13)", () => {
+    runsQ.data = [caseRunOf("c1")];
+    renderModal(caseWithOutcome());
+    expect(screen.getByText("Running…")).toBeInTheDocument();
+    expect(screen.queryByText(/Last run/)).toBeNull();
+  });
+
+  it("puts Run case in its loading state and disables it (AC-14)", () => {
+    runsQ.data = [caseRunOf("c1")];
+    renderModal(caseWithOutcome());
+    const run = runCaseBtn();
+    expect(run).toBeDisabled();
+    expect(run.querySelector("svg.lucide-refresh-cw")).not.toBeNull();
+    expect(run.querySelector("svg.lucide-play")).toBeNull();
+  });
+
+  it("leaves Save enabled, and Save sends the PATCH (AC-15)", () => {
+    runsQ.data = [caseRunOf("c1")];
+    renderModal(caseWithOutcome());
+    type(nameBox(), "renamed");
+    expect(save()).toBeEnabled();
+    fireEvent.click(save());
+    expect(update.mutate.mock.calls[0]![0]).toEqual({ id: "c1", patch: { name: "renamed" } });
+    expect(startMut.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps following the run by id once it leaves the list, until its own read says it is final", () => {
+    runsQ.data = [caseRunOf("c1")];
+    const view = renderModal(caseWithOutcome());
+    expect(screen.getByText("Running…")).toBeInTheDocument();
+    // The list no longer holds it (finished case runs leave the list); its own read still says running.
+    runsQ.data = [];
+    ownQ.data = caseRunOf("c1", { status: "running" });
+    view.rerender(modalTree(caseWithOutcome()));
+    expect(screen.getByText("Running…")).toBeInTheDocument();
+    ownQ.data = caseRunOf("c1", { status: "completed" });
+    view.rerender(modalTree(caseWithOutcome()));
+    expect(screen.queryByText("Running…")).toBeNull();
+    expect(screen.getByText(/^Last run passed/)).toBeInTheDocument();
+    expect(runCaseBtn()).toBeEnabled();
+  });
+
+  it("shows 'Run interrupted — try again' and re-enables Run case when the run was interrupted (AC-17)", () => {
+    runsQ.data = [caseRunOf("c1")];
+    const view = renderModal(caseWithOutcome());
+    runsQ.data = [];
+    ownQ.data = caseRunOf("c1", { status: "failed", error_reason: "interrupted" });
+    view.rerender(modalTree(caseWithOutcome()));
+    expect(screen.getByText("Run interrupted — try again")).toBeInTheDocument();
+    expect(screen.queryByText("Running…")).toBeNull();
+    expect(screen.queryByText(/^Last run/)).toBeNull();
+    expect(runCaseBtn()).toBeEnabled();
+  });
+});
+
+describe("EvalCaseModal — the run followed by id from a 202 (SPEC-07 AC-14, AC-16)", () => {
+  it("keeps Run case disabled, loading, in the gap before the followed run's own read answers", async () => {
+    startMut.mutateAsync.mockResolvedValue({ run_id: "r1", status: "running", cases_total: 1 });
+    runsQ.data = []; // the list does not hold it yet; the run's own read (ownQ.data) is still undefined
+    renderModal();
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(startMut.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Running…")).toBeInTheDocument();
+    expect(runCaseBtn()).toBeDisabled();
+    expect(runCaseBtn().querySelector("svg.lucide-refresh-cw")).not.toBeNull();
+  });
+
+  it("stops waiting when the followed run's read failed: no stuck 'Running…', Run case works again", async () => {
+    startMut.mutateAsync.mockResolvedValue({ run_id: "r1", status: "running", cases_total: 1 });
+    const view = renderModal();
+    fireEvent.click(runCaseBtn());
+    expect(await screen.findByText("Running…")).toBeInTheDocument();
+    ownQ.isError = true;
+    view.rerender(modalTree(makeCase()));
+    expect(screen.queryByText("Running…")).toBeNull();
+    expect(runCaseBtn()).toBeEnabled();
+  });
+});
+
+describe("EvalCaseModal — Run case in edit mode (SPEC-07 AC-4, AC-5, AC-8)", () => {
+  it("an unchanged case sends only the run start, with no save", async () => {
+    startMut.mutateAsync.mockResolvedValue({ run_id: "r1", status: "running", cases_total: 1 });
+    renderModal();
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(startMut.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(startMut.mutateAsync).toHaveBeenCalledWith({ caseId: "c1", afterSave: false });
+    expect(update.mutateAsync).not.toHaveBeenCalled();
+    expect(update.mutate).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("a changed case saves first and starts only after the save resolved", async () => {
+    const order: string[] = [];
+    let finishSave!: () => void;
+    update.mutateAsync.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          order.push("save");
+          finishSave = () => resolve();
+        }),
+    );
+    startMut.mutateAsync.mockImplementation(async () => {
+      order.push("start");
+      return { run_id: "r1", status: "running", cases_total: 1 };
+    });
+    renderModal();
+    type(nameBox(), "renamed");
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(update.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(update.mutateAsync).toHaveBeenCalledWith({ id: "c1", patch: { name: "renamed" } });
+    expect(startMut.mutateAsync).not.toHaveBeenCalled();
+    finishSave();
+    await waitFor(() => expect(startMut.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(startMut.mutateAsync).toHaveBeenCalledWith({ caseId: "c1", afterSave: true });
+    expect(order).toEqual(["save", "start"]);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("starts no run when the save rejects, keeps the fields and the dialog, and lets the user retry", async () => {
+    update.mutateAsync.mockRejectedValue(new Error("422"));
+    renderModal();
+    type(nameBox(), "renamed");
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(update.mutateAsync).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(startMut.mutateAsync).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(nameBox()).toHaveValue("renamed");
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(update.mutateAsync).toHaveBeenCalledTimes(2));
+  });
+
+  it("starts one sequence for a click burst (AC-8)", async () => {
+    startMut.mutateAsync.mockResolvedValue({ run_id: "r1", status: "running", cases_total: 1 });
+    renderModal();
+    const run = runCaseBtn();
+    fireEvent.click(run);
+    fireEvent.click(run);
+    await waitFor(() => expect(startMut.mutateAsync).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("EvalCaseModal — Run case in create mode (SPEC-07 AC-6, AC-7, AC-9, AC-11)", () => {
+  it("creates, starts a run for the new id, and hands over to its edit modal", async () => {
+    createMut.mutateAsync.mockResolvedValue({ id: "new1" });
+    startMut.mutateAsync.mockResolvedValue({ run_id: "r1", status: "running", cases_total: 1 });
+    renderCreate();
+    fillValid();
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("new1"));
+    expect(createMut.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(startMut.mutateAsync).toHaveBeenCalledWith({ caseId: "new1", afterSave: true });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("still hands over when the run start is rejected after the create", async () => {
+    createMut.mutateAsync.mockResolvedValue({ id: "new1" });
+    startMut.mutateAsync.mockRejectedValue(new Error("409"));
+    renderCreate();
+    fillValid();
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("new1"));
+  });
+
+  it("starts no run and hands over nothing when the create rejects", async () => {
+    createMut.mutateAsync.mockRejectedValue(new Error("422"));
+    renderCreate();
+    fillValid();
+    fireEvent.click(runCaseBtn());
+    await waitFor(() => expect(createMut.mutateAsync).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(startMut.mutateAsync).not.toHaveBeenCalled();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(nameBox()).toHaveValue("my-case");
+  });
+});
+
+describe("EvalCaseModal — Run case keyboard (SPEC-07 NFR-2)", () => {
+  it("is a native, focusable button, and a click on the focused element runs the case", async () => {
+    startMut.mutateAsync.mockResolvedValue({ run_id: "r1", status: "running", cases_total: 1 });
+    renderModal();
+    const run = runCaseBtn();
+    expect(run.tagName).toBe("BUTTON");
+    expect(run.getAttribute("tabindex")).not.toBe("-1");
+    run.focus();
+    expect(document.activeElement).toBe(run);
+    fireEvent.click(document.activeElement as HTMLElement); // Enter / Space on a native button
+    await waitFor(() => expect(startMut.mutateAsync).toHaveBeenCalledTimes(1));
   });
 });

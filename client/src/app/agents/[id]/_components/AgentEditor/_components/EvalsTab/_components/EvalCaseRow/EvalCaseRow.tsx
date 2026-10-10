@@ -1,8 +1,9 @@
 /* EvalCaseRow — one case of the agent's suite (AC-29): status icon, mono name,
-   result line, kind badge, severity · category chip and Edit / Delete icon
-   buttons. There is deliberately NO Run button: a run covers the whole suite.
-   A manual case has no severity or category, so a "manual" badge stands in for
-   the chip (SPEC-05 AC-41).
+   result line, kind badge, severity · category chip and Run / Edit / Delete
+   icon buttons. Run starts a run of THIS case alone (SPEC-07); while that run
+   is running a spinner stands in for the status icon. A manual case has no
+   severity or category, so a "manual" badge stands in for the chip (SPEC-05
+   AC-41).
 
    Case name and labels are user/model text → rendered as text only (NFR-4). */
 "use client";
@@ -20,10 +21,19 @@ export function EvalCaseRow({
   evalCase,
   onOpen,
   onDelete,
+  onRun,
+  runDisabled,
+  running,
 }: {
   evalCase: EvalCase;
   onOpen: () => void;
   onDelete: () => void;
+  /** Starts a run of this case alone; never opens the modal. */
+  onRun: () => void;
+  /** Any run of the agent is running (or a start is in flight). */
+  runDisabled: boolean;
+  /** THIS case's own run is running: a spinner replaces the status icon. */
+  running: boolean;
 }) {
   const t = useTranslations("eval");
   const [hover, setHover] = React.useState(false);
@@ -41,12 +51,21 @@ export function EvalCaseRow({
       onMouseLeave={() => setHover(false)}
       style={s.row(hover)}
     >
-      <StatusIcon
-        size={15}
-        style={s.statusIcon(color)}
-        role="img"
-        aria-label={t(`evalsTab.row.status.${status}`)}
-      />
+      {running ? (
+        <Icon.RefreshCw
+          size={15}
+          style={s.spinner}
+          role="img"
+          aria-label={t("evalsTab.row.running")}
+        />
+      ) : (
+        <StatusIcon
+          size={15}
+          style={s.statusIcon(color)}
+          role="img"
+          aria-label={t(`evalsTab.row.status.${status}`)}
+        />
+      )}
       <button type="button" style={s.main}>
         <span className="mono" style={s.name} title={evalCase.name}>
           {evalCase.name}
@@ -71,6 +90,13 @@ export function EvalCaseRow({
       {/* The icon buttons sit inside the clickable row: their clicks must not
           also reach the row's own open handler. */}
       <span style={s.actions(hover)} onClick={(e) => e.stopPropagation()}>
+        <IconBtn
+          icon="Play"
+          label={t("evalsTab.row.run")}
+          size={26}
+          onClick={onRun}
+          disabled={runDisabled}
+        />
         <IconBtn icon="Edit" label={t("evalsTab.row.edit")} size={26} onClick={onOpen} />
         <IconBtn icon="Trash" label={t("evalsTab.row.delete")} size={26} danger onClick={onDelete} />
       </span>

@@ -61,7 +61,7 @@ export const evalCases = pgTable('eval_cases', {
   }),
 );
 
-/** One execution of an agent's whole case suite. */
+/** One execution of an agent's whole case suite, or of exactly one case (`scope`). */
 export const evalSuiteRuns = pgTable('eval_suite_runs', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')
@@ -89,6 +89,13 @@ export const evalSuiteRuns = pgTable('eval_suite_runs', {
   citationAccuracy: doublePrecision('citation_accuracy'),
   costUsd: doublePrecision('cost_usd'),
   durationMs: integer('duration_ms'),
+  /** `suite` = the agent's whole suite; `case` = exactly one case (SPEC-07). */
+  scope: text('scope', { enum: ['suite', 'case'] }).notNull().default('suite'),
+  /**
+   * The run's one case when scope = 'case'. Deliberately NO foreign key: deleting the
+   * case must keep the run and its outcome (like `eval_case_outcomes.case_id`).
+   */
+  caseId: uuid('case_id'),
 },
   (t) => ({
     byAgentStarted: index('eval_suite_runs_agent_started_idx').on(t.agentId, t.startedAt.desc()),
@@ -96,6 +103,8 @@ export const evalSuiteRuns = pgTable('eval_suite_runs', {
     oneRunning: uniqueIndex('eval_suite_runs_one_running_uq')
       .on(t.agentId)
       .where(sql`status = 'running'`),
+    // A case run names its case; a suite run names none.
+    scopeCase: check('eval_suite_runs_scope_case_ck', sql`(${t.scope} = 'case') = (${t.caseId} IS NOT NULL)`),
   }),
 );
 

@@ -15,6 +15,12 @@ export const s = {
     marginBottom: 6,
   }),
   statusIcon: (color: string): CSSProperties => ({ color, flexShrink: 0 }),
+  // The case's own run is running: the status icon becomes a spinning refresh.
+  spinner: {
+    color: "var(--accent)",
+    flexShrink: 0,
+    animation: "ddspin 1s linear infinite",
+  } satisfies CSSProperties,
   // A native button so the row is reachable by keyboard; it carries no handler
   // of its own — its click bubbles to the row.
   main: {

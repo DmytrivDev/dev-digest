@@ -27,8 +27,10 @@ vi.mock("../../../../../lib/hooks/core", () => ({
 vi.mock("@/lib/hooks/eval", () => ({
   useEvalCases: () => ({ data: [], isLoading: false, isError: false }),
   useEvalRuns: () => ({ data: [], isLoading: false, isError: false }),
+  useEvalRun: () => ({ data: undefined, isError: false }),
   useDeleteEvalCase: () => ({ mutate: vi.fn(), isPending: false }),
   useStartEvalRun: () => ({ mutate: vi.fn(), isPending: false }),
+  useStartCaseRun: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateEvalCase: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("next/navigation", () => ({

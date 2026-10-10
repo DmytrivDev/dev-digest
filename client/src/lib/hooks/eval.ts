@@ -1,6 +1,7 @@
 /* hooks/eval.ts — React Query hooks for the eval pipeline (SPEC-04): the cases
-   of an agent, suite runs (started in the background, so polled while running),
-   the dashboard aggregates and the run-to-run compare.
+   of an agent, suite runs and single-case runs (SPEC-07, started in the
+   background, so polled while running), the dashboard aggregates and the
+   run-to-run compare.
 
    Mutations whose 4xx is an ANSWER (a reason code the user can act on) carry
    `meta.quietError` so the global MutationCache handler stays silent, and map
@@ -8,7 +9,7 @@
 "use client";
 
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { api } from "../api";
 import { notify } from "../toast";
@@ -45,6 +46,14 @@ export const evalKeys = {
 const hasRunning = (runs: ReadonlyArray<{ status: string }> | undefined) =>
   (runs ?? []).some((r) => r.status === "running");
 
+/** Everything built from a run's outcomes: case rows, run lists, dashboard, overview. */
+function refreshRunDependents(qc: QueryClient, agentId: string | null | undefined) {
+  qc.invalidateQueries({ queryKey: evalKeys.cases(agentId) });
+  qc.invalidateQueries({ queryKey: evalKeys.runs(agentId) });
+  qc.invalidateQueries({ queryKey: evalKeys.dashboard(agentId) });
+  qc.invalidateQueries({ queryKey: evalKeys.overview });
+}
+
 /**
  * A run finishing changes every number built from its outcomes: the case rows'
  * last result, the dashboard and the overview. Polling alone only refreshes the
@@ -54,14 +63,34 @@ function useRefreshWhenRunSettles(agentId: string | null | undefined, running: b
   const qc = useQueryClient();
   const wasRunning = React.useRef(false);
   React.useEffect(() => {
-    if (wasRunning.current && !running) {
-      qc.invalidateQueries({ queryKey: evalKeys.cases(agentId) });
-      qc.invalidateQueries({ queryKey: evalKeys.runs(agentId) });
-      qc.invalidateQueries({ queryKey: evalKeys.dashboard(agentId) });
-      qc.invalidateQueries({ queryKey: evalKeys.overview });
-    }
+    if (wasRunning.current && !running) refreshRunDependents(qc, agentId);
     wasRunning.current = running;
   }, [running, agentId, qc]);
+}
+
+/**
+ * The same refresh for a run FOLLOWED BY ID: its id came from a 202 (or from a
+ * list that showed it `running`), so it is KNOWN to have been running. The first
+ * read that finds it final refreshes, even when no read ever saw it `running` (an
+ * instant provider error). Keyed on the run, not on a transition: switching to
+ * another id (whose data is still undefined) is not a settle, and a run refreshes
+ * once.
+ */
+function useRefreshWhenFollowedRunIsFinal(
+  agentId: string | null | undefined,
+  runId: string | null | undefined,
+  run: Pick<EvalSuiteRun, "id" | "status"> | undefined,
+) {
+  const qc = useQueryClient();
+  const refreshedFor = React.useRef<string | null>(null);
+  const status = run && run.id === runId ? run.status : undefined;
+  React.useEffect(() => {
+    if (status === "running") refreshedFor.current = null; // a re-run under the same id settles again
+    if (!agentId || !runId || !status || status === "running") return;
+    if (refreshedFor.current === runId) return;
+    refreshedFor.current = runId;
+    refreshRunDependents(qc, agentId);
+  }, [agentId, runId, status, qc]);
 }
 
 // ---- Reads -------------------------------------------------------------------
@@ -87,15 +116,23 @@ export function useEvalRuns(agentId: string | null | undefined) {
   return q;
 }
 
-/** One run with its per-case outcomes. Polls while it is running. */
-export function useEvalRun(runId: string | null | undefined) {
-  return useQuery({
+/**
+ * One run with its per-case outcomes. Polls while it is running. With `agentId`
+ * the caller declares `runId` a run it STARTED (the id of a 202) or saw running:
+ * the first read that finds it final also refreshes that agent's cases, runs,
+ * dashboard and overview (SPEC-07 AC-16). The case modal and the case rows follow
+ * their own case run through this. Without `agentId` it is a plain read.
+ */
+export function useEvalRun(runId: string | null | undefined, agentId?: string | null) {
+  const q = useQuery({
     queryKey: evalKeys.run(runId),
     queryFn: () => api.get<EvalSuiteRun>(`/eval/runs/${runId}`),
     enabled: !!runId,
     refetchInterval: (query) =>
       query.state.data?.status === "running" ? EVAL_RUN_POLL_MS : false,
   });
+  useRefreshWhenFollowedRunIsFinal(agentId, runId, q.data);
+  return q;
 }
 
 /** One row per workspace agent, zero-case agents included. */
@@ -182,7 +219,10 @@ export function useCreateManualEvalCase(agentId: string | null | undefined) {
   return useMutation({
     meta: { quietError: true },
     mutationFn: (body: EvalCaseCreate) => api.post<EvalCase>(`/agents/${agentId}/eval/cases`, body),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // In the cached list before any refetch, so the edit modal the create flow
+      // hands over to (SPEC-07 AC-7) finds its case at once.
+      qc.setQueryData<EvalCase[]>(evalKeys.cases(agentId), (prev) => [...(prev ?? []), created]);
       qc.invalidateQueries({ queryKey: evalKeys.cases(agentId) });
       qc.invalidateQueries({ queryKey: evalKeys.dashboard(agentId) });
       qc.invalidateQueries({ queryKey: evalKeys.overview });
@@ -241,5 +281,32 @@ export function useStartEvalRun(agentId: string | null | undefined) {
       qc.invalidateQueries({ queryKey: evalKeys.overview });
     },
     onError: (err) => notify.error(t(runStartErrorKey(err))),
+  });
+}
+
+/**
+ * Start a run of ONE case (SPEC-07, 202: it continues on the server whether or
+ * not anyone is watching). 409 / 422 / 429 each become ONE mapped toast; after a
+ * save (`afterSave`) it reads "Case saved; not run: <reason>" so the user knows
+ * the edit went through. `onSuccess` returns the invalidations, so the mutation
+ * stays pending until the runs list holds the running case run — a second click
+ * cannot start a second run in that window (AC-8, AC-21).
+ */
+export function useStartCaseRun(agentId: string | null | undefined) {
+  const qc = useQueryClient();
+  const t = useTranslations("eval");
+  return useMutation({
+    meta: { quietError: true },
+    mutationFn: ({ caseId }: { caseId: string; afterSave: boolean }) =>
+      api.post<EvalRunStartResponse>(`/eval/cases/${caseId}/runs`),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: evalKeys.runs(agentId) }),
+        qc.invalidateQueries({ queryKey: evalKeys.dashboard(agentId) }),
+      ]),
+    onError: (err, vars) => {
+      const reason = t(runStartErrorKey(err));
+      notify.error(vars.afterSave ? t("caseRun.savedNotRun", { reason }) : reason);
+    },
   });
 }

@@ -198,10 +198,21 @@ reads, re-sent each turn), so cache-read pricing decides the bill, not the headl
 > checkout is disposable); locally, prefer the Anthropic path or a throwaway clone for the workflow
 > tier.
 
-### GitHub Actions (per-PR) — `.github/workflows/evals.yml`
+### GitHub Actions (per-PR) — one workflow per tier
 
 The repo runs the evals on every PR that touches the harness, on OpenRouter, and runs **only the
-suites the PR affects**. `scripts/ci-detect.mjs` maps the PR diff onto suites:
+suites the PR affects**. Each tier is its own workflow, so a PR shows one status per tier and a red
+check says at once which tier broke:
+
+| Workflow | Tier | Runs |
+|---|---|---|
+| `.github/workflows/eval-skills.yml` | skills (content tier, no tools) | the changed skills' evals, one matrix job each |
+| `.github/workflows/eval-agents.yml` | agents (tool tier) | the changed agents' evals, one matrix job each |
+| `.github/workflows/eval-workflow.yml` | workflow (live harness) | `evals/workflow/` |
+
+All three call the reusable `.github/workflows/eval-detect.yml`. Its `detect` job runs
+`scripts/ci-detect.mjs` with `EVAL_TIER=<tier>`, and its `static` job needs no model. The detector
+maps the PR diff onto suites:
 
 | PR changes | Runs |
 |---|---|
@@ -209,26 +220,29 @@ suites the PR affects**. `scripts/ci-detect.mjs` maps the PR diff onto suites:
 | `.claude/agents/<name>.md` or `evals/agents/<name>/**` | `evals/agents/<name>` **and** the workflow tier |
 | any `CLAUDE.md` (root or nested), `.claude/settings.json`, `.claude/hooks/**`, `.claude/skill-routing.md`, `evals/workflow/**` | the workflow tier |
 | a skill the workflow cases name (e.g. `engineering-insights`) | that skill **and** the workflow tier |
-| the eval engine (`evals/src/**`, deps, `proxy/`) or the CI workflow itself | everything |
+| one tier's own workflow file (`eval-<tier>.yml`) | that whole tier, nothing else |
+| the eval engine (`evals/src/**`, deps, `proxy/`), `eval-detect.yml` or the setup action | every tier, in full |
 
 An artifact with **no evals written** is not a failure — the `detect` job logs
 `SKIP skill zod — no evals written (evals/skills/zod/)` and moves on. Same for an eval folder whose
 artifact is gone (`SKIP agent architecture-reviewer-lite — artifact not found (...)`). An eval
 folder that imports another folder's cases (`../architecture-reviewer/...`) re-runs with it.
 
-Jobs: `detect` → `static` (no model: detector tests, `typecheck`, `eval:quality`, stats tests) →
-`skills` / `agents` (a matrix, one job per artifact) and `workflow`. Each model job uploads
-`evals/results/` as a build artifact. The workflow tier is **advisory** by default
+Jobs per tier workflow: `detect / detect` and `detect / static` (detector tests, `typecheck`,
+`eval:quality`, stats tests) → the tier job (`skills` / `agents` matrix, or `workflow`). Each model
+job uploads `evals/results/` as a build artifact. The workflow tier is **advisory** by default
 (`continue-on-error`); set the repo variable `EVAL_WORKFLOW_BLOCKING=true` to make it gate merges.
+A manual run (Actions → *eval-skills* / *eval-agents* / *eval-workflow* → *Run workflow*)
+evaluates that whole tier.
 
 **Setup:** add the secret `OPENROUTER_API_KEY` (Settings → Secrets and variables → Actions). The
 `detect` job fails loudly when there is something to run and the secret is missing.
 
 **Switching the model** — no code change, first non-empty wins:
 
-1. manual run: Actions → *evals* → *Run workflow* → `model` / `judge_model` / `scope`;
+1. manual run: Actions → *eval-skills* / *eval-agents* / *eval-workflow* → *Run workflow* → `model` / `judge_model`;
 2. every PR run: repo **Variables** `EVAL_MODEL` / `EVAL_JUDGE_MODEL`;
-3. the default in the workflow file.
+3. the default in each tier workflow file.
 
 An `anthropic/*` slug talks to OpenRouter's Anthropic endpoint directly. Any other slug makes the
 tool-tier jobs start the LiteLLM proxy automatically (`.github/actions/evals-setup`). Under

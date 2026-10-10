@@ -1,4 +1,4 @@
-# Shared setup for the model-backed eval jobs in .github/workflows/evals.yml:
+# Shared setup for the eval jobs in .github/workflows/eval-{detect,skills,agents,workflow}.yml:
 # pnpm + Node 22, `evals/` dependencies, and — only when the tool tiers need it — the LiteLLM proxy.
 name: evals-setup
 description: Install evals/ and, for a non-Anthropic EVAL_MODEL on the tool tiers, start the LiteLLM proxy
@@ -7,6 +7,9 @@ inputs:
   proxy:
     description: "'true' for jobs that run the Claude Agent SDK (agents, workflow); the content tier never needs it"
     default: "false"
+  openrouter_key:
+    description: "OPENROUTER_API_KEY for the proxy; given only to the proxy step, never to the other setup steps"
+    default: ""
 
 runs:
   using: composite
@@ -30,6 +33,8 @@ runs:
     - if: inputs.proxy == 'true'
       shell: bash
       working-directory: evals
+      env:
+        OPENROUTER_API_KEY: ${{ inputs.openrouter_key }}
       run: |
         if [[ "$EVAL_MODEL" == anthropic/* ]]; then
           echo "proxy: not needed — $EVAL_MODEL is served natively by OpenRouter's Anthropic endpoint"
