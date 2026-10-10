@@ -34,3 +34,22 @@ describe("Project Context sidebar entry", () => {
     expect(resolveHref(entry!.href, "r-42")).toBe("/repos/r-42/context");
   });
 });
+
+describe("Eval Dashboard sidebar entry", () => {
+  const lab = NAV.find((g) => g.section === "SKILLS LAB");
+  const entry = lab?.items.find((i) => i.key === "eval");
+
+  it("is in SKILLS LAB with the Gauge icon, linking to /eval", () => {
+    expect(entry).toMatchObject({ label: "Eval Dashboard", icon: "Gauge", href: "/eval" });
+  });
+
+  it("sits last in SKILLS LAB, after Conventions, as in the mock (chrome.jsx:13)", () => {
+    const keys = lab?.items.map((i) => i.key);
+    expect(keys?.at(-1)).toBe("eval");
+    expect(keys?.indexOf("eval")).toBe((keys?.indexOf("conventions") ?? -2) + 1);
+  });
+
+  it("is not repo-scoped, so resolveHref leaves it alone", () => {
+    expect(resolveHref(entry!.href, "r-42")).toBe("/eval");
+  });
+});

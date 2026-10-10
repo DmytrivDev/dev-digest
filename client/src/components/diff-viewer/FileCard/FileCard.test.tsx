@@ -144,3 +144,27 @@ describe("FileCard — deep-link focus", () => {
     expect(scrolledElement().textContent).toContain("stripeKey: x,");
   });
 });
+
+describe("FileCard — defaultOpen", () => {
+  const scrollIntoView = vi.fn();
+
+  beforeEach(() => {
+    scrollIntoView.mockClear();
+    Element.prototype.scrollIntoView = scrollIntoView;
+  });
+
+  const BIG: PrFile = { ...FILE, additions: 250, deletions: 0 };
+
+  it("opens a large file without scrolling or outlining it", () => {
+    const { container } = renderFileCard({ file: BIG, defaultOpen: true });
+    expect(screen.getByText("stripeKey: x,")).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    const card = container.querySelector<HTMLElement>("[data-theme] > div")!;
+    expect(card.style.borderColor).toBe("var(--border)");
+  });
+
+  it("a large file stays collapsed when defaultOpen is not set", () => {
+    renderFileCard({ file: BIG });
+    expect(screen.queryByText("stripeKey: x,")).not.toBeInTheDocument();
+  });
+});

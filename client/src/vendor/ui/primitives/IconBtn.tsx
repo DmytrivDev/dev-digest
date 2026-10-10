@@ -8,6 +8,7 @@ export function IconBtn({
   active,
   onClick,
   danger,
+  disabled,
 }: {
   icon: IconName;
   label: string;
@@ -15,14 +16,18 @@ export function IconBtn({
   active?: boolean;
   onClick?: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   const I = Icon[icon];
-  const [h, setH] = React.useState(false);
+  const [hovered, setH] = React.useState(false);
+  // A disabled button takes no hover look: it must not read as clickable.
+  const h = hovered && !disabled;
   return (
     <button
       title={label}
       aria-label={label}
       onClick={onClick}
+      disabled={disabled}
       onMouseEnter={() => setH(true)}
       onMouseLeave={() => setH(false)}
       style={{
@@ -35,6 +40,7 @@ export function IconBtn({
         background: h ? "var(--bg-hover)" : active ? "var(--bg-hover)" : "transparent",
         color: danger && h ? "var(--crit)" : active || h ? "var(--text-primary)" : "var(--text-secondary)",
         transition: "background .12s, color .12s",
+        ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : null),
       }}
     >
       <I size={Math.round(size * 0.52)} />

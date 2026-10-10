@@ -1,84 +1,264 @@
 {
-  "dashboard": {
-    "defaultTitle": "Eval Dashboard",
-    "loading": "Loading eval metrics…",
-    "casesSummary": "{count, plural, one {# eval case} other {# eval cases}} · gold set · {runs, plural, one {# run} other {# runs}}",
-    "configure": "Configure eval cases →",
-    "runEval": "Run eval ({count})",
-    "running": "Running…",
-    "metricTrend": "Metric trend",
-    "recentRuns": "Recent runs",
-    "noRuns": "No runs yet. Create an eval case and run it.",
+  "common": {
     "metrics": {
       "recall": "RECALL",
       "precision": "PRECISION",
-      "citationAccuracy": "CITATION ACCURACY"
+      "citationAccuracy": "CITATION ACCURACY",
+      "casesPassed": "CASES PASSED",
+      "citation": "CITATION",
+      "cost": "COST"
     },
+    "metricName": {
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation_accuracy": "Citation accuracy"
+    },
+    "kind": {
+      "must_find": "must find",
+      "must_not_flag": "must not flag"
+    },
+    "runStatus": {
+      "running": "running",
+      "completed": "completed",
+      "failed": "failed"
+    },
+    "errorReason": {
+      "all_cases_errored": "all cases errored",
+      "interrupted": "interrupted"
+    },
+    "result": {
+      "mustFind": "expected a finding at {loc}, got {n}",
+      "mustNotFlag": "expected none at {loc}, got {n}",
+      "errored": "errored · {reason}",
+      "never": "never run"
+    },
+    "version": "v{version}",
+    "loading": "Loading…",
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "rateLimited": "Too many requests. Wait a moment and try again.",
+    "run_in_progress": "A run is already in progress for this agent.",
+    "no_cases": "This agent has no eval cases yet. Turn an accepted or dismissed finding into a case first.",
+    "provider_key_missing": "No API key is configured for this agent's provider. Add one in Settings.",
+    "run_not_completed": "Only completed runs can be compared.",
+    "different_agents": "These runs belong to different agents and cannot be compared.",
+    "same_run": "Pick two different runs to compare.",
+    "not_suite_run": "Only suite runs can be compared.",
+    "file_mismatch": "The expected output must point at the same file as the case diff.",
+    "range_outside_hunks": "The expected line range must overlap a changed line of the case diff.",
+    "diff_too_large": "The diff is larger than 200 KB. Paste a smaller one.",
+    "diff_unparseable": "The diff could not be read. It needs a +++ header naming a file and an @@ hunk.",
+    "multi_file_diff": "A case holds one file only. Remove the other files from the diff.",
+    "diff_frozen": "The input of a case made from a finding cannot be edited.",
+    "validation_error": "Some fields are not valid. Check the name and the text sizes and try again."
+  },
+  "runButton": {
+    "tab": "Run all evals ({count} cases)",
+    "dashboard": "Run eval ({count} cases)",
+    "running": "Running {done} / {total} cases",
+    "runningCase": "Running case…"
+  },
+  "evalsTab": {
+    "metricsTitle": "Eval metrics",
+    "viewDashboard": "View full dashboard →",
+    "noRuns": "No runs yet",
+    "casesHeading": "Eval cases",
+    "passing": "{passed} / {scored} passing",
+    "loadingCases": "Loading eval cases…",
+    "loadError": "Could not load the eval cases.",
+    "emptyTitle": "No eval cases yet",
+    "emptyBody": "Turn an accepted or dismissed finding into a case: triage a finding on a pull request, then choose \"Turn into eval case\". Or write one by hand with \"New eval case\".",
+    "row": {
+      "run": "Run",
+      "running": "Running",
+      "edit": "Edit",
+      "delete": "Delete",
+      "status": {
+        "pass": "Passed",
+        "fail": "Failed",
+        "errored": "Errored",
+        "never": "Never run"
+      },
+      "manual": "manual"
+    },
+    "runHistory": {
+      "title": "Run history",
+      "link": "View full dashboard →",
+      "empty": "No runs yet",
+      "columns": {
+        "ranAt": "Ran at",
+        "version": "Version",
+        "recall": "Recall",
+        "precision": "Precision",
+        "citation": "Citation",
+        "pass": "Pass",
+        "cost": "Cost",
+        "status": "Status"
+      }
+    },
+    "deleteDialog": {
+      "title": "Delete eval case {name}?",
+      "body": "The case is removed from this agent's suite. Results of past runs keep their stored outcome.",
+      "confirm": "Delete case"
+    },
+    "newCase": "New eval case"
+  },
+  "caseRun": {
+    "savedNotRun": "Case saved; not run: {reason}"
+  },
+  "caseModal": {
+    "runCase": "Run case",
+    "running": "Running…",
+    "interrupted": "Run interrupted — try again",
+    "title": "Eval case · {name}",
+    "subtitle": "{agent} · simulate a PR and assert the expected output",
+    "nameLabel": "Name",
+    "notesLabel": "Notes",
+    "notesPlaceholder": "Why this case exists (optional)",
+    "inputLabel": "Input",
+    "tabs": {
+      "diff": "Diff",
+      "prMeta": "PR meta"
+    },
+    "prMeta": {
+      "number": "PR number",
+      "title": "Title",
+      "body": "Body",
+      "noBody": "No description",
+      "titleLabel": "Title",
+      "bodyLabel": "Body"
+    },
+    "expectedLabel": "Expected output",
+    "validJson": "valid JSON",
+    "invalidJson": "invalid JSON",
+    "lastRun": {
+      "passed": "Last run passed · {line} · {seconds}s · {cost}",
+      "failed": "Last run failed · {line} · {seconds}s · {cost}",
+      "errored": "Last run errored · {reason}",
+      "never": "Never run"
+    },
+    "source": {
+      "line": "PR #{number} · {file}:{start}–{end}",
+      "removed": "source removed",
+      "manual": "Created manually"
+    },
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "loadError": "Could not load this eval case.",
+    "createTitle": "New eval case",
+    "createSubtitle": "{agent} · simulate a PR and assert the expected output",
+    "diffPlaceholder": "Paste a unified diff for one file. It needs a +++ b/'<'path'>' header and an @@ hunk.",
+    "diffErrors": {
+      "diff_too_large": "The diff is larger than 200 KB. Paste a smaller one.",
+      "diff_unparseable": "This is not a diff the case can use. It needs a +++ header naming a file and an @@ hunk.",
+      "multi_file_diff": "A case holds one file only. Remove the other files from the diff."
+    },
+    "expectationErrors": {
+      "file_mismatch": "The expected output must point at the same file as the diff.",
+      "range_outside_hunks": "The expected line range must touch lines inside a hunk, as its @@ header declares them."
+    },
+    "skeleton": "Finding skeleton"
+  },
+  "overview": {
+    "title": "Eval Dashboard",
+    "subtitle": "Regression harness for every review agent in this workspace",
+    "loading": "Loading eval metrics…",
+    "loadError": "Could not load the eval overview.",
+    "empty": "No agents in this workspace yet.",
+    "columns": {
+      "agent": "Agent",
+      "cases": "Cases",
+      "version": "Version",
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "pass": "Pass",
+      "cost": "Cost",
+      "ranAt": "Ran at"
+    },
+    "casesCount": "{count, plural, one {# case} other {# cases}}",
+    "noCases": "0 cases · never run",
+    "configure": "Configure eval cases →"
+  },
+  "detail": {
+    "allAgents": "All agents",
+    "subtitle": "Regression harness · {runs, plural, one {# run} other {# runs}} on the {cases}-case set",
+    "configure": "Configure eval cases →",
+    "loading": "Loading eval metrics…",
+    "loadError": "Could not load this agent's eval dashboard.",
+    "banner": {
+      "drop": "{metric} dropped {pts} pts on v{newVersion} vs v{oldVersion}",
+      "nowFailing": "Now failing"
+    },
+    "metricTrend": "Metric trend",
     "legend": {
       "recall": "Recall",
       "precision": "Precision",
       "citation": "Citation"
     },
+    "recentRuns": "Recent runs",
+    "noRuns": "No runs yet. Run the eval to see metrics here.",
     "table": {
+      "select": "Select run v{version}",
       "ranAt": "Ran at",
+      "version": "Version",
       "recall": "Recall",
       "precision": "Precision",
       "citation": "Citation",
       "pass": "Pass",
       "cost": "Cost"
     },
-    "pass": "pass",
-    "fail": "fail"
+    "selected": "{count} selected",
+    "compare": "Compare"
   },
-  "caseEditor": {
-    "newCase": "New eval case",
-    "caseTitle": "Eval case · {name}",
-    "runCase": "Run case",
-    "running": "Running…",
-    "save": "Save",
-    "saving": "Saving…",
-    "nameLabel": "Name",
-    "namePlaceholder": "stripe-key-leak",
-    "inputLabel": "Input",
-    "tabs": {
-      "diff": "Diff",
-      "prMeta": "PR meta"
+  "compare": {
+    "title": "Compare runs · v{old} → v{new}",
+    "subtitle": "Old prompt vs new — metric deltas and prompt diff on the {count}-case common set",
+    "loading": "Loading comparison…",
+    "loadError": "Could not compare these runs.",
+    "deltaPoints": "{pts}pt",
+    "promptDiff": "SYSTEM PROMPT DIFF",
+    "legendOld": "v{version} (old)",
+    "legendNew": "v{version} (new)",
+    "noChanges": "No changes",
+    "configChanges": "Config changes",
+    "configChange": "{field}: {old} → {new}",
+    "configField": {
+      "model": "model",
+      "provider": "provider",
+      "strategy": "strategy",
+      "skills": "skills"
     },
-    "diffPlaceholder": "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,6 +10,7 @@\n+  stripeKey: \"sk_live_...\"",
-    "titleLabel": "Title",
-    "titlePlaceholder": "Add Stripe integration",
-    "bodyLabel": "Body",
-    "bodyPlaceholder": "Wire up payments via Stripe SDK.",
-    "preview": "Preview",
-    "expectedOutput": "Expected output",
-    "validJson": "valid JSON",
-    "invalidJson": "invalid JSON",
-    "lastRunPassed": "Last run passed",
-    "lastRunFailed": "Last run failed",
-    "resultSummary": "recall {recall}% · precision {precision}% · citation {citation}% · {duration}s"
+    "flips": "Case changes",
+    "nowPassing": "now passing",
+    "nowFailing": "now failing",
+    "onlyInOld": "Only in v{version}",
+    "onlyInNew": "Only in v{version}",
+    "close": "Close"
   },
-  "evalsTab": {
-    "metricsTitle": "Eval metrics",
-    "metricsSubtitle": "Recall / Precision / Citation for this agent's eval cases",
-    "casesHeading": "Eval cases",
-    "newCase": "New case",
-    "loadingCases": "Loading cases…",
-    "emptyCases": "No eval cases yet. Create one to assert this agent's expected findings on a sample diff.",
-    "neverRun": "never run",
-    "passed": "passed",
-    "failed": "failed",
-    "recallSuffix": " · recall {recall}%",
-    "run": "Run",
-    "running": "Running…",
-    "edit": "Edit",
-    "delete": "Delete"
+  "nav": {
+    "skillsLab": "Skills Lab",
+    "evalDashboard": "Eval Dashboard"
   },
-  "page": {
-    "crumbSkillsLab": "Skills Lab",
-    "crumbEvalDashboard": "Eval Dashboard",
-    "crumbAgents": "Agents",
-    "crumbEvals": "Evals",
-    "crumbNewCase": "New case",
-    "crumbEvalCase": "Eval case"
+  "trend": {
+    "title": "Metric trend",
+    "notEnough": "Run the suite at least twice to see a trend",
+    "loadError": "Could not load the run history for the trend.",
+    "chartLabel": "Metric trend by run",
+    "tooltip": {
+      "version": "v{version}",
+      "cost": "Cost {cost}",
+      "recall": "Recall {value}",
+      "precision": "Precision {value}",
+      "citation": "Citation {value}"
+    }
   }
 }

@@ -2,7 +2,15 @@
  * Pure helpers for the review service (side-effect free; operate purely on
  * their arguments — no DB / network / `this`).
  */
-import type { Finding, IntentSource, SkillSource, SkillType, SkillUsed } from '@devdigest/shared';
+import type {
+  EvalIneligibleReason,
+  Finding,
+  IntentSource,
+  SkillSource,
+  SkillType,
+  SkillUsed,
+} from '@devdigest/shared';
+import { evalIneligibleReason } from '../eval/helpers/eligibility.js';
 import type { FindingRow, PullRow, ReviewRow } from './repository.js';
 
 // reduceReviews + sliceDiff live in @devdigest/reviewer-core (pure engine logic
@@ -16,6 +24,20 @@ export interface ReviewDtoFinding extends Finding {
   review_id: string;
   accepted_at: string | null;
   dismissed_at: string | null;
+  /** Id of the eval case made from this finding. Set only on the PR reviews response. */
+  eval_case_id?: string | null;
+  /** Why no eval case can be made. Set only on the PR reviews response. */
+  eval_ineligible_reason?: EvalIneligibleReason | null;
+}
+
+/**
+ * What the PR reviews response needs to fill the eval fields of a review's findings
+ * (SPEC-04 AC-25): the cases that exist, and whether the review's agent still does.
+ */
+export interface ReviewEvalInfo {
+  /** findingId -> eval case id. */
+  caseIds: ReadonlyMap<string, string>;
+  agentExists: boolean;
 }
 
 export interface ReviewDto {
@@ -34,7 +56,14 @@ export interface ReviewDto {
   findings: ReviewDtoFinding[];
 }
 
-export function findingRowToDto(row: FindingRow): ReviewDtoFinding {
+/**
+ * `evalInfo` is passed only by the PR reviews response; every other caller (accept /
+ * dismiss, run result) keeps the shape it always had, without the eval fields.
+ */
+export function findingRowToDto(
+  row: FindingRow,
+  evalInfo?: { caseId: string | null; reviewAgentId: string | null; agentExists: boolean },
+): ReviewDtoFinding {
   return {
     id: row.id,
     severity: row.severity as Finding['severity'],
@@ -52,6 +81,16 @@ export function findingRowToDto(row: FindingRow): ReviewDtoFinding {
     review_id: row.reviewId,
     accepted_at: row.acceptedAt?.toISOString() ?? null,
     dismissed_at: row.dismissedAt?.toISOString() ?? null,
+    ...(evalInfo
+      ? {
+          eval_case_id: evalInfo.caseId,
+          eval_ineligible_reason: evalIneligibleReason(
+            { acceptedAt: row.acceptedAt, dismissedAt: row.dismissedAt },
+            evalInfo.reviewAgentId,
+            evalInfo.agentExists,
+          ),
+        }
+      : {}),
   };
 }
 
@@ -59,6 +98,7 @@ export function reviewToDto(
   review: ReviewRow,
   findings: FindingRow[],
   agentName?: string | null,
+  evalInfo?: ReviewEvalInfo,
 ): ReviewDto {
   return {
     id: review.id,
@@ -72,7 +112,16 @@ export function reviewToDto(
     score: review.score,
     model: review.model,
     created_at: review.createdAt.toISOString(),
-    findings: findings.map(findingRowToDto),
+    findings: findings.map((f) =>
+      findingRowToDto(
+        f,
+        evalInfo && {
+          caseId: evalInfo.caseIds.get(f.id) ?? null,
+          reviewAgentId: review.agentId,
+          agentExists: evalInfo.agentExists,
+        },
+      ),
+    ),
   };
 }
 

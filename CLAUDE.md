@@ -47,6 +47,24 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
   the related tests); DB-backed suites separately (`node scripts/verify.mjs server --it`,
   needs Docker). There is NO linter configured in this repo — don't look for one.
 - Specs guard: `node scripts/verify.mjs specs` (or `node scripts/check-specs.mjs`) when you touch `specs/` — fails an approved/implemented spec that still has a `[NEEDS CLARIFICATION]` marker, an unmirrored marker, or more than 3.
+- Harness evals (`evals/`, model-backed; details in `evals/README.md`), run from `evals/`:
+  `pnpm eval:quality` (static, no model) · `pnpm vitest run skills/<name>` ·
+  `pnpm vitest run agents/<name>` · `pnpm eval:workflow` · before/after an edit:
+  `pnpm eval:repeat <pattern> -n 5 --label <name>` then `pnpm eval:delta <before> <after>`.
+  On OpenRouter: `EVAL_BACKEND=openrouter EVAL_MODEL=<slug> EVAL_JUDGE_MODEL=<slug>`, key from
+  `~/.devdigest/secrets.json`. `pnpm eval:scaffold` lists which artifacts have evals at all.
+- Which change → which eval run (run it before you commit; CI re-runs the same mapping as
+  `eval-skills.yml` / `eval-agents.yml` / `eval-workflow.yml`, one status per tier):
+
+  | You changed | Run |
+  |---|---|
+  | `.claude/skills/<name>/**` | `pnpm vitest run skills/<name>` (+ `pnpm eval:quality`) |
+  | `.claude/agents/<name>.md` | `pnpm vitest run agents/<name>` **and** `pnpm eval:workflow` |
+  | any `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/**`, `.claude/skill-routing.md` | `pnpm eval:workflow` |
+  | `evals/src/**` or eval deps | `pnpm eval` (everything) |
+
+  An artifact with no evals written is reported as SKIP, not a failure; say so instead of
+  claiming it passed. The mapping lives in `evals/scripts/ci-detect.mjs`.
 
 ## Map
 | Folder | Package | Role |
@@ -56,6 +74,7 @@ React 19 · Drizzle + Postgres/pgvector · Zod · vitest
 | `reviewer-core/` | `@devdigest/reviewer-core` | pure engine: diff → prompt → LLM → grounded findings |
 | `e2e/` | `@devdigest/e2e` | deterministic browser flows |
 | `mcp/` | `@devdigest/mcp` | stdio MCP server (thin client of the API) |
+| `evals/` | `@devdigest/evals` | evals for the harness (skills, agents, CLAUDE.md); per-PR CI: `.github/workflows/eval-{skills,agents,workflow}.yml` |
 | `server/src/vendor/shared` | `@devdigest/shared` | Zod contracts |
 
 `repo-intel` (indexer) lives inside the server: `server/src/modules/repo-intel/`.

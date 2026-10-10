@@ -1,0 +1,83 @@
+# Reusable: shared front half of the three harness-eval tier workflows
+# (eval-skills.yml, eval-agents.yml, eval-workflow.yml). Not triggered on its own.
+#
+#   detect — evals/scripts/ci-detect.mjs with EVAL_TIER=<tier> maps the PR diff onto THIS tier's
+#            targets; a missing OPENROUTER_API_KEY fails here, only when the tier has work.
+#   static — no model: detector tests, typecheck, eval:quality, stats tests.
+#
+# Changing this file (or evals/src, deps, proxy, the setup action) re-runs every tier in full.
+name: eval-detect
+
+on:
+  workflow_call:
+    inputs:
+      tier:
+        description: skills | agents | workflow
+        type: string
+        required: true
+      scope:
+        description: changed (diff-based, the PR default) or the tier name (run the whole tier)
+        type: string
+        default: changed
+    secrets:
+      OPENROUTER_API_KEY:
+        required: false
+    outputs:
+      targets:
+        description: JSON array of what this tier runs (["workflow"] or [] for the workflow tier)
+        value: ${{ jobs.detect.outputs.targets }}
+      has_work:
+        description: '"true" when the tier has something to run'
+        value: ${{ jobs.detect.outputs.has_work }}
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.detect.outputs.targets }}
+      has_work: ${{ steps.detect.outputs.has_work }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # the PR merge commit and its first parent (the base tip)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: detect
+        env:
+          EVAL_SCOPE: ${{ inputs.scope }}
+          EVAL_TIER: ${{ inputs.tier }}
+        run: |
+          if [[ "$EVAL_SCOPE" == changed ]]; then
+            export CHANGED_FILES="$(git diff --name-only HEAD^1 HEAD)"
+          fi
+          node evals/scripts/ci-detect.mjs
+
+      - name: Require the OpenRouter key when this tier has something to run
+        if: steps.detect.outputs.has_work == 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [[ -z "$OPENROUTER_API_KEY" ]]; then
+            echo "::error::OPENROUTER_API_KEY is not set — add it under Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/evals-setup
+      - working-directory: evals
+        run: |
+          node --test scripts/ci-detect.test.mjs
+          pnpm typecheck
+          pnpm eval:quality
+          pnpm vitest run src/records/stats.test.ts

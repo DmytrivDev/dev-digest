@@ -1,0 +1,85 @@
+import type { CSSProperties } from "react";
+import { OVERVIEW_GRID } from "./constants";
+
+/** Co-located styles for EvalOverview and its AgentRow. */
+export const s = {
+  page: { padding: "24px 32px 44px", maxWidth: 1100, margin: "0 auto" } satisfies CSSProperties,
+  header: { marginBottom: 20 } satisfies CSSProperties,
+  h1: { fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" } satisfies CSSProperties,
+  subtitle: { fontSize: 14, color: "var(--text-secondary)", marginTop: 4 } satisfies CSSProperties,
+  table: {
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    overflow: "hidden",
+    background: "var(--bg-elevated)",
+  } satisfies CSSProperties,
+  headRow: {
+    display: "grid",
+    gridTemplateColumns: OVERVIEW_GRID,
+    gap: 12,
+    padding: "9px 16px",
+    background: "var(--bg-surface)",
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: "var(--border)",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  row: (last: boolean, hovered: boolean): CSSProperties => ({
+    display: "grid",
+    gridTemplateColumns: OVERVIEW_GRID,
+    gap: 12,
+    padding: "12px 16px",
+    alignItems: "center",
+    fontSize: 12.5,
+    cursor: "pointer",
+    background: hovered ? "var(--bg-hover)" : "transparent",
+    borderBottomWidth: last ? 0 : 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: "var(--border)",
+  }),
+  // Name above the model chip (as on the Agents list cards): side by side, the
+  // nowrap chip took the whole track and squeezed the name to zero width.
+  agentCell: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+    minWidth: 0,
+  } satisfies CSSProperties,
+  /** The agent name is the row's keyboard stop: a native button with no chrome. */
+  agentButton: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    font: "inherit",
+    fontSize: 13.5,
+    fontWeight: 600,
+    color: "var(--text-primary)",
+    cursor: "pointer",
+    textAlign: "left",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: "100%",
+  } satisfies CSSProperties,
+  noCases: { gridColumn: "span 8", display: "flex", gap: 10, alignItems: "center" } satisfies CSSProperties,
+  noCasesLink: {
+    color: "var(--accent-text)",
+    fontSize: 12.5,
+    textDecoration: "none",
+  } satisfies CSSProperties,
+  muted: { color: "var(--text-secondary)" } satisfies CSSProperties,
+  version: { display: "flex", alignItems: "center", gap: 6, color: "var(--accent-text)" } satisfies CSSProperties,
+  pass: { fontWeight: 600 } satisfies CSSProperties,
+  ranAt: {
+    color: "var(--text-secondary)",
+    fontSize: 11.5,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  } satisfies CSSProperties,
+} as const;
