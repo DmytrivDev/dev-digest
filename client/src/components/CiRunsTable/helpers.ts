@@ -8,6 +8,8 @@ export function runStatusTone(status: CiRunStatus): { color: string; bg: string 
       return { color: "var(--ok)", bg: "var(--ok-bg)" };
     case "failed":
       return { color: "var(--crit)", bg: "var(--crit-bg)" };
+    case "skipped":
+      return { color: "var(--text-muted)", bg: "var(--bg-hover)" };
     case "running":
       return { color: "var(--accent-text)", bg: "var(--accent-bg)" };
     case "rejected":
@@ -19,6 +21,14 @@ export function verdictTone(verdict: CiRunVerdict): { color: string; bg: string 
   return verdict === "blocked"
     ? { color: "var(--crit)", bg: "var(--crit-bg)" }
     : { color: "var(--ok)", bg: "var(--ok-bg)" };
+}
+
+/** Compact run time for the table, e.g. "Oct 11, 11:53 AM"; echoes `iso` if unparseable. */
+export function formatRunTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 /** "12s", "1m 4s"; "—" when the run has no duration. */

@@ -466,7 +466,7 @@ export const CiExportInput = CiPreviewInput.extend({
 }).strict();
 export type CiExportInput = z.infer<typeof CiExportInput>;
 
-export const CiRunStatus = z.enum(['running', 'succeeded', 'failed', 'rejected']);
+export const CiRunStatus = z.enum(['running', 'succeeded', 'skipped', 'failed', 'rejected']);
 export type CiRunStatus = z.infer<typeof CiRunStatus>;
 
 export const CiRunVerdict = z.enum(['blocked', 'passed']);

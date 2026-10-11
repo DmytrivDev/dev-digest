@@ -1,5 +1,6 @@
 /** Row → wire mappers (ring 1). Drizzle rows never leave the module. */
-import type { CiInstallation, CiRun, CiRunStatus } from '@devdigest/shared';
+import { CiRunStatus } from '@devdigest/shared';
+import type { CiInstallation, CiRun } from '@devdigest/shared';
 import type { ciInstallations, ciRuns } from '../../../db/schema/ci.js';
 
 export type InstallationRow = typeof ciInstallations.$inferSelect;
@@ -10,7 +11,8 @@ export interface LastRun {
   ranAt: Date | null;
 }
 
-const RUN_STATUSES: readonly string[] = ['running', 'succeeded', 'failed', 'rejected'];
+/** Taken from the contract so a new status cannot be silently narrowed to `failed`. */
+const RUN_STATUSES: readonly string[] = CiRunStatus.options;
 
 /** Narrow a free-text `ci_runs.status` (legacy rows may hold anything) to the wire enum. */
 export function asRunStatus(value: string | null): CiRunStatus | null {

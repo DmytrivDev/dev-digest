@@ -3,17 +3,17 @@
    never fall out of step (the PR list needs a comment for the same guarantee). */
 
 export const CI_RUN_COLUMNS = [
-  { key: "timestamp", width: "150px" },
-  { key: "repository", width: "minmax(120px, 0.8fr)" },
-  { key: "pullRequest", width: "minmax(160px, 1.4fr)" },
-  { key: "agent", width: "140px" },
-  { key: "source", width: "148px" },
-  { key: "duration", width: "64px" },
-  { key: "findings", width: "112px" },
-  { key: "cost", width: "72px" },
-  { key: "verdict", width: "92px" },
-  { key: "status", width: "104px" },
-  { key: "job", width: "56px" },
+  { key: "timestamp", width: "112px" },
+  { key: "repository", width: "minmax(96px, 1fr)" },
+  { key: "pullRequest", width: "minmax(130px, 1.6fr)" },
+  { key: "agent", width: "minmax(100px, 1fr)" },
+  { key: "source", width: "136px" },
+  { key: "duration", width: "48px" },
+  { key: "findings", width: "76px" },
+  { key: "cost", width: "68px" },
+  { key: "verdict", width: "80px" },
+  { key: "status", width: "116px" },
+  { key: "job", width: "48px" },
 ] as const;
 
 export type CiRunColumnKey = (typeof CI_RUN_COLUMNS)[number]["key"];
@@ -21,4 +21,4 @@ export type CiRunColumnKey = (typeof CI_RUN_COLUMNS)[number]["key"];
 export const CI_RUN_GRID = CI_RUN_COLUMNS.map((c) => c.width).join(" ");
 
 /** Narrowest width at which the 11 tracks stay readable; below it the table scrolls. */
-export const CI_RUN_TABLE_MIN_WIDTH = 1180;
+export const CI_RUN_TABLE_MIN_WIDTH = 1140;

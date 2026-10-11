@@ -13,7 +13,7 @@ export const s = {
   headRow: {
     display: "grid",
     gridTemplateColumns: CI_RUN_GRID,
-    gap: 12,
+    gap: 10,
     padding: "10px 16px",
     background: "var(--bg-surface)",
     borderBottomWidth: 1,
@@ -28,7 +28,7 @@ export const s = {
   row: (last: boolean): CSSProperties => ({
     display: "grid",
     gridTemplateColumns: CI_RUN_GRID,
-    gap: 12,
+    gap: 10,
     padding: "12px 16px",
     alignItems: "center",
     fontSize: 12.5,

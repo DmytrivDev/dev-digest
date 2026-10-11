@@ -77,7 +77,9 @@ const EMPTY: Omit<MappedRun, 'status' | 'reason'> = {
 
 /**
  * One status per run (AC-33): not completed → running; completed without an
- * artifact → failed with GitHub's conclusion; invalid → rejected (no counts or
+ * artifact → skipped when GitHub's conclusion is `success` (the installing PR,
+ * AC-25: the base has no runner yet, so the job passes without reviewing),
+ * otherwise failed with GitHub's conclusion; invalid → rejected (no counts or
  * cost); valid → succeeded with verdict, counts, cost and duration.
  */
 export function mapRun(meta: WorkflowRunMeta, outcome: ArtifactOutcome | null): MappedRun {
@@ -85,6 +87,7 @@ export function mapRun(meta: WorkflowRunMeta, outcome: ArtifactOutcome | null): 
     return { ...EMPTY, status: 'running', reason: null };
   }
   if (!outcome.ok && outcome.reason === 'absent') {
+    if (meta.conclusion === 'success') return { ...EMPTY, status: 'skipped', reason: null };
     return { ...EMPTY, status: 'failed', reason: meta.conclusion ?? 'unknown' };
   }
   if (!outcome.ok) {
@@ -105,10 +108,11 @@ export function mapRun(meta: WorkflowRunMeta, outcome: ArtifactOutcome | null): 
   };
 }
 
-/** `agent_runs.status` for a mapped run — null while running (plan assumption A2). */
+/** `agent_runs.status` for a mapped run — null while running (plan assumption A2).
+ *  A skipped run reviewed nothing but did not fail, so it is `done`. */
 export function agentRunStatus(status: CiRunStatus): 'done' | 'failed' | null {
   if (status === 'running') return null;
-  return status === 'succeeded' ? 'done' : 'failed';
+  return status === 'succeeded' || status === 'skipped' ? 'done' : 'failed';
 }
 
 /** The workflow file's basename, as the Actions API addresses it. */

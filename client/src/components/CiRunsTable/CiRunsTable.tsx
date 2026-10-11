@@ -7,9 +7,8 @@ import { useTranslations } from "next-intl";
 import { Badge, Icon, MonoLink } from "@devdigest/ui";
 import type { CiRun } from "@devdigest/shared";
 import { formatCost } from "@/lib/cost";
-import { formatWhen } from "@/lib/datetime";
 import { CI_RUN_COLUMNS } from "./constants";
-import { findingCounts, formatDuration, isHttpUrl, runStatusTone, verdictTone } from "./helpers";
+import { findingCounts, formatDuration, formatRunTime, isHttpUrl, runStatusTone, verdictTone } from "./helpers";
 import { s } from "./styles";
 
 type Translate = ReturnType<typeof useTranslations>;
@@ -19,7 +18,7 @@ function CiRunRow({ run, last, t }: { run: CiRun; last: boolean; t: Translate })
   return (
     <div role="row" style={s.row(last)}>
       <span role="cell" className="mono" style={{ ...s.mono, ...s.ellipsis }}>
-        {formatWhen(run.ran_at)}
+        {formatRunTime(run.ran_at)}
       </span>
       <span role="cell" className="mono" style={{ ...s.mono, ...s.ellipsis }}>
         {run.repo}

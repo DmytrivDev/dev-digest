@@ -29,6 +29,7 @@
     "jobLink": "Job ↗",
     "status": {
       "succeeded": "Succeeded",
+      "skipped": "Skipped",
       "failed": "Failed",
       "running": "Running",
       "rejected": "Rejected"
@@ -54,6 +55,7 @@
     "loadError": "CI installations could not be loaded.",
     "runStatus": {
       "succeeded": "succeeded",
+      "skipped": "skipped",
       "failed": "failed",
       "running": "running",
       "rejected": "rejected"

@@ -250,10 +250,11 @@ and no findings or cost.
 Verify: integration — a 65 KB artifact, an extra-key artifact and a wrong-SHA artifact are stored as `rejected` with the matching reason.
 
 **AC-33 [server]** The system shall map each run to one status: not completed → `running` (updated
-in place by a later Refresh), completed without artifact → `failed` with GitHub's conclusion as
+in place by a later Refresh), completed without artifact and conclusion `success` → `skipped` (the
+installing PR, AC-25), any other completed run without artifact → `failed` with GitHub's conclusion as
 reason, completed with a valid artifact → `succeeded` with verdict `blocked` (gate triggered) or
 `passed`, severity counts, cost and duration.
-Verify: integration — `in_progress` then completed-valid moves one record from `running` to `succeeded`; a failure with no artifact is `failed` / `failure`.
+Verify: integration — `in_progress` then completed-valid moves one record from `running` to `succeeded`; a failure with no artifact is `failed` / `failure`; a success with no artifact is `skipped` (found 2026-10-11 on a real repo: the installing PR showed as `failed` / `success`).
 
 **AC-34 [server]** Every ingested run shall be stored in `agent_runs` with `source='ci'`, the
 installation's agent and workspace, and a null `pr_id`, leaving the PR list and PR run history
