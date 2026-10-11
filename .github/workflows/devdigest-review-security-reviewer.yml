@@ -1,0 +1,43 @@
+name: DevDigest Review (security-reviewer)
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: devdigest-security-reviewer-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  review:
+    name: DevDigest Review (security-reviewer)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse fork pull requests
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "Fork PRs are not reviewed by DevDigest — maintainer review required"
+          exit 1
+      - name: Check out the base commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: Skip while DevDigest is being installed
+        if: hashFiles('.devdigest/runner/index.js') == ''
+        run: echo "DevDigest is being installed — review skipped"
+      - name: DevDigest review
+        if: hashFiles('.devdigest/runner/index.js') != ''
+        run: node .devdigest/runner/index.js
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEVDIGEST_MANIFEST: .devdigest/agents/security-reviewer.yaml
+          DEVDIGEST_POST_AS: github_review
+      - name: Upload DevDigest result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: devdigest-result
+          path: devdigest-result.json
+          if-no-files-found: ignore
