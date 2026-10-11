@@ -60,6 +60,12 @@ export const NAV: NavGroup[] = [
       { key: "eval", label: "Eval Dashboard", icon: "Gauge", href: "/eval" },
     ],
   },
+  {
+    // Cross-repo and cross-agent, so not repo-scoped; `activeKeyFor` maps /ci-runs
+    // to this key. Mock: chrome.jsx GLOBAL section.
+    section: "GLOBAL",
+    items: [{ key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" }],
+  },
 ];
 
 export const SETTINGS_ITEM: NavItemDef = {

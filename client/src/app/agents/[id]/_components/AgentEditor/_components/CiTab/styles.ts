@@ -1,0 +1,41 @@
+import type { CSSProperties } from "react";
+
+/** Co-located styles for the agent editor's CiTab. */
+export const s = {
+  wrap: { display: "flex", flexDirection: "column", gap: 8 } satisfies CSSProperties,
+  header: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 } satisfies CSSProperties,
+  h2: { fontSize: 18, fontWeight: 700 } satisfies CSSProperties,
+  actions: { marginLeft: "auto", display: "flex", gap: 8 } satisfies CSSProperties,
+  row: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "13px 14px",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    background: "var(--bg-elevated)",
+  } satisfies CSSProperties,
+  rowIcon: { color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  repo: { fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0 } satisfies CSSProperties,
+  versions: { fontSize: 11.5, color: "var(--text-muted)", whiteSpace: "nowrap" } satisfies CSSProperties,
+  ago: { fontSize: 11.5, color: "var(--text-muted)", whiteSpace: "nowrap" } satisfies CSSProperties,
+  addRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "13px 14px",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "var(--border-strong)",
+    background: "transparent",
+    color: "var(--text-secondary)",
+    fontSize: 13.5,
+    fontWeight: 500,
+  } satisfies CSSProperties,
+  failOn: { maxWidth: 420, marginTop: 16 } satisfies CSSProperties,
+  runs: { marginTop: 16 } satisfies CSSProperties,
+} as const;

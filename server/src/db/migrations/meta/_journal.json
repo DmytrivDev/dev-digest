@@ -162,6 +162,13 @@
       "when": 1791629558335,
       "tag": "0022_steep_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791648458506,
+      "tag": "0023_vengeful_kree",
+      "breakpoints": true
     }
   ]
 }

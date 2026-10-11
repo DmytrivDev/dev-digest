@@ -18,7 +18,7 @@
  * real world and maps the result onto `process.exitCode`.
  */
 import path from 'node:path';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { OpenRouterProvider } from '@devdigest/reviewer-core';
 import { runCi, type PostAs } from './run.js';
 
@@ -45,7 +45,6 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
     postAs,
     resultPath,
     readFile: readFileSync,
-    readDir: readdirSync,
     writeFile: writeFileSync,
   });
 
@@ -73,7 +72,7 @@ if (isDirectRun) {
       process.exitCode = code;
     },
     (err) => {
-      console.error('[agent-runner] fatal error:', err);
+      console.error('[agent-runner] fatal error:', err instanceof Error ? err.message : 'unknown');
       process.exitCode = 1;
     },
   );

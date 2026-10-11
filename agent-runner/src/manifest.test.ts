@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { loadManifest, findManifestPath, loadAgentManifest } from './manifest.js';
+import { loadManifestFromEnv, loadAgentManifest } from './manifest.js';
 import { RunnerError } from './errors.js';
 
 const VALID_MANIFEST_YAML = `
@@ -13,6 +13,7 @@ system_prompt: "Review this PR for security issues."
 skills: ["security-basics"]
 strategy: "auto"
 ci_fail_on: "critical"
+agent_version: 3
 `;
 
 describe('manifest loading + validation (AC-20)', () => {
@@ -30,7 +31,7 @@ describe('manifest loading + validation (AC-20)', () => {
   it('loads and validates a well-formed manifest against the AgentManifest schema', () => {
     writeFileSync(path.join(dir, 'agents', 'security-reviewer.yaml'), VALID_MANIFEST_YAML);
 
-    const manifest = loadManifest(dir);
+    const manifest = loadManifestFromEnv('agents/security-reviewer.yaml', dir);
 
     expect(manifest.name).toBe('Security Reviewer');
     expect(manifest.model).toBe('deepseek/deepseek-v4-flash');
@@ -49,24 +50,22 @@ ci_fail_on: "sometimes"
 `,
     );
 
-    expect(() => loadManifest(dir)).toThrow(RunnerError);
-    expect(() => loadManifest(dir)).toThrow(/failed validation/i);
+    expect(() => loadManifestFromEnv('agents/bad.yaml', dir)).toThrow(RunnerError);
+    expect(() => loadManifestFromEnv('agents/bad.yaml', dir)).toThrow(/failed validation/i);
   });
 
   it('fails clearly when the manifest is missing required fields', () => {
     writeFileSync(path.join(dir, 'agents', 'incomplete.yaml'), 'name: "No model or prompt"\n');
-    expect(() => loadManifest(dir)).toThrow(RunnerError);
+    expect(() => loadManifestFromEnv('agents/incomplete.yaml', dir)).toThrow(RunnerError);
   });
 
-  it('fails clearly when no manifest file exists', () => {
-    rmSync(path.join(dir, 'agents', ), { recursive: true, force: true });
-    expect(() => findManifestPath(dir)).toThrow(/not found/i);
+  it('fails clearly when DEVDIGEST_MANIFEST is unset or empty (AC-27)', () => {
+    expect(() => loadManifestFromEnv(undefined, dir)).toThrow(/DEVDIGEST_MANIFEST is required/);
+    expect(() => loadManifestFromEnv('', dir)).toThrow(RunnerError);
   });
 
-  it('fails clearly when more than one manifest file exists', () => {
-    writeFileSync(path.join(dir, 'agents', 'a.yaml'), VALID_MANIFEST_YAML);
-    writeFileSync(path.join(dir, 'agents', 'b.yaml'), VALID_MANIFEST_YAML);
-    expect(() => findManifestPath(dir)).toThrow(/exactly one/i);
+  it('fails clearly when the named manifest file does not exist', () => {
+    expect(() => loadManifestFromEnv('agents/missing.yaml', dir)).toThrow(/Cannot read agent manifest/);
   });
 
   it('fails clearly on malformed YAML', () => {

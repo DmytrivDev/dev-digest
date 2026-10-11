@@ -10,8 +10,8 @@ executed by the target repo's workflow as `node .devdigest/runner/index.js`.
 
 ## What it does
 
-1. **Loads + validates** the checked-in manifest `.devdigest/agents/<slug>.yaml`
-   and skill bodies `.devdigest/skills/*.md` from the target repo's working tree
+1. **Loads + validates** the one manifest named by `DEVDIGEST_MANIFEST`
+   (e.g. `.devdigest/agents/<slug>.yaml`; no directory discovery) and skill bodies `.devdigest/skills/*.md` from the target repo's working tree
    (validated against `AgentManifest` before use).
 2. **Resolves the PR context** (owner / repo / number / title / body / fork flag)
    from CI env vars + the `pull_request` event payload.
@@ -92,7 +92,7 @@ there is no `SecretsProvider` / DI graph to inject from (see `CLAUDE.md`).
 | `GITHUB_TOKEN` | when `post_as` ≠ `none` | fetch the diff + post the review/comment |
 | `GITHUB_REPOSITORY` | yes | `owner/name` of the target repo |
 | `PR_NUMBER` | yes¹ | PR to review |
-| `GITHUB_EVENT_PATH` | auto (GHA) | `pull_request` event payload (title/body/fork) |
+| `GITHUB_EVENT_PATH` | auto (GHA) | `pull_request` event payload (title/body/fork + `head.sha`, the artifact's `commit_sha`) |
 | `DEVDIGEST_DIR` | no | override the `.devdigest` dir (default: `cwd/.devdigest`) |
 | `DEVDIGEST_RESULT_PATH` | no | override artifact path (default: `cwd/devdigest-result.json`) |
 | `DEVDIGEST_POST_AS` | no | `github_review` (default) \| `pr_comment` \| `none` |

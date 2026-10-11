@@ -11,6 +11,16 @@ export interface BuildResultArtifactInput {
   durationMs: number;
   agent: string;
   prNumber: number;
+  repository: string;
+  repositoryId: number;
+  commitSha: string;
+  runId: number;
+  runAttempt: number;
+  agentSlug: string;
+  agentVersion: number;
+  ciFailOn: CiResultArtifact['ci_fail_on'];
+  gateTriggered: boolean;
+  blockers: number;
 }
 
 function severityCounts(findings: Finding[]): { critical: number; warning: number; suggestion: number } {
@@ -41,6 +51,16 @@ export function buildResultArtifact(input: BuildResultArtifactInput): CiResultAr
     agent: input.agent,
     version: RUNNER_VERSION,
     pr_number: input.prNumber,
+    repository: input.repository,
+    repository_id: input.repositoryId,
+    commit_sha: input.commitSha,
+    run_id: input.runId,
+    run_attempt: input.runAttempt,
+    agent_slug: input.agentSlug,
+    agent_version: input.agentVersion,
+    ci_fail_on: input.ciFailOn,
+    gate_triggered: input.gateTriggered,
+    blockers: input.blockers,
   };
   const result = CiResultArtifact.safeParse(candidate);
   if (!result.success) {
