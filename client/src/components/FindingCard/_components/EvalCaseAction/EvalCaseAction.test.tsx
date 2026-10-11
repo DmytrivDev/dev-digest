@@ -5,7 +5,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { EvalCase, FindingRecord } from "@devdigest/shared";
 import { ToastProvider } from "@/lib/toast";
-import messages from "../../../../../../../../../../messages/en/prReview.json";
+import messages from "../../../../../messages/en/prReview.json";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({

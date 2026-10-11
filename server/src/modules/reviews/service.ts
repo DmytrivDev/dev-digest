@@ -127,6 +127,7 @@ export class ReviewService {
     prId: string,
     targets: AgentRow[],
     logger?: Logger,
+    multiAgentRunId?: string,
   ): Promise<{ runs: { run_id: string; agent_id: string; agent_name: string }[]; reviews: ReviewDto[] }> {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError('Pull request not found');
@@ -145,6 +146,7 @@ export class ReviewService {
         prId,
         provider: agent.provider,
         model: agent.model,
+        multiAgentRunId,
       });
       runs.push({ run_id: runId, agent_id: agent.id, agent_name: agent.name });
       jobs.push({ agent, runId });

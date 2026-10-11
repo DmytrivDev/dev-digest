@@ -42,8 +42,13 @@ export const agentRuns = pgTable('agent_runs', {
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
   blockers: integer('blockers'),
+  /** Parent multi-agent run this review belongs to; null for a single-agent run. */
+  multiAgentRunId: uuid('multi_agent_run_id').references(() => multiAgentRuns.id, {
+    onDelete: 'set null',
+  }),
 },
   (t) => ({
+    byMultiAgentRun: index('agent_runs_multi_idx').on(t.multiAgentRunId),
     // activeRunsForPull / listRunsForPull / costByPr all filter
     // (workspace_id, pr_id) and order by ran_at desc.
     byPr: index('agent_runs_ws_pr_ran_idx').on(t.workspaceId, t.prId, t.ranAt.desc()),

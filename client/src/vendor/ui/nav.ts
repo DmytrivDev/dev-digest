@@ -60,6 +60,11 @@ export const NAV: NavGroup[] = [
       { key: "eval", label: "Eval Dashboard", icon: "Gauge", href: "/eval" },
     ],
   },
+  {
+    // Not repo-scoped: the run picks its own PR on the configure screen.
+    section: "GLOBAL",
+    items: [{ key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/multi-agent" }],
+  },
 ];
 
 export const SETTINGS_ITEM: NavItemDef = {

@@ -14,7 +14,7 @@ import { usePrComments, useCreatePrComment, useSmartDiff, usePrReviews, useFindi
 import { usePrBrief } from "@/lib/hooks/brief";
 import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
-import { FindingCard } from "../FindingCard";
+import { FindingCard } from "@/components/FindingCard";
 import { riskColor, riskIconName } from "../RiskAreas";
 import { SmartDiffGroup } from "./_components/SmartDiffGroup";
 import { BriefNote } from "./_components/BriefNote";

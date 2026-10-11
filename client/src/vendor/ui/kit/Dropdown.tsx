@@ -61,12 +61,15 @@ function DropdownItem({ it, onClose }: { it: DropdownItemDef; onClose: () => voi
 
 export function Dropdown({
   trigger,
-  items,
+  items = [],
+  children,
   align = "left",
   width = 230,
 }: {
   trigger: React.ReactNode;
-  items: DropdownItemDef[];
+  items?: DropdownItemDef[];
+  /** Free-form panel content, rendered after the items. */
+  children?: React.ReactNode;
   align?: "left" | "right";
   width?: number;
 }) {
@@ -105,6 +108,7 @@ export function Dropdown({
               <DropdownItem key={i} it={it} onClose={() => setOpen(false)} />
             )
           )}
+          {children}
         </div>
       )}
     </div>

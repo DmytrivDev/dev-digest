@@ -1,0 +1,82 @@
+{
+  "nav": {
+    "title": "Multi-Agent Review"
+  },
+  "picker": {
+    "title": "Pick agents to run",
+    "clear": "Clear",
+    "run": "Run multi-agent review ({count})",
+    "configureAgents": "Configure agents…",
+    "noEnabledAgents": "No enabled agents — configure agents",
+    "agentsLabel": "Agents to run"
+  },
+  "configure": {
+    "title": "Run a Multi-Agent Review",
+    "subtitle": "Run one pull request through several agents in parallel and compare what each one finds.",
+    "stepPr": "Pull request",
+    "stepAgents": "Agents to run",
+    "prSelectLabel": "Pull request",
+    "prPlaceholder": "Select a pull request…",
+    "prOption": "#{number} · {title}",
+    "selectAll": "Select all",
+    "noPrTitle": "Pick a pull request first",
+    "noPrBody": "Choose which PR to review above, then select the agents to run on it.",
+    "noAgentsTitle": "Enable agents to run reviews",
+    "noAgentsBody": "Multi-agent review runs the PR through every enabled agent in parallel. You have no agents enabled yet.",
+    "goToAgents": "Go to Agents",
+    "estimate": "≈ {time} · {cost} · parallel fan-out",
+    "run": "Run multi-agent review ({count})",
+    "loadError": "Could not load pull requests or agents.",
+    "selectedCount": "{count} selected"
+  },
+  "recent": {
+    "title": "Recent runs",
+    "agents": "{count, plural, one {# agent} other {# agents}}",
+    "running": "Running",
+    "done": "Done"
+  },
+  "results": {
+    "title": "Multi-Agent Review",
+    "configureRun": "Configure run",
+    "selectedAgents": "{count, plural, one {# selected agent} other {# selected agents}} · parallel",
+    "modeLabel": "View mode",
+    "modeColumns": "Columns",
+    "modeTabs": "Tabs",
+    "meta": "{count, plural, one {# agent} other {# agents}} · parallel · {time} total · {cost}",
+    "loadError": "Could not load this multi-agent run.",
+    "loading": "Loading multi-agent run…",
+    "viewTrace": "View trace",
+    "unknownAgent": "Unknown agent"
+  },
+  "column": {
+    "running": "Running · {seconds}s",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "noFindings": "No findings.",
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}"
+  },
+  "tabs": {
+    "listLabel": "Agents",
+    "noSummary": "No summary.",
+    "learn": "Learn",
+    "learnTooltip": "Not available yet",
+    "noFindings": "No findings.",
+    "failedBody": "This agent did not finish: {error}",
+    "cancelledBody": "This agent run was cancelled.",
+    "runningBody": "This agent is still running."
+  },
+  "disagree": {
+    "title": "Where agents disagree",
+    "onlyConflicts": "Show only conflicts",
+    "needTwo": "Disagreements need at least two finished agents.",
+    "noConflicts": "No conflicts — the agents agree on every flagged location.",
+    "noGroups": "No findings to compare.",
+    "take": {
+      "didNotFlag": "did not flag",
+      "failed": "no result (failed)",
+      "cancelled": "no result (cancelled)",
+      "pending": "pending",
+      "flagged": "flagged"
+    }
+  }
+}
