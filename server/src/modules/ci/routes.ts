@@ -10,7 +10,7 @@ import { CiRepository } from './repository.js';
 import { CiService } from './service.js';
 
 /**
- * Export to CI (SPEC-08).
+ * Export to CI (SPEC-09).
  *   POST /agents/:id/ci/preview        → { files }
  *   POST /agents/:id/export-ci         → { installation, pr_url } | application/zip
  *   GET  /agents/:id/ci/installations  → { installations }

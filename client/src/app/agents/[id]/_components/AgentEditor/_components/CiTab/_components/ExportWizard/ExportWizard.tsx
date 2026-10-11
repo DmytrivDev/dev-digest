@@ -1,4 +1,4 @@
-/* ExportWizard — "Export to CI" (SPEC-08 AC-4..AC-16): a four-step Modal that
+/* ExportWizard — "Export to CI" (SPEC-09 AC-4..AC-16): a four-step Modal that
    previews the generated files, lets the user adjust triggers and post-as, and
    installs them as a PR or a zip.
 

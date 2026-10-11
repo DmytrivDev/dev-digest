@@ -2,7 +2,7 @@
 
 **Route** — A (spec-driven).
 
-**Requirements source** — `specs/SPEC-08-export-to-ci.md` (Status: approved, 0 `[NEEDS CLARIFICATION]` markers, `node scripts/check-specs.mjs` clean). The spec file is still **untracked** in this worktree (`?? specs/SPEC-08-export-to-ci.md`). Commit it with the feature. This plan implements those requirements. It does not define or change them.
+**Requirements source** — `specs/SPEC-09-export-to-ci.md` (Status: approved, 0 `[NEEDS CLARIFICATION]` markers, `node scripts/check-specs.mjs` clean). The spec file is still **untracked** in this worktree (`?? specs/SPEC-09-export-to-ci.md`). Commit it with the feature. This plan implements those requirements. It does not define or change them.
 
 **Execution mode** — multi-agent lanes, chosen by the user on 2026-10-10:
 - **4 build implementers** (L1–L4), within the user's cap of 5 for writing the implementation.

@@ -1,4 +1,4 @@
-/* CiTab — where the agent runs in CI (SPEC-08 AC-1..AC-3): the "Fail CI on"
+/* CiTab — where the agent runs in CI (SPEC-09 AC-1..AC-3): the "Fail CI on"
    gate, the repositories it is exported to with the last run of each, the CI
    Runs table filtered to this agent, and the entry points of the Export wizard.
    Server data comes only from the hooks; the wizard is mounted on demand, so it

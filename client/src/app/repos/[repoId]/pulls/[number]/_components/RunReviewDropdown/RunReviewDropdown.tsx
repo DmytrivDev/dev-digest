@@ -1,15 +1,17 @@
-/* RunReviewDropdown — ported from components2.jsx.
-   "Run all enabled agents" / a specific agent → kicks off POST /pulls/:id/review
-   and hands the resulting runIds up so the parent can stream SSE live status. */
+/* RunReviewDropdown — ported from components2.jsx, reworked for SPEC-08.
+   Opens the "Pick agents to run" panel; one click starts ONE multi-agent run
+   (POST /pulls/:id/multi-agent-run) and navigates to /multi-agent/<id>. The
+   resulting runIds are still handed up so the parent can stream SSE status. */
 "use client";
 
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Dropdown, type DropdownItemDef } from "@devdigest/ui";
-import { useAgents } from "../../../../../../../lib/hooks/agents";
-import { useRunReview } from "../../../../../../../lib/hooks/reviews";
+import { Button, Dropdown } from "@devdigest/ui";
+import { useAgents } from "@/lib/hooks/agents";
+import { useStartMultiAgentRun } from "@/lib/hooks/multi-agent";
 import { DROPDOWN_WIDTH } from "./constants";
+import { PickerPanel } from "./_components/PickerPanel";
 
 export function RunReviewDropdown({
   prId,
@@ -34,68 +36,44 @@ export function RunReviewDropdown({
   const t = useTranslations("prReview");
   const router = useRouter();
   const { data: agents } = useAgents();
-  const run = useRunReview();
-  const all = agents ?? [];
-  const hasEnabled = all.some((a) => a.enabled);
+  const start = useStartMultiAgentRun();
+  // Guards a double click that lands before `isPending` re-renders the button.
+  const inFlight = React.useRef(false);
 
-  const kick = async (opts: { all?: boolean; agentId?: string }) => {
+  const kick = async (agentIds: string[]) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     onRunStart?.();
     try {
-      const res = await run.mutateAsync({ prId, ...opts });
+      const res = await start.mutateAsync({ prId, agentIds });
       onRunsStarted?.(res.runs.map((r) => r.run_id));
+      router.push(`/multi-agent/${res.id}`);
+    } catch {
+      // The global mutation error toast reports it; stay on the page.
     } finally {
+      inFlight.current = false;
       onRunSettled?.();
     }
   };
-
-  // List EVERY agent (not just enabled) so they're always visible; a specific
-  // agent can be run regardless of its enabled flag. "Run all" still targets
-  // only enabled agents.
-  const agentItems: DropdownItemDef[] = all.length
-    ? all.map((a) => ({
-        label: a.name,
-        icon: "Cpu" as const,
-        hint: a.enabled ? a.model : `${a.model} · disabled`,
-        onClick: () => kick({ agentId: a.id }),
-      }))
-    : [{ label: "No agents yet — create one", icon: "Plus", muted: true, onClick: () => router.push("/agents") }];
-
-  const items: DropdownItemDef[] = [
-    // Merged/closed PRs can still be reviewed (informational only); lead with a
-    // muted, non-actionable warning so the intent is clear.
-    ...(warnMerged
-      ? [
-          { label: t("runReview.mergedWarning"), icon: "AlertTriangle" as const, muted: true },
-          { divider: true } as DropdownItemDef,
-        ]
-      : []),
-    {
-      label: t("runReview.runAll"),
-      icon: "Play",
-      ...(hasEnabled ? {} : { muted: true }),
-      onClick: () => kick({ all: true }),
-    },
-    { divider: true },
-    ...agentItems,
-    { divider: true },
-    { label: t("runReview.configureAgents"), icon: "Settings", muted: true, onClick: () => router.push("/agents") },
-  ];
 
   return (
     <Dropdown
       width={DROPDOWN_WIDTH}
       align="right"
-      items={items}
       trigger={
         <span
           title={warnMerged ? t("runReview.mergedTooltip") : undefined}
           style={warnMerged ? { opacity: 0.6 } : undefined}
         >
-          <Button kind={kind} size={size} iconRight="ChevronDown" icon="Sparkles" loading={run.isPending}>
-            {run.isPending ? t("runReview.running") : t("runReview.runReview")}
+          <Button kind={kind} size={size} iconRight="ChevronDown" icon="Sparkles" loading={start.isPending}>
+            {start.isPending ? t("runReview.running") : t("runReview.runReview")}
           </Button>
         </span>
       }
-    />
+    >
+      {agents && (
+        <PickerPanel agents={agents} warnMerged={warnMerged} pending={start.isPending} onRun={kick} />
+      )}
+    </Dropdown>
   );
 }

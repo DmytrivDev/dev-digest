@@ -1,4 +1,4 @@
-/* /ci-runs — the runs executed inside CI (SPEC-08 AC-35, AC-37, AC-38).
+/* /ci-runs — the runs executed inside CI (SPEC-09 AC-35, AC-37, AC-38).
    Refresh ingests from GitHub; a failure per repo is shown above the table,
    which keeps listing the runs stored earlier. Server data comes only from the
    hooks; nothing is copied into state. */

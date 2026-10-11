@@ -1,4 +1,4 @@
-/* hooks/ci.ts — React Query hooks for Export to CI (SPEC-08): the installations
+/* hooks/ci.ts — React Query hooks for Export to CI (SPEC-09): the installations
    of an agent, the CI runs list, the wizard's preview, the export and the
    refresh that ingests runs from GitHub.
 

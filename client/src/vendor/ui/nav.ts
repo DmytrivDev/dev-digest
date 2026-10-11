@@ -61,10 +61,14 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    // Cross-repo and cross-agent, so not repo-scoped; `activeKeyFor` maps /ci-runs
-    // to this key. Mock: chrome.jsx GLOBAL section.
+    // Not repo-scoped: Multi-Agent Review picks its own PR on the configure screen;
+    // CI Runs is cross-repo and cross-agent (`activeKeyFor` maps /ci-runs to its key).
+    // Mock: chrome.jsx GLOBAL section.
     section: "GLOBAL",
-    items: [{ key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" }],
+    items: [
+      { key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/multi-agent" },
+      { key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" },
+    ],
   },
 ];
 

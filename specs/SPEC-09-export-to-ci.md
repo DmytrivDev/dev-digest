@@ -1,5 +1,5 @@
 # Spec: Export to CI (MVP) — deploy a review agent to GitHub Actions, CI Runs page, agent CI tab
-Spec ID: SPEC-08
+Spec ID: SPEC-09
 Status: approved
 Supersedes: none
 
