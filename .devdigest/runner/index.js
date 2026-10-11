@@ -20515,7 +20515,7 @@ const EvalCaseOutcome = objectType({
     grounding_kept: numberType().int(),
     grounding_total: numberType().int(),
     duration_ms: numberType().int(),
-    cost_usd: numberType().nullable(),
+    cost_usd: numberType().nonnegative().finite().max(1000).nullable(),
     actual: arrayType(EvalActualFinding),
 });
 const EvalCase = objectType({
@@ -20776,7 +20776,7 @@ const CiExportInput = CiPreviewInput.extend({
     /** The user-edited workflow text; when absent the generated one is used. */
     workflow_contents: stringType().max(65_536).optional(),
 }).strict();
-const CiRunStatus = enumType(['running', 'succeeded', 'failed', 'rejected']);
+const CiRunStatus = enumType(['running', 'succeeded', 'skipped', 'failed', 'rejected']);
 const CiRunVerdict = enumType(['blocked', 'passed']);
 /**
  * AgentManifest — the agent contract shared by the studio and the CI runner.
@@ -20871,13 +20871,14 @@ const CiRefreshResult = objectType({
  * Ingested back on refresh to populate `ci_runs`. The identity fields are
  * cross-checked by the studio against what GitHub reports about the run.
  */
+const Count = numberType().int().nonnegative().max(1_000_000);
 const CiResultArtifact = objectType({
-    findings_count: numberType().int(),
-    critical: numberType().int().nullish(),
-    warning: numberType().int().nullish(),
-    suggestion: numberType().int().nullish(),
+    findings_count: Count,
+    critical: Count.nullish(),
+    warning: Count.nullish(),
+    suggestion: Count.nullish(),
     cost_usd: numberType().nullable(),
-    duration_ms: numberType().int().nullish(),
+    duration_ms: numberType().int().nonnegative().max(86_400_000).nullish(),
     agent: stringType(),
     version: stringType().nullish(),
     pr_number: numberType().int(),
@@ -20890,7 +20891,7 @@ const CiResultArtifact = objectType({
     agent_version: numberType().int(),
     ci_fail_on: CiFailOn,
     gate_triggered: booleanType(),
-    blockers: numberType().int(),
+    blockers: Count,
 })
     .strict();
 // ===========================================================================
@@ -20923,6 +20924,7 @@ const HookScanResult = objectType({
 ;// CONCATENATED MODULE: ../server/src/vendor/shared/contracts/observability.ts
 
 
+
 /**
  * A5 — Observability / Multi-agent contracts (L07).
  *
@@ -20939,61 +20941,95 @@ const HookScanResult = objectType({
 // ---------------------------------------------------------------------------
 // Multi-Agent Review
 // ---------------------------------------------------------------------------
-/** A finding as surfaced in a multi-agent column (subset of FindingRecord). */
-const AgentColumnFinding = objectType({
-    id: stringType(),
-    severity: Severity,
-    category: stringType(),
-    title: stringType(),
-    file: stringType(),
-    start_line: numberType().int(),
-    kind: stringType().nullish(),
+/** Request of POST /pulls/:id/multi-agent-run. Duplicates are collapsed server-side; capped at 50 ids (same cap as the estimates read). */
+const MultiAgentRunRequest = objectType({
+    agent_ids: arrayType(stringType().uuid()).min(1).max(50),
 });
+/** Response of POST /pulls/:id/multi-agent-run: the parent id and one run per agent. */
+const MultiAgentRunStarted = objectType({
+    id: stringType(),
+    pr_id: stringType(),
+    runs: arrayType(ReviewRunTarget),
+});
+const AgentRunStatus = enumType(['running', 'done', 'failed', 'cancelled']);
 /** One agent's result column in the multi-agent review. */
 const AgentColumn = objectType({
     run_id: stringType(),
-    agent_id: stringType(),
-    agent_name: stringType(),
+    agent_id: stringType().nullable(),
+    agent_name: stringType().nullable(),
     provider: stringType().nullable(),
     model: stringType().nullable(),
-    status: enumType(['done', 'failed', 'running']),
+    status: AgentRunStatus,
+    error: stringType().nullable(),
     verdict: stringType().nullable(),
     score: numberType().int().nullable(),
     summary: stringType().nullable(),
     duration_ms: numberType().int().nullable(),
     cost_usd: numberType().nullable(),
-    findings: arrayType(AgentColumnFinding),
+    tokens_in: numberType().int().nullable(),
+    tokens_out: numberType().int().nullable(),
+    grounding: stringType().nullable(),
+    findings: arrayType(FindingRecord),
 });
-/** One agent's stance on a contended file:line. */
-const ConflictTake = objectType({
-    agent_id: stringType(),
-    persona: stringType(),
-    /** Severity if the agent flagged it, or 'ignored' when it did not. */
-    verdict: unionType([Severity, literalType('ignored')]),
-    note: stringType(),
+/** One agent's stance on a finding group. */
+const TakeState = enumType(['flagged', 'did_not_flag', 'failed', 'cancelled', 'pending']);
+const FindingTake = objectType({
+    run_id: stringType(),
+    agent_id: stringType().nullable(),
+    agent_name: stringType().nullable(),
+    state: TakeState,
+    severity: Severity.nullable(),
+    note: stringType().nullable(),
+    finding_ids: arrayType(stringType()),
 });
 /**
- * A conflict = a file:line that at least one agent flagged and at least one
- * other agent (that also reviewed) did NOT, OR where agents assigned divergent
- * severities. Computed from persisted findings; not stored.
+ * Findings from different agents that overlap on the same file lines, with one
+ * take per agent. Computed on read from persisted findings; never stored.
  */
-const Conflict = objectType({
+const FindingGroup = objectType({
+    id: stringType(),
     file: stringType(),
     line: numberType().int(),
     title: stringType(),
-    takes: arrayType(ConflictTake),
+    is_conflict: booleanType(),
+    takes: arrayType(FindingTake),
 });
-/** Response of POST /pulls/:id/multi-agent-run and GET /pulls/:id/multi-agent. */
+/** Response of GET /multi-agent-runs/:id. */
 const MultiAgentRun = objectType({
     id: stringType(),
     pr_id: stringType(),
     pr_number: numberType().int().nullish(),
+    pr_title: stringType().nullish(),
+    repo_id: stringType().nullish(),
     ran_at: stringType(),
+    status: enumType(['running', 'done']),
     agent_count: numberType().int(),
-    total_duration_ms: numberType().int(),
+    total_duration_ms: numberType().int().nullable(),
     total_cost_usd: numberType().nullable(),
     columns: arrayType(AgentColumn),
-    conflicts: arrayType(Conflict),
+    groups: arrayType(FindingGroup),
+});
+/** Average of an agent's newest done runs (GET /agents/run-estimates). */
+const AgentRunEstimate = objectType({
+    agent_id: stringType(),
+    runs_sampled: numberType().int(),
+    avg_duration_ms: numberType().int().nullable(),
+    avg_cost_usd: numberType().nullable(),
+});
+const AgentRunEstimates = objectType({
+    estimates: arrayType(AgentRunEstimate),
+});
+/** One row of GET /pulls/:id/multi-agent-runs (a PR's recent multi-agent runs). */
+const MultiAgentRunSummary = objectType({
+    id: stringType(),
+    ran_at: stringType(),
+    status: enumType(['running', 'done']),
+    agent_count: numberType().int(),
+    total_duration_ms: numberType().int().nullable(),
+    total_cost_usd: numberType().nullable(),
+});
+const MultiAgentRunList = objectType({
+    runs: arrayType(MultiAgentRunSummary),
 });
 // ---------------------------------------------------------------------------
 // Per-agent Stats (GET /agents/:id/stats)
