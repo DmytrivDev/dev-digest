@@ -18,7 +18,8 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+/** fetch + the error taxonomy shared by `apiFetch` and `apiFetchBlob`. */
+async function request(path: string, init?: RequestInit): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -57,9 +58,31 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
     throw new ApiError(message, res.status, code, details);
   }
+  return res;
+}
 
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await request(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/** File name from a `content-disposition: attachment; filename="x.zip"` header. */
+function fileNameOf(res: Response): string | null {
+  const match = /filename="?([^";]+)"?/i.exec(res.headers.get("content-disposition") ?? "");
+  return match?.[1] ?? null;
+}
+
+/**
+ * A binary response (a zip export). Errors are parsed into ApiError exactly like
+ * `apiFetch`; `fileName` is null when the header is absent (or not exposed by CORS).
+ */
+export async function apiFetchBlob(
+  path: string,
+  init?: RequestInit
+): Promise<{ blob: Blob; fileName: string | null }> {
+  const res = await request(path, init);
+  return { blob: await res.blob(), fileName: fileNameOf(res) };
 }
 
 /**

@@ -12,6 +12,9 @@ import type {
   PrMeta,
   PrDetail,
   GitHubReviewPayload,
+  RepositoryInfo,
+  WorkflowRunMeta,
+  RunArtifactResult,
   CreateReviewCommentInput,
   PrReviewComment,
   OpenPrPayload,
@@ -129,6 +132,16 @@ export interface MockGitHubOptions {
   comments?: PrReviewComment[];
   /** `listMergedPullsForPath` results, keyed by path. */
   pathPulls?: Record<string, PathPullRequest[]>;
+  /** `getRepository` result. */
+  repository?: RepositoryInfo;
+  /** `listWorkflowRuns` results, keyed by workflow file basename. */
+  workflowRuns?: Record<string, WorkflowRunMeta[]>;
+  /** `findPullNumberForCommit` results, keyed by sha. */
+  commitPulls?: Record<string, number>;
+  /** `getPullRequestTitle` results, keyed by PR number. */
+  pullTitles?: Record<number, string>;
+  /** `downloadRunArtifact` results, keyed by run id (default: absent). */
+  artifacts?: Record<number, RunArtifactResult>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -232,6 +245,34 @@ export class MockGitHubClient implements GitHubClient {
   async findOpenPr(_repo: RepoRef, branch: string): Promise<{ url: string } | null> {
     const pr = this.openedPrs.find((p) => p.head === branch);
     return pr ? { url: 'https://github.com/mock/mock/pull/1' } : null;
+  }
+
+  async getRepository(_repo: RepoRef): Promise<RepositoryInfo> {
+    return this.opts.repository ?? { id: 1, default_branch: 'main' };
+  }
+
+  async listWorkflowRuns(
+    _repo: RepoRef,
+    workflowFile: string,
+    _opts: { perPage: number },
+  ): Promise<WorkflowRunMeta[]> {
+    return this.opts.workflowRuns?.[workflowFile] ?? [];
+  }
+
+  async findPullNumberForCommit(_repo: RepoRef, sha: string): Promise<number | null> {
+    return this.opts.commitPulls?.[sha] ?? null;
+  }
+
+  async getPullRequestTitle(_repo: RepoRef, n: number): Promise<string> {
+    return this.opts.pullTitles?.[n] ?? `PR #${n}`;
+  }
+
+  async downloadRunArtifact(
+    _repo: RepoRef,
+    runId: number,
+    _opts: { artifactName: string; fileName: string; maxBytes: number },
+  ): Promise<RunArtifactResult> {
+    return this.opts.artifacts?.[runId] ?? { status: 'absent' };
   }
 
   async getIssue(_repo: RepoRef, n: number): Promise<IssueMeta> {

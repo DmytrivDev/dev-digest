@@ -21,7 +21,8 @@ agent-runner/
 
 ## What This Package Does
 
-1. Reads the checked-in `.devdigest/agents/<slug>.yaml` manifest and `.devdigest/skills/*.md` from
+1. Reads exactly the manifest named by `DEVDIGEST_MANIFEST` (e.g. `.devdigest/agents/<slug>.yaml`;
+   several agents can share one repo, each with its own workflow) and `.devdigest/skills/*.md` from
    the target repo's working tree (validated against `AgentManifest` before use).
 2. Assembles the PR diff + PR body/title from CI context and runs them through the same
    `reviewer-core` pipeline a local studio run uses (`assemblePrompt` / `wrapUntrusted` /

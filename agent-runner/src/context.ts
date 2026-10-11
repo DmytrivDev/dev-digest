@@ -16,6 +16,9 @@ export interface CiEnv {
   GITHUB_REPOSITORY?: string;
   PR_NUMBER?: string;
   GITHUB_EVENT_PATH?: string;
+  GITHUB_REPOSITORY_ID?: string;
+  GITHUB_RUN_ID?: string;
+  GITHUB_RUN_ATTEMPT?: string;
   [key: string]: string | undefined;
 }
 
@@ -30,6 +33,13 @@ export interface PrContext {
   /** True when the PR head is a fork — informational only; the workflow
    *  itself is responsible for never scheduling this job for fork PRs. */
   isFork: boolean;
+  /** Run identity echoed into the result artifact (AC-29). */
+  repository: string;
+  repositoryId: number;
+  runId: number;
+  runAttempt: number;
+  /** PR head commit: the event's `pull_request.head.sha`, NOT `GITHUB_SHA` (A9). */
+  commitSha: string;
 }
 
 interface PullRequestEventPayload {
@@ -37,7 +47,7 @@ interface PullRequestEventPayload {
     number?: number;
     title?: string;
     body?: string | null;
-    head?: { repo?: { fork?: boolean } | null };
+    head?: { sha?: string; repo?: { fork?: boolean } | null };
   };
 }
 
@@ -57,6 +67,14 @@ function readEventPayload(
   } catch {
     return null;
   }
+}
+
+function requiredInt(raw: string | undefined, name: string, min: number): number {
+  const n = raw ? Number(raw) : NaN;
+  if (!Number.isInteger(n) || n < min) {
+    throw new RunnerError(`${name} must be set to an integer >= ${min}`);
+  }
+  return n;
 }
 
 /** Resolve the PR context from env + (best-effort) event payload. */
@@ -83,7 +101,20 @@ export function resolvePrContext(
     );
   }
 
+  const repositoryId = requiredInt(env.GITHUB_REPOSITORY_ID, 'GITHUB_REPOSITORY_ID', 1);
+  const runId = requiredInt(env.GITHUB_RUN_ID, 'GITHUB_RUN_ID', 1);
+  const runAttempt = requiredInt(env.GITHUB_RUN_ATTEMPT, 'GITHUB_RUN_ATTEMPT', 1);
+  const commitSha = pr?.head?.sha;
+  if (!commitSha || !/^[0-9a-f]{40}$/.test(commitSha)) {
+    throw new RunnerError('event pull_request.head.sha must be a 40-char lowercase hex commit sha');
+  }
+
   return {
+    repository,
+    repositoryId,
+    runId,
+    runAttempt,
+    commitSha,
     owner,
     repo,
     prNumber,

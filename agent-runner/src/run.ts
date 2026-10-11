@@ -1,7 +1,8 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { LLMProvider, GitHubReviewPayload, CiResultArtifact } from '@devdigest/shared';
 import { reviewPullRequest, toReviewPayload, gateTriggered, countBlockers } from '@devdigest/reviewer-core';
-import { loadManifest } from './manifest.js';
+import { loadManifestFromEnv } from './manifest.js';
 import { loadSkillBodies } from './skills.js';
 import { resolvePrContext, type CiEnv } from './context.js';
 import { parseUnifiedDiff, stripIgnoredFiles } from './diff.js';
@@ -46,7 +47,8 @@ export interface RunCiDeps {
   resultPath: string;
   fetchImpl?: FetchLike;
   readFile?: typeof readFileSync;
-  readDir?: typeof readdirSync;
+  /** Base for resolving `DEVDIGEST_MANIFEST`; defaults to `process.cwd()`. */
+  cwd?: string;
   writeFile?: typeof writeFileSync;
   now?: () => number;
   /**
@@ -82,7 +84,6 @@ export type RunCiResult = RunCiSuccess | RunCiFailure;
 
 export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
   const readFile = deps.readFile ?? readFileSync;
-  const readDir = deps.readDir ?? readdirSync;
   const writeFile = deps.writeFile ?? writeFileSync;
   const now = deps.now ?? Date.now;
   const fetchImpl = deps.fetchImpl ?? fetch;
@@ -90,7 +91,10 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
 
   try {
     // 1. Load + validate the manifest BEFORE it is used for anything (AC-20).
-    const manifest = loadManifest(deps.devdigestDir, { readFile, readDir });
+    //    Only the manifest named by DEVDIGEST_MANIFEST is read (AC-27); a missing
+    //    or invalid one throws before any artifact write or POST.
+    const manifestValue = deps.env.DEVDIGEST_MANIFEST;
+    const manifest = loadManifestFromEnv(manifestValue, deps.cwd ?? process.cwd(), { readFile });
     const skills = loadSkillBodies(deps.devdigestDir, manifest.skills, readFile);
 
     // 2. Resolve CI context (PR number/title/body/repo) from env + event payload.
@@ -122,8 +126,12 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
       llm: deps.llm,
       strategy: manifest.strategy,
       skills,
-      prDescription: ctx.body,
-      task: `Review PR #${ctx.prNumber}: ${ctx.title}`,
+      // Trusted task slot = fixed words + integer only (AC-28); the
+      // author-controlled title travels inside the wrapped pr-description.
+      prDescription: `Title: ${ctx.title}
+
+${ctx.body}`,
+      task: `Review pull request #${ctx.prNumber}.`,
     });
     const durationMs = now() - start;
 
@@ -145,6 +153,16 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
       durationMs,
       agent: manifest.name,
       prNumber: ctx.prNumber,
+      repository: ctx.repository,
+      repositoryId: ctx.repositoryId,
+      commitSha: ctx.commitSha,
+      runId: ctx.runId,
+      runAttempt: ctx.runAttempt,
+      agentSlug: path.basename(manifestValue as string, path.extname(manifestValue as string)),
+      agentVersion: manifest.agent_version,
+      ciFailOn: manifest.ci_fail_on,
+      gateTriggered: triggered,
+      blockers,
     });
     writeFile(deps.resultPath, `${JSON.stringify(artifact, null, 2)}\n`);
 

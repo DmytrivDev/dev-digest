@@ -144,7 +144,39 @@ export interface CommitFilesPayload {
   base: string;
   message: string;
   files: CommitFile[];
+  /**
+   * When true the commit's parent is the current head of `base` (not of
+   * `branch`) and the `branch` ref is force-moved onto it — a clean re-install.
+   */
+  resetToBase?: boolean;
 }
+
+/** Repository identity as GitHub reports it (never the locally cached copy). */
+export interface RepositoryInfo {
+  id: number;
+  default_branch: string;
+}
+
+/** One GitHub Actions workflow run, reduced to what the CI-runs ingest needs. */
+export interface WorkflowRunMeta {
+  id: number;
+  run_attempt: number;
+  status: string | null;
+  conclusion: string | null;
+  head_sha: string;
+  html_url: string;
+  repository_id: number;
+  /** The run's head repository id (differs from `repository_id` for a fork PR); null when unknown. */
+  head_repository_id: number | null;
+  pr_numbers: number[];
+  created_at: string;
+  run_started_at: string | null;
+}
+
+export type RunArtifactResult =
+  | { status: 'absent' }
+  | { status: 'too_large' }
+  | { status: 'ok'; text: string };
 
 /** One merged PR that touched a given path — the shape `listMergedPullsForPath` returns. */
 export interface PathPullRequest {
@@ -190,6 +222,26 @@ export interface GitHubClient {
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;
+  /** Repository id + default branch as GitHub reports them. */
+  getRepository(repo: RepoRef): Promise<RepositoryInfo>;
+  /** Recent runs of one workflow file (basename); [] when the file does not exist. */
+  listWorkflowRuns(
+    repo: RepoRef,
+    workflowFile: string,
+    opts: { perPage: number },
+  ): Promise<WorkflowRunMeta[]>;
+  /** The PR number a commit belongs to, or null when GitHub knows none. */
+  findPullNumberForCommit(repo: RepoRef, sha: string): Promise<number | null>;
+  getPullRequestTitle(repo: RepoRef, n: number): Promise<string>;
+  /**
+   * Download one file out of a run's named artifact. Never inflates more than
+   * `maxBytes`; an expired / missing artifact is `absent`.
+   */
+  downloadRunArtifact(
+    repo: RepoRef,
+    runId: number,
+    opts: { artifactName: string; fileName: string; maxBytes: number },
+  ): Promise<RunArtifactResult>;
 }
 
 // ---------- Git (simple-git, heavy) ----------

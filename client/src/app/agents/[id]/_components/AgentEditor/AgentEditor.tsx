@@ -1,13 +1,14 @@
 /* AgentEditor — agent config editor (model + system prompt), the Skills tab
    that binds reusable skills to this agent, and the Context tab that attaches
-   repository documents, and the Evals tab (its regression suite). Stats/CI
-   arrive with later lessons. Tab state lives in ?tab=. */
+   repository documents, the Evals tab (its regression suite) and the CI tab
+   (Export to CI). Stats arrives with a later lesson. Tab state lives in ?tab=. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
+import { CiTab } from "./_components/CiTab";
 import { ConfigTab } from "./_components/ConfigTab";
 import { ContextTab } from "./_components/ContextTab";
 import { EvalsTab } from "./_components/EvalsTab";
@@ -30,6 +31,8 @@ export function AgentEditor({ agent, tab, onTab }: { agent: Agent; tab: string; 
           <SkillsTab key={agent.id} agent={agent} />
         ) : tab === "evals" ? (
           <EvalsTab key={agent.id} agent={agent} />
+        ) : tab === "ci" ? (
+          <CiTab key={agent.id} agent={agent} />
         ) : tab === "context" ? (
           <ContextTab key={agent.id} agent={agent} />
         ) : (

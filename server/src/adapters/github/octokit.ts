@@ -1,4 +1,5 @@
 import { Octokit } from 'octokit';
+import { unzipSync } from 'fflate';
 import type {
   GitHubClient,
   RepoRef,
@@ -12,10 +13,19 @@ import type {
   CommitFilesPayload,
   IssueMeta,
   PathPullRequest,
+  RepositoryInfo,
+  WorkflowRunMeta,
+  RunArtifactResult,
 } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
 const TIMEOUT = 30_000;
+/** A zipped artifact bigger than this is never downloaded. */
+const MAX_ZIPPED_ARTIFACT_BYTES = 1_048_576;
+
+function httpStatus(err: unknown): number | undefined {
+  return (err as { status?: number })?.status;
+}
 
 function mapStatus(state: string, merged: boolean | undefined): PrStatus {
   if (merged) return 'merged';
@@ -276,29 +286,47 @@ export class OctokitGitHubClient implements GitHubClient {
           const name = repo.name;
           const g = this.octokit.rest.git;
 
-          // Parent commit: the target branch if it already exists, else the base.
-          let parentSha: string;
+          // The ONLY ref this method ever writes is `heads/${payload.branch}`
+          // (never the base / default branch).
+          const branchRef = `heads/${payload.branch}`;
           let branchExists = false;
           try {
-            const ref = await g.getRef({ owner, repo: name, ref: `heads/${payload.branch}` });
-            parentSha = ref.data.object.sha;
+            await g.getRef({ owner, repo: name, ref: branchRef });
             branchExists = true;
-          } catch {
-            const baseRef = await g.getRef({ owner, repo: name, ref: `heads/${payload.base}` });
-            parentSha = baseRef.data.object.sha;
+          } catch (err) {
+            if (httpStatus(err) !== 404) throw err;
           }
 
+          // Parent commit: the base head on a clean re-install (`resetToBase`) or
+          // when the branch is new, else the branch's own head.
+          const parentRefName =
+            branchExists && !payload.resetToBase ? branchRef : `heads/${payload.base}`;
+          const parentRef = await g.getRef({ owner, repo: name, ref: parentRefName });
+          const parentSha = parentRef.data.object.sha;
+
           // New tree layered on the parent's tree (so unrelated files are kept).
+          // Each file goes through a blob so large files do not bloat the tree request.
           const parentCommit = await g.getCommit({ owner, repo: name, commit_sha: parentSha });
+          const blobs = await Promise.all(
+            payload.files.map(async (file) => {
+              const blob = await g.createBlob({
+                owner,
+                repo: name,
+                content: file.contents,
+                encoding: 'utf-8',
+              });
+              return { path: file.path, sha: blob.data.sha };
+            }),
+          );
           const tree = await g.createTree({
             owner,
             repo: name,
             base_tree: parentCommit.data.tree.sha,
-            tree: payload.files.map((f) => ({
-              path: f.path,
-              mode: '100644',
-              type: 'blob',
-              content: f.contents,
+            tree: blobs.map((b) => ({
+              path: b.path,
+              mode: '100644' as const,
+              type: 'blob' as const,
+              sha: b.sha,
             })),
           });
 
@@ -314,7 +342,7 @@ export class OctokitGitHubClient implements GitHubClient {
             await g.updateRef({
               owner,
               repo: name,
-              ref: `heads/${payload.branch}`,
+              ref: branchRef,
               sha: commit.data.sha,
               force: true,
             });
@@ -322,7 +350,7 @@ export class OctokitGitHubClient implements GitHubClient {
             await g.createRef({
               owner,
               repo: name,
-              ref: `refs/heads/${payload.branch}`,
+              ref: `refs/${branchRef}`,
               sha: commit.data.sha,
             });
           }
@@ -372,6 +400,142 @@ export class OctokitGitHubClient implements GitHubClient {
       withTimeout(this.octokit.rest.users.getAuthenticated(), TIMEOUT),
     );
     return res.data.login;
+  }
+
+  async getRepository(repo: RepoRef): Promise<RepositoryInfo> {
+    const res = await withRetry(() =>
+      withTimeout(this.octokit.rest.repos.get({ owner: repo.owner, repo: repo.name }), TIMEOUT),
+    );
+    return { id: res.data.id, default_branch: res.data.default_branch };
+  }
+
+  async listWorkflowRuns(
+    repo: RepoRef,
+    workflowFile: string,
+    opts: { perPage: number },
+  ): Promise<WorkflowRunMeta[]> {
+    return withRetry(() =>
+      withTimeout(
+        (async () => {
+          try {
+            const res = await this.octokit.rest.actions.listWorkflowRuns({
+              owner: repo.owner,
+              repo: repo.name,
+              workflow_id: workflowFile,
+              per_page: opts.perPage,
+            });
+            return res.data.workflow_runs.map((r) => ({
+              id: r.id,
+              run_attempt: r.run_attempt ?? 1,
+              status: r.status ?? null,
+              conclusion: r.conclusion ?? null,
+              head_sha: r.head_sha,
+              html_url: r.html_url,
+              repository_id: r.repository?.id ?? r.head_repository?.id ?? 0,
+              head_repository_id: r.head_repository?.id ?? null,
+              pr_numbers: (r.pull_requests ?? []).map((p) => p.number),
+              created_at: r.created_at,
+              run_started_at: r.run_started_at ?? null,
+            }));
+          } catch (err) {
+            // The workflow file is not on the default branch (yet) — no runs.
+            if (httpStatus(err) === 404) return [];
+            throw err;
+          }
+        })(),
+        TIMEOUT,
+      ),
+    );
+  }
+
+  async findPullNumberForCommit(repo: RepoRef, sha: string): Promise<number | null> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+          owner: repo.owner,
+          repo: repo.name,
+          commit_sha: sha,
+        }),
+        TIMEOUT,
+      ),
+    );
+    return res.data[0]?.number ?? null;
+  }
+
+  async getPullRequestTitle(repo: RepoRef, n: number): Promise<string> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.pulls.get({ owner: repo.owner, repo: repo.name, pull_number: n }),
+        TIMEOUT,
+      ),
+    );
+    return res.data.title;
+  }
+
+  async downloadRunArtifact(
+    repo: RepoRef,
+    runId: number,
+    opts: { artifactName: string; fileName: string; maxBytes: number },
+  ): Promise<RunArtifactResult> {
+    return withRetry(() =>
+      withTimeout(
+        (async (): Promise<RunArtifactResult> => {
+          const list = await this.octokit.rest.actions.listWorkflowRunArtifacts({
+            owner: repo.owner,
+            repo: repo.name,
+            run_id: runId,
+            name: opts.artifactName,
+          });
+          const artifact = list.data.artifacts.find((a) => !a.expired);
+          if (!artifact) return { status: 'absent' };
+          if (artifact.size_in_bytes > MAX_ZIPPED_ARTIFACT_BYTES) return { status: 'too_large' };
+
+          let data: unknown;
+          try {
+            const dl = await this.octokit.rest.actions.downloadArtifact({
+              owner: repo.owner,
+              repo: repo.name,
+              artifact_id: artifact.id,
+              archive_format: 'zip',
+            });
+            data = dl.data;
+          } catch (err) {
+            if (httpStatus(err) === 404 || httpStatus(err) === 410) return { status: 'absent' };
+            throw err;
+          }
+          const bytes =
+            data instanceof ArrayBuffer
+              ? new Uint8Array(data)
+              : ArrayBuffer.isView(data)
+                ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+                : null;
+          if (!bytes) return { status: 'absent' };
+
+          // The filter runs BEFORE inflation, so an oversized entry is never expanded.
+          let tooLarge = false;
+          let files: Record<string, Uint8Array>;
+          try {
+            files = unzipSync(bytes, {
+              filter: (entry) => {
+                if (entry.name !== opts.fileName) return false;
+                if (entry.originalSize > opts.maxBytes) {
+                  tooLarge = true;
+                  return false;
+                }
+                return true;
+              },
+            });
+          } catch {
+            return { status: 'absent' };
+          }
+          if (tooLarge) return { status: 'too_large' };
+          const entry = files[opts.fileName];
+          if (!entry) return { status: 'absent' };
+          return { status: 'ok', text: new TextDecoder().decode(entry) };
+        })(),
+        TIMEOUT,
+      ),
+    );
   }
 
   /**
