@@ -136,7 +136,8 @@ export class ReviewRunExecutor {
     // every queued review.
     const intent = await this.buildIntentBlock(workspaceId, pull, repo, runLog);
 
-    for (const { agent, runId } of jobs) {
+    // Fan out in parallel: the per-job catch below never rejects.
+    await Promise.all(jobs.map(async ({ agent, runId }) => {
       const agentStart = Date.now();
       logger?.info(
         { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
@@ -163,7 +164,7 @@ export class ReviewRunExecutor {
           `review: agent "${agent.name}" ${cancelled ? 'cancelled' : 'failed'}`,
         );
       }
-    }
+    }));
   }
 
   /** Execute a single agent's review against a PR, streaming progress. */
