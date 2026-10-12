@@ -20,6 +20,9 @@ export {
   type AssembledPrompt,
 } from './prompt.js';
 
+// The review task framing — one wording for studio, eval and CI runs.
+export { reviewTaskLine, reviewPrDescription } from './task.js';
+
 // Citation grounding — the mandatory mechanical gate for diff findings.
 export { groundFindings, groundingSummary, type GroundingResult } from './grounding.js';
 

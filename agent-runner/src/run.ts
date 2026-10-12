@@ -1,7 +1,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { LLMProvider, GitHubReviewPayload, CiResultArtifact } from '@devdigest/shared';
-import { reviewPullRequest, toReviewPayload, gateTriggered, countBlockers } from '@devdigest/reviewer-core';
+import {
+  reviewPullRequest,
+  reviewPrDescription,
+  reviewTaskLine,
+  toReviewPayload,
+  gateTriggered,
+  countBlockers,
+} from '@devdigest/reviewer-core';
 import { loadManifestFromEnv } from './manifest.js';
 import { loadSkillBodies } from './skills.js';
 import { resolvePrContext, type CiEnv } from './context.js';
@@ -126,12 +133,11 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
       llm: deps.llm,
       strategy: manifest.strategy,
       skills,
-      // Trusted task slot = fixed words + integer only (AC-28); the
-      // author-controlled title travels inside the wrapped pr-description.
-      prDescription: `Title: ${ctx.title}
-
-${ctx.body}`,
-      task: `Review pull request #${ctx.prNumber}.`,
+      // Same task framing as a studio review (reviewer-core): the trusted task
+      // slot is fixed words + the PR number only (AC-28); the author-controlled
+      // title travels inside the wrapped pr-description.
+      prDescription: reviewPrDescription(ctx.title, ctx.body),
+      task: reviewTaskLine(ctx.prNumber),
     });
     const durationMs = now() - start;
 
