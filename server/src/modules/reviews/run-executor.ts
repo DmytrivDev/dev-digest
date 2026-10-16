@@ -1,6 +1,6 @@
 import type { Container } from '../../platform/container.js';
 import type { Provider, Review, RunTrace, ToolCall, UnifiedDiff } from '@devdigest/shared';
-import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
+import { reviewPullRequest, countBlockers, reviewPrDescription, reviewTaskLine } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import { AppError } from '../../platform/errors.js';
 import * as schema from '../../db/schema.js';
@@ -14,7 +14,6 @@ import {
   intentModelLine,
   intentSourceLine,
   intentUsageLine,
-  taskLine,
   type SkillAssembly,
 } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
@@ -215,7 +214,7 @@ export class ReviewRunExecutor {
       const repoMap = repoIntelOn ? await this.buildRepoMapDigest(pull.repoId, runLog) : undefined;
       const rankNote = repoIntelOn ? await this.buildRankNote(pull.repoId, diff, runLog) : '';
 
-      const task = taskLine(pull) + rankNote;
+      const task = reviewTaskLine(pull.number) + rankNote;
 
       // L02 — the agent's linked skills, resolved to their bodies. Independent
       // of repo-intel: a skill is text the user wrote, not repo-derived context.
@@ -245,9 +244,10 @@ export class ReviewRunExecutor {
         ...(callersDigest ? { callers: callersDigest } : {}),
         // T3 — repo skeleton, same omit-when-empty contract.
         ...(repoMap ? { repoMap } : {}),
-        // PR author's description/body — untrusted; assemblePrompt wraps +
-        // truncates it. Omitted when the PR has no body.
-        ...(pull.body ? { prDescription: pull.body } : {}),
+        // PR title + body — author-controlled, so it rides in the untrusted
+        // description slot (assemblePrompt wraps + truncates it), never in the
+        // trusted task line. Same framing as eval and the CI runner.
+        prDescription: reviewPrDescription(pull.title, pull.body),
         // Intent layer — server-derived intent + scope, untrusted; omitted
         // when derivation failed or was skipped (best-effort pre-work).
         ...(intent ? { intent: intent.block } : {}),
