@@ -1,32 +1,82 @@
 {
   "title": "Agent Performance",
-  "subtitle": "Accept-rate is the headline quality signal · cost shown as a breakdown",
-  "loadError": "Could not load agent performance.",
+  "subtitle": "Which agents earn their keep — accept rate is the quality signal",
+  "window": {
+    "label": "Period",
+    "days1": "1 day",
+    "days30": "30 days",
+    "custom": "Custom range",
+    "start": "Start date",
+    "end": "End date",
+    "apply": "Apply",
+    "errors": {
+      "empty": "Pick both a start and an end date.",
+      "reversed": "The start date is after the end date.",
+      "future": "The end date is after today.",
+      "tooLong": "The range is longer than 366 days."
+    }
+  },
+  "estimate": {
+    "label": "DevDigest estimate",
+    "explanation": "Cost is computed by DevDigest at run time — from token counts and its price table, or the per-request cost OpenRouter reports — and is not reconciled with provider billing."
+  },
   "summary": {
     "totalRuns": "Total runs",
-    "avgAcceptRate": "Avg accept-rate",
+    "failedExcluded": "{count} failed or cancelled, not counted",
     "totalCost": "Total cost",
-    "mostActive": "Most active"
+    "unpriced": "{unpriced} of {runs} runs unpriced",
+    "avgAcceptRate": "Avg accept rate",
+    "mostActive": "Most-active agent",
+    "runsCount": "{count, plural, one {# run} other {# runs}}"
   },
-  "costByAgent": "Cost by agent",
-  "costByModel": "Cost by model",
-  "noCost": "No cost recorded yet.",
-  "sort": {
-    "acceptRate": "accept-rate",
-    "runs": "runs",
-    "cost": "cost"
+  "metrics": {
+    "ofDecided": "{accepted} of {decided} decided",
+    "zeroDecided": "0 decided",
+    "smallSample": "small sample (n = {n})"
+  },
+  "relative": {
+    "now": "just now",
+    "minutes": "{n}m ago",
+    "hours": "{n}h ago",
+    "days": "{n}d ago"
   },
   "table": {
     "agent": "Agent",
-    "accept": "Accept",
     "runs": "Runs",
-    "findings": "Findings",
-    "cost": "Cost",
-    "trend": "Trend"
+    "avgCost": "Avg cost",
+    "avgDuration": "Avg duration",
+    "acceptRate": "Accept rate",
+    "lastRun": "Last run",
+    "view": "View",
+    "viewLabel": "View stats for {name}",
+    "expand": "Show recent runs for {name}",
+    "never": "Never",
+    "noRunsInPeriod": "No runs in this period",
+    "recentRuns": "Recent runs",
+    "source": {
+      "local": "Local",
+      "ci": "CI"
+    }
   },
-  "empty": {
-    "title": "No agent runs yet",
-    "body": "Run a review (manually) to populate per-agent performance."
+  "breakdown": {
+    "title": "Cost breakdown",
+    "byAgent": "By agent",
+    "byModel": "By model",
+    "modelNotRecorded": "Model not recorded",
+    "noPriced": "No priced runs in this period"
   },
-  "perAgent": "Per-agent"
+  "states": {
+    "loading": "Loading agent performance",
+    "loadError": "Could not load agent performance.",
+    "retry": "Retry",
+    "noRuns": {
+      "title": "No agent runs in this period",
+      "body": "{from} – {to}. Pick a wider range to see more."
+    },
+    "noAgents": {
+      "title": "No agents yet",
+      "body": "Create an agent to start measuring its performance.",
+      "link": "Go to Agents"
+    }
+  }
 }

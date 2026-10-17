@@ -109,5 +109,17 @@
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."
+  },
+  "stats": {
+    "totalRuns": "Total runs",
+    "avgCost": "Avg cost / run",
+    "avgDuration": "Avg duration",
+    "acceptRate": "Accept rate",
+    "pricedOf": "{priced} of {runs} runs priced",
+    "neverRun": "This agent has not run yet",
+    "noRunsInPeriod": "No runs in this period · last run {when}",
+    "loading": "Loading agent stats",
+    "loadError": "Could not load this agent's stats.",
+    "retry": "Retry"
   }
 }

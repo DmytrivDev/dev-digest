@@ -1,0 +1,31 @@
+{
+  "name": "Agent Performance: custom range survives a reload; dashboard row matches the Stats tab",
+  "description": "SPEC-10 AC-31 + AC-62. The seeded PR #484 runs (server/src/db/seed-performance.ts) give the Security Reviewer 6 counted runs, $0.05, 6.2s, 71% and 5/7 decided in 2026-09-01..2026-09-30. Two agent-browser quirks shape the steps: (1) `fill` on a native <input type=date> leaves the value empty (Apply stays disabled, observed 2026-10-17), so the dates are set with the native value setter plus an `input` event, which reaches React's onChange like a real edit; (2) `find role link --name` does not match the row's aria-labelled View link although the accessibility snapshot lists it, so that link is clicked by its aria-label attribute. The window is restored by a fresh `open` (no reload command) and carried to the agent Stats tab through the row's View link. Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/agent-performance"], "label": "open the dashboard" },
+    { "cmd": ["wait", "--text", "Agent Performance"], "label": "the dashboard heading renders" },
+    { "cmd": ["find", "text", "Custom range", "click"], "label": "open the custom range inputs" },
+    { "cmd": ["wait", "--text", "Start date"], "label": "the labelled Start date input is shown" },
+    { "cmd": ["wait", "--text", "End date"], "label": "the labelled End date input is shown" },
+    {
+      "cmd": ["eval", "(() => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; const [a, b] = document.querySelectorAll('input[type=date]'); set.call(a, '2026-09-01'); a.dispatchEvent(new Event('input', { bubbles: true })); set.call(b, '2026-09-30'); b.dispatchEvent(new Event('input', { bubbles: true })); return 'set'; })()"],
+      "label": "set Start date 2026-09-01 and End date 2026-09-30 through the date inputs"
+    },
+    { "cmd": ["find", "role", "button", "click", "--name", "Apply"], "label": "apply the custom range" },
+    { "cmd": ["wait", "--url", "to=2026-09-30"], "label": "the applied window is written to the URL (AC-31)" },
+    { "cmd": ["open", "{BASE}/agent-performance?from=2026-09-01&to=2026-09-30"], "label": "fresh page load: reload with the custom window in the URL" },
+    { "cmd": ["wait", "--url", "to=2026-09-30"], "label": "the custom window survives the reload (AC-31)" },
+    { "cmd": ["wait", "--text", "Security Reviewer"], "label": "the seeded Security Reviewer row renders" },
+    { "cmd": ["wait", "--text", "$0.05"], "label": "dashboard row: cost" },
+    { "cmd": ["wait", "--text", "6.2s"], "label": "dashboard row: average duration" },
+    { "cmd": ["wait", "--text", "71%"], "label": "dashboard row: acceptance rate" },
+    { "cmd": ["wait", "--text", "5/7"], "label": "dashboard row: accepted of decided" },
+    { "cmd": ["find", "first", "a[aria-label='View stats for Security Reviewer']", "click"], "label": "open the agent's Stats tab from its row" },
+    { "cmd": ["wait", "--url", "tab=stats"], "label": "land on the Stats tab" },
+    { "cmd": ["wait", "--url", "to=2026-09-30"], "label": "the window travels with the link" },
+    { "cmd": ["wait", "--text", "$0.05"], "label": "Stats tab: cost matches the dashboard row (AC-62)" },
+    { "cmd": ["wait", "--text", "6.2s"], "label": "Stats tab: average duration matches" },
+    { "cmd": ["wait", "--text", "71%"], "label": "Stats tab: acceptance rate matches" },
+    { "cmd": ["wait", "--text", "5 of 7 decided"], "label": "Stats tab: decided count matches" }
+  ]
+}

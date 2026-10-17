@@ -5,6 +5,7 @@ import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../messages/en/agents.json";
 import contextMessages from "../../../../../../messages/en/context.json";
 import evalMessages from "../../../../../../messages/en/eval.json";
+import perfMessages from "../../../../../../messages/en/agentPerformance.json";
 import { ToastProvider } from "../../../../../lib/toast";
 
 // Mock the data hooks so the editor renders without a network/query client.
@@ -32,6 +33,15 @@ vi.mock("@/lib/hooks/eval", () => ({
   useStartEvalRun: () => ({ mutate: vi.fn(), isPending: false }),
   useStartCaseRun: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateEvalCase: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("@/lib/hooks/agent-performance", () => ({
+  usePerfWindow: () => ({
+    window: { kind: "days", days: 30 },
+    setWindow: vi.fn(),
+    apiQuery: "days=30",
+    params: [["days", "30"]],
+  }),
+  useAgentStats: () => ({ data: undefined, isError: false, refetch: vi.fn() }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -64,7 +74,7 @@ const AGENT: Agent = {
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ agents: messages, context: contextMessages, eval: evalMessages }}>
+    <NextIntlClientProvider locale="en" messages={{ agents: messages, context: contextMessages, eval: evalMessages, agentPerformance: perfMessages }}>
       <ToastProvider>{ui}</ToastProvider>
     </NextIntlClientProvider>,
   );
@@ -80,9 +90,9 @@ describe("A2 Agent Editor (smoke)", () => {
 });
 
 describe("AgentEditor — tabs (AC-22, AC-26)", () => {
-  it("orders the tabs Config · Skills · Context · Evals", () => {
+  it("orders the tabs Config · Skills · Context · Evals · Stats · CI (AC-57)", () => {
     renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
-    const order = ["Config", "Skills", "Context", "Evals"].map((name) => screen.getByRole("button", { name }));
+    const order = ["Config", "Skills", "Context", "Evals", "Stats", "CI"].map((name) => screen.getByRole("button", { name }));
     for (let i = 1; i < order.length; i++) {
       const rel = order[i - 1]!.compareDocumentPosition(order[i]!);
       expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -92,6 +102,19 @@ describe("AgentEditor — tabs (AC-22, AC-26)", () => {
   it("accepts ?tab=context and ?tab=evals as valid tabs", () => {
     expect(VALID_TABS).toContain("context");
     expect(VALID_TABS).toContain("evals");
+  });
+
+  it("accepts ?tab=stats as a valid tab, between evals and ci (AC-57)", () => {
+    expect(VALID_TABS).toContain("stats");
+    expect(VALID_TABS.indexOf("stats")).toBe(VALID_TABS.indexOf("evals") + 1);
+    expect(VALID_TABS.indexOf("ci")).toBe(VALID_TABS.indexOf("stats") + 1);
+  });
+
+  it("renders the Stats tab for tab=stats (AC-57)", () => {
+    renderWithIntl(<AgentEditor agent={AGENT} tab="stats" onTab={() => {}} />);
+    expect(screen.getByText("Loading agent stats")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "30 days" })).toBeInTheDocument();
+    expect(screen.queryByText("Save agent")).not.toBeInTheDocument();
   });
 
   it("renders the Context tab for tab=context", () => {

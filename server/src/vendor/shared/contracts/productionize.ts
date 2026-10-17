@@ -132,56 +132,137 @@ export const PluginImportResult = z.object({
 export type PluginImportResult = z.infer<typeof PluginImportResult>;
 
 // ---------------------------------------------------------------------------
-// Agent Performance  (GET /agents/performance)
+// Agent Performance  (GET /agents/performance, GET /agents/:id/stats — SPEC-10)
 // ---------------------------------------------------------------------------
 
-/** Per-agent performance row (aggregate across agent_runs + findings). */
+/** Rolling presets the window selector offers. */
+export const PERF_WINDOW_DAYS = [1, 30] as const;
+/** Longest custom window, in days (24 h each), measured as `to − from`. */
+export const PERF_MAX_SPAN_DAYS = 366;
+
+/** Query of GET /agents/performance and GET /agents/:id/stats (AC-15, AC-16). */
+export const PerfWindowQuery = z
+  .object({
+    days: z.coerce.number().optional(),
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+  })
+  .superRefine((q, ctx) => {
+    const hasRange = q.from !== undefined || q.to !== undefined;
+    if (q.days !== undefined && !(PERF_WINDOW_DAYS as readonly number[]).includes(q.days)) {
+      ctx.addIssue({ code: 'custom', path: ['days'], message: 'days must be 1 or 30' });
+    }
+    if (q.days !== undefined && hasRange) {
+      ctx.addIssue({ code: 'custom', path: ['days'], message: 'days cannot be combined with from/to' });
+    }
+    if ((q.from === undefined) !== (q.to === undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [q.from === undefined ? 'from' : 'to'],
+        message: 'from and to must be given together',
+      });
+    }
+    if (q.from !== undefined && q.to !== undefined) {
+      const span = Date.parse(q.to) - Date.parse(q.from);
+      if (span <= 0) {
+        ctx.addIssue({ code: 'custom', path: ['from'], message: 'from must be before to' });
+      } else if (span > PERF_MAX_SPAN_DAYS * 86_400_000) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['to'],
+          message: `range must not exceed ${PERF_MAX_SPAN_DAYS} days`,
+        });
+      }
+    }
+  });
+export type PerfWindowQuery = z.infer<typeof PerfWindowQuery>;
+
+export const PerfWindowDays = z.union([z.literal(1), z.literal(30)]);
+export type PerfWindowDays = z.infer<typeof PerfWindowDays>;
+
+export const PerfWindow = z.object({
+  from: z.string(),
+  to: z.string(),
+  days: PerfWindowDays.nullable(),
+});
+export type PerfWindow = z.infer<typeof PerfWindow>;
+
+export const CostBasis = z.literal('estimate');
+export type CostBasis = z.infer<typeof CostBasis>;
+
+export const PerfRecentRun = z.object({
+  run_id: z.string(),
+  ran_at: z.string(),
+  source: z.enum(['local', 'ci']),
+  duration_ms: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+});
+export type PerfRecentRun = z.infer<typeof PerfRecentRun>;
+
+/** The ONE per-agent row both endpoints return (spec "Per-agent row"). */
 export const AgentPerfRow = z.object({
   agent_id: z.string(),
   agent_name: z.string(),
-  provider: z.string().nullable(),
-  model: z.string().nullable(),
+  enabled: z.boolean(),
   runs: z.number().int(),
-  findings_total: z.number().int(),
-  accepted: z.number().int(),
-  dismissed: z.number().int(),
-  /** headline quality signal: accepted / (accepted + dismissed), 0..1 or null. */
-  accept_rate: z.number().nullable(),
-  dismiss_rate: z.number().nullable(),
-  avg_findings_per_run: z.number().nullable(),
+  failed_runs: z.number().int(),
+  priced_runs: z.number().int(),
   total_cost_usd: z.number().nullable(),
   avg_cost_usd: z.number().nullable(),
-  avg_latency_ms: z.number().nullable(),
+  avg_duration_ms: z.number().nullable(),
+  findings: z.number().int(),
+  accepted: z.number().int(),
+  dismissed: z.number().int(),
+  accept_rate: z.number().min(0).max(1).nullable(),
+  small_sample: z.boolean(),
   last_run_at: z.string().nullable(),
-  findings_by_severity: z.object({
-    CRITICAL: z.number().int(),
-    WARNING: z.number().int(),
-    SUGGESTION: z.number().int(),
-  }),
-  /** recent findings-per-run trend (oldest→newest) for the sparkline. */
-  trend: z.array(z.number()),
+  recent_runs: z.array(PerfRecentRun).max(5),
 });
 export type AgentPerfRow = z.infer<typeof AgentPerfRow>;
 
-/** A donut segment {label,value,color}. */
-export const PerfCostSegment = z.object({
-  label: z.string(),
-  value: z.number(),
+export const PerfMostActive = z.object({
+  agent_id: z.string(),
+  agent_name: z.string(),
+  runs: z.number().int(),
 });
-export type PerfCostSegment = z.infer<typeof PerfCostSegment>;
+export type PerfMostActive = z.infer<typeof PerfMostActive>;
+
+export const PerfSummary = z.object({
+  runs: z.number().int(),
+  failed_runs: z.number().int(),
+  priced_runs: z.number().int(),
+  total_cost_usd: z.number().nullable(),
+  accepted: z.number().int(),
+  dismissed: z.number().int(),
+  accept_rate: z.number().min(0).max(1).nullable(),
+  small_sample: z.boolean(),
+  most_active: PerfMostActive.nullable(),
+});
+export type PerfSummary = z.infer<typeof PerfSummary>;
+
+export const PerfAgentCost = z.object({
+  agent_id: z.string(),
+  agent_name: z.string(),
+  cost_usd: z.number(),
+});
+export type PerfAgentCost = z.infer<typeof PerfAgentCost>;
+
+export const PerfModelCost = z.object({
+  model: z.string().nullable(),
+  cost_usd: z.number(),
+  runs: z.number().int(),
+});
+export type PerfModelCost = z.infer<typeof PerfModelCost>;
 
 /** Response of GET /agents/performance. */
 export const AgentPerf = z.object({
-  summary: z.object({
-    runs: z.number().int(),
-    total_cost_usd: z.number().nullable(),
-    avg_accept_rate: z.number().nullable(),
-    most_active_agent: z.string().nullable(),
-  }),
+  window: PerfWindow,
+  cost_basis: CostBasis,
+  min_decisions: z.number().int(),
+  summary: PerfSummary,
   agents: z.array(AgentPerfRow),
-  /** cost split by agent and by model (for the two cost-breakdown donuts). */
-  cost_by_agent: z.array(PerfCostSegment),
-  cost_by_model: z.array(PerfCostSegment),
+  cost_by_agent: z.array(PerfAgentCost),
+  cost_by_model: z.array(PerfModelCost),
 });
 export type AgentPerf = z.infer<typeof AgentPerf>;
 
