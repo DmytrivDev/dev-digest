@@ -53,3 +53,17 @@ describe("Eval Dashboard sidebar entry", () => {
     expect(resolveHref(entry!.href, "r-42")).toBe("/eval");
   });
 });
+
+describe("Agent Performance sidebar entry (AC-29)", () => {
+  const global = NAV.find((g) => g.section === "GLOBAL");
+  const entry = global?.items.find((i) => i.key === "agent-performance");
+
+  it("sits in GLOBAL between Multi-Agent Review and CI Runs", () => {
+    expect(global?.items.map((i) => i.key)).toEqual(["multi-agent", "agent-performance", "ci-runs"]);
+  });
+
+  it("links to /agent-performance and is not repo-scoped", () => {
+    expect(entry).toMatchObject({ label: "Agent Performance", href: "/agent-performance" });
+    expect(resolveHref(entry!.href, "r-42")).toBe("/agent-performance");
+  });
+});

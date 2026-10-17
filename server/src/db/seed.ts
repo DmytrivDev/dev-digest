@@ -30,6 +30,7 @@ import {
   SEED_PR_483_TITLE,
   caseDiff,
 } from './seed-eval.js';
+import { seedPerformance } from './seed-performance.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -415,6 +416,15 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       }
     }
   }
+
+  // ---- Agent Performance demo data (SPEC-10) ----
+  // After the agents and the PR #483 block; it hangs off its own PR #484.
+  const seededAgents = await db.select().from(t.agents).where(eq(t.agents.workspaceId, workspaceId));
+  await seedPerformance(db, {
+    workspaceId,
+    repoId,
+    agentIdsByName: new Map(seededAgents.map((a) => [a.name, a.id])),
+  });
 
   // ---- built-in skills (L02) + their agent links ----
   // Bodies live in ./seed-skills.ts. Matched by name like the agents above, so

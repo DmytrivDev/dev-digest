@@ -1,0 +1,57 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: { display: "flex", flexDirection: "column", gap: 16 } satisfies CSSProperties,
+  toolbar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 } satisfies CSSProperties,
+  row: { display: "flex", gap: 12 } satisfies CSSProperties,
+  card: {
+    flex: 1,
+    background: "var(--bg-elevated)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    borderRadius: 9,
+    padding: 18,
+  } satisfies CSSProperties,
+  label: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    letterSpacing: "0.03em",
+  } satisfies CSSProperties,
+  value: { fontSize: 32, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 12 } satisfies CSSProperties,
+  valueText: { fontSize: 18, fontWeight: 700, lineHeight: 1.4, marginTop: 14 } satisfies CSSProperties,
+  sub: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "var(--text-muted)",
+    marginTop: 6,
+  } satisfies CSSProperties,
+  placeholder: {
+    height: 32,
+    width: "55%",
+    marginTop: 12,
+    borderRadius: 6,
+    background: "var(--bg-hover)",
+  } satisfies CSSProperties,
+  empty: {
+    fontSize: 13,
+    color: "var(--text-muted)",
+    padding: "14px 16px",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "var(--border)",
+    borderRadius: 9,
+  } satisfies CSSProperties,
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+} as const;

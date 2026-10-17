@@ -62,11 +62,13 @@ export const NAV: NavGroup[] = [
   },
   {
     // Not repo-scoped: Multi-Agent Review picks its own PR on the configure screen;
-    // CI Runs is cross-repo and cross-agent (`activeKeyFor` maps /ci-runs to its key).
+    // Agent Performance and CI Runs are cross-repo and cross-agent (`activeKeyFor` maps
+    // /agent-performance and /ci-runs to their keys).
     // Mock: chrome.jsx GLOBAL section.
     section: "GLOBAL",
     items: [
       { key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/multi-agent" },
+      { key: "agent-performance", label: "Agent Performance", icon: "Activity", href: "/agent-performance" },
       { key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" },
     ],
   },

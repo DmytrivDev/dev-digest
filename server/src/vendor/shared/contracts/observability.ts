@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Severity } from './findings.js';
 import { FindingRecord, ReviewRunTarget } from './review-api.js';
+import { AgentPerfRow, CostBasis, PerfWindow } from './productionize.js';
 
 /**
  * A5 — Observability / Multi-agent contracts (L07).
@@ -143,27 +144,10 @@ export const StatPoint = z.object({ label: z.string(), value: z.number() });
 export type StatPoint = z.infer<typeof StatPoint>;
 
 export const AgentStats = z.object({
-  agent_id: z.string(),
-  agent_name: z.string(),
-  runs: z.number().int(),
-  findings_total: z.number().int(),
-  /** accept-rate is the headline quality signal. 0..1 over acted findings. */
-  accepted: z.number().int(),
-  dismissed: z.number().int(),
-  pending: z.number().int(),
-  accept_rate: z.number().nullable(),
-  dismiss_rate: z.number().nullable(),
-  avg_findings_per_run: z.number().nullable(),
-  total_cost_usd: z.number().nullable(),
-  avg_cost_usd: z.number().nullable(),
-  avg_latency_ms: z.number().nullable(),
-  findings_by_severity: z.object({
-    CRITICAL: z.number().int(),
-    WARNING: z.number().int(),
-    SUGGESTION: z.number().int(),
-  }),
-  /** recent runs for a small trend chart (oldest→newest). */
-  trend: z.array(StatPoint),
+  window: PerfWindow,
+  cost_basis: CostBasis,
+  min_decisions: z.number().int(),
+  agent: AgentPerfRow,
 });
 export type AgentStats = z.infer<typeof AgentStats>;
 

@@ -27,3 +27,10 @@ describe("activeKeyFor — Eval Dashboard", () => {
     expect(activeKeyFor("/eval/abc")).toBe("eval");
   });
 });
+
+describe("activeKeyFor — Agent Performance", () => {
+  it("is active on /agent-performance, and /agents stays Agents", () => {
+    expect(activeKeyFor("/agent-performance")).toBe("agent-performance");
+    expect(activeKeyFor("/agents/x")).toBe("agents");
+  });
+});
